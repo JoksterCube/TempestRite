@@ -10,3 +10,4 @@ riderModule.iml
 /Thunderstore/README.md
 environment.props.user
 Nexus/
+__pycache__/

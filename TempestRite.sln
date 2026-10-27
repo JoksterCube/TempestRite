@@ -1,0 +1,70 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35707.178
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TempestRite", "TempestRite.csproj", "{8C2122A5-507E-4039-8D73-D55BE44C0414}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{021114F4-6945-4A15-A198-F24FDDDD46B2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TempestRite.Tests", "Tests\TempestRite.Tests\TempestRite.Tests.csproj", "{ACAC549E-FF67-4C3F-9646-BCB17441CF37}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChestKit", "..\ChestKit\ChestKit\ChestKit.csproj", "{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Debug|x64.Build.0 = Debug|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Debug|x86.Build.0 = Debug|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Release|x64.ActiveCfg = Release|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Release|x64.Build.0 = Release|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Release|x86.ActiveCfg = Release|Any CPU
+		{8C2122A5-507E-4039-8D73-D55BE44C0414}.Release|x86.Build.0 = Release|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Debug|x64.Build.0 = Debug|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Debug|x86.Build.0 = Debug|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Release|x64.ActiveCfg = Release|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Release|x64.Build.0 = Release|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Release|x86.ActiveCfg = Release|Any CPU
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37}.Release|x86.Build.0 = Release|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Debug|x64.Build.0 = Debug|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Debug|x86.Build.0 = Debug|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Release|x64.ActiveCfg = Release|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Release|x64.Build.0 = Release|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Release|x86.ActiveCfg = Release|Any CPU
+		{D2457CA5-CF8D-4807-9E90-BC57FAF20AC0}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{ACAC549E-FF67-4C3F-9646-BCB17441CF37} = {021114F4-6945-4A15-A198-F24FDDDD46B2}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C7375B42-C12C-41C0-A21C-2C30B4BD12DF}
+	EndGlobalSection
+EndGlobal

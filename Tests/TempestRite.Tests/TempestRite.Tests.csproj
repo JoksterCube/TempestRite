@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Game paths (CorlibPath, BepInExPath, PublicizedAssembliesPath). -->
+  <Import Project="..\..\environment.props" />
+  <Import Project="..\..\environment.props.user" Condition="Exists('..\..\environment.props.user')" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- Tests run against the merged Release plugin; build TempestRite.csproj -c Release first.
+         Modern .NET is used because Unity 2022 assemblies target .NET Standard 2.1, which net48 cannot load. -->
+    <TempestRiteAssembly>..\..\bin\Release\TempestRite.dll</TempestRiteAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="TempestRite">
+      <HintPath>$(TempestRiteAssembly)</HintPath>
+    </Reference>
+    <!-- Vector3 (rites keep where they were performed). -->
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(CorlibPath)\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,9 @@
+{
+  "name": "TempestRite",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/JoksterCube/TempestRite",
+  "description": "Perform rites at the obliterator: burn an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.",
+  "dependencies": [
+    "denikson-BepInExPack_Valheim-5.4.2351"
+  ]
+}

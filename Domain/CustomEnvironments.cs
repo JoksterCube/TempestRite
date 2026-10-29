@@ -8,22 +8,28 @@ namespace JoksterCube.TempestRite.Domain;
 // - TempestRite_Aurora: a clear sky with the strongest auroras any of the game's environments has, at night, and calm,
 //   quiet wind (the Aurora Rite).
 // - TempestRite_Bloodmoon: a game environment (Eikthyr's by default) tinted blood red (the Crimson Rite).
+// - TempestRite_Ragnarok: a game environment (the thunderstorm by default) darkened and tinted ember and gold, a sky
+//   on fire (the Ragnarök Rite).
 internal static class CustomEnvironments
 {
     private const string AuroraBase = "Clear";
 
     private static EnvMan? _madeFor;
     private static string _bloodmoonBase = string.Empty;
+    private static string _ragnarokBase = string.Empty;
 
     // Makes them once per environment manager (one per world), and the blood moon again if its base changes.
     internal static void Ensure(EnvMan envMan)
     {
         string bloodmoonBase = PluginConfig.BloodmoonBase.Value;
-        if (_madeFor == envMan && bloodmoonBase == _bloodmoonBase) return;
+        string ragnarokBase = PluginConfig.RagnarokSkyBase.Value;
+        if (_madeFor == envMan && bloodmoonBase == _bloodmoonBase && ragnarokBase == _ragnarokBase) return;
         _madeFor = envMan;
         _bloodmoonBase = bloodmoonBase;
+        _ragnarokBase = ragnarokBase;
         Replace(envMan, MakeAurora(envMan));
         Replace(envMan, MakeBloodmoon(envMan, bloodmoonBase));
+        Replace(envMan, MakeRagnarok(envMan, ragnarokBase));
     }
 
     private static void Replace(EnvMan envMan, EnvSetup? env)
@@ -88,6 +94,41 @@ internal static class CustomEnvironments
         moon.m_sunColorDay = Blood(moon.m_sunColorDay);
         moon.m_sunColorEvening = Blood(moon.m_sunColorEvening);
         return moon;
+    }
+
+    private static EnvSetup? MakeRagnarok(EnvMan envMan, string baseName)
+    {
+        EnvSetup? source = envMan.GetEnv(baseName);
+        if (source == null || IsOurs(source))
+        {
+            Plugin.ModLogger.LogWarning($"Ragnarök Rite: burning sky base environment \"{baseName}\" is not one the game knows.");
+            return null;
+        }
+        EnvSetup sky = source.Clone();
+        sky.m_name = CustomEnvironmentNames.Ragnarok;
+        sky.m_ambColorNight = Ember(sky.m_ambColorNight);
+        sky.m_ambColorDay = Ember(sky.m_ambColorDay);
+        sky.m_fogColorNight = Ember(sky.m_fogColorNight);
+        sky.m_fogColorMorning = Ember(sky.m_fogColorMorning);
+        sky.m_fogColorDay = Ember(sky.m_fogColorDay);
+        sky.m_fogColorEvening = Ember(sky.m_fogColorEvening);
+        sky.m_fogColorSunNight = Ember(sky.m_fogColorSunNight);
+        sky.m_fogColorSunMorning = Ember(sky.m_fogColorSunMorning);
+        sky.m_fogColorSunDay = Ember(sky.m_fogColorSunDay);
+        sky.m_fogColorSunEvening = Ember(sky.m_fogColorSunEvening);
+        sky.m_sunColorNight = Ember(sky.m_sunColorNight);
+        sky.m_sunColorMorning = Ember(sky.m_sunColorMorning);
+        sky.m_sunColorDay = Ember(sky.m_sunColorDay);
+        sky.m_sunColorEvening = Ember(sky.m_sunColorEvening);
+        return sky;
+    }
+
+    // Keeps how bright a color is, turned to the orange and gold of a burning sky: brighter than the blood moon's red,
+    // and never quite dark.
+    private static Color Ember(Color color)
+    {
+        float light = (color.r + color.g + color.b) / 3f;
+        return new Color(Mathf.Clamp01(light * 1.4f + 0.12f), Mathf.Clamp01(light * 0.8f + 0.05f), Mathf.Clamp01(light * 0.22f), color.a);
     }
 
     // Keeps how bright a color is, turned deep red.

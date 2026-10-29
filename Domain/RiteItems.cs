@@ -7,23 +7,25 @@ internal static class RiteItems
 {
     private static readonly List<ItemDrop.ItemData> Matching = [];
 
-    // How many more of the rite's item the obliterator needs.
+    // How many more of the rite's items (any mix of them) the obliterator needs.
     internal static int Missing(Inventory obliterator, WeatherKind kind) =>
         System.Math.Max(0, ObliteratorKeys.Amount(kind) - ObliteratorKeys.Count(obliterator, kind));
 
     internal static int Have(Inventory inventory, WeatherKind kind) => ObliteratorKeys.Count(inventory, kind);
 
     // Moves what the obliterator is missing from the player's inventory into it: onto a stack of the same item there,
-    // or into the first free slot from the bottom left, where items go first and decide. Only when the player has all
-    // of it. Returns whether anything moved.
-    internal static bool PutIn(Inventory from, Inventory to, WeatherKind kind)
+    // or into the first free slot from the bottom left, where items go first and decide. The clicked item goes first,
+    // then the rite's other items make up the rest. Only when the player has all of it. Returns whether anything moved.
+    internal static bool PutIn(Inventory from, Inventory to, WeatherKind kind, string preferred)
     {
         int needed = Missing(to, kind);
         if (needed <= 0 || Have(from, kind) < needed) return false;
 
         Matching.Clear();
         foreach (ItemDrop.ItemData item in from.GetAllItems())
-            if (ObliteratorKeys.KindOf(item) == kind) Matching.Add(item);
+            if (ObliteratorKeys.KindOf(item) == kind && ObliteratorKeys.IsItem(item, preferred)) Matching.Add(item);
+        foreach (ItemDrop.ItemData item in from.GetAllItems())
+            if (ObliteratorKeys.KindOf(item) == kind && !ObliteratorKeys.IsItem(item, preferred)) Matching.Add(item);
 
         bool moved = false;
         foreach (ItemDrop.ItemData item in Matching)

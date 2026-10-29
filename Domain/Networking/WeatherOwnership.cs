@@ -12,8 +12,9 @@ namespace JoksterCube.TempestRite.Domain.Networking;
 //   Rite): during weather and daylight rites;
 // - spreading fire going out in rain, fires that rain puts out: during weather rites;
 // - plants and bushes near a Verdant Rite's obliterator (they grow faster);
-// - creatures near a Packward or Carrion Rite's obliterator (they flee, or come);
-// - fermenters near a Vat-Boil Rite's obliterator (they work faster).
+// - creatures near a Packward or Carrion Rite's obliterator (they keep out, or come);
+// - fermenters and cooking stations near a Vat-Boil Rite's obliterator, smelters and kilns near a Pitch-Bellows
+//   Rite's (they work faster).
 // This only matters when the server lets players without the mod join (Require Mod On Clients off). The server already
 // hands out objects to players every 2 seconds; right after, it moves these objects from players without the mod to
 // a player with it who is near. Objects already owned by a player with the mod are left alone.
@@ -32,7 +33,8 @@ internal static class WeatherOwnership
         Fire,
         Growing,
         Creature,
-        Fermenter
+        // Sped up by a rite (see RiteSpeedup.KindOf).
+        Station
     }
 
     private static Dictionary<int, Kind>? _prefabs;
@@ -54,7 +56,8 @@ internal static class WeatherOwnership
         || WeatherState.IsActive(WeatherKind.Verdant)
         || WeatherState.IsActive(WeatherKind.Packward)
         || WeatherState.IsActive(WeatherKind.Carrion)
-        || WeatherState.IsActive(WeatherKind.VatBoil);
+        || WeatherState.IsActive(WeatherKind.VatBoil)
+        || WeatherState.IsActive(WeatherKind.PitchBellows);
 
     // Whether the object at position should go to a player with the mod within reach, and how near they must be.
     // weatherHere: a weather rite shows at that position.
@@ -71,10 +74,10 @@ internal static class WeatherOwnership
             case Kind.Growing:
                 return WeatherState.Reaches(WeatherKind.Verdant, position);
             case Kind.Creature:
-                return WeatherState.Reaches(WeatherKind.Packward, position, CreatureMargin)
-                    || (WeatherState.Reaches(WeatherKind.Carrion, position, CreatureMargin) && PluginConfig.CarrionPrefabs().Contains(zdo.GetPrefab()));
-            case Kind.Fermenter:
-                return WeatherState.Reaches(WeatherKind.VatBoil, position);
+                return (WeatherState.Reaches(WeatherKind.Packward, position, CreatureMargin) && CreatureRites.Steered(zdo, WeatherKind.Packward))
+                    || (WeatherState.Reaches(WeatherKind.Carrion, position, CreatureMargin) && CreatureRites.Steered(zdo, WeatherKind.Carrion));
+            case Kind.Station:
+                return WeatherState.Reaches(RiteSpeedup.KindOf(zdo.GetPrefab()), position);
             default:
                 return false;
         }
@@ -121,7 +124,7 @@ internal static class WeatherOwnership
     // ---- Which objects ----
 
     // Found once from the game's prefabs: zone controllers and spawn points (spawning), anything weather can put out,
-    // plants and bushes that regrow, creatures (not bosses) and fermenters.
+    // plants and bushes that regrow, creatures (not bosses) and the stations rites speed up.
     private static bool Prefabs()
     {
         if (_prefabs != null) return true;
@@ -138,7 +141,7 @@ internal static class WeatherOwnership
             else if (prefab.GetComponent<Fire>() || (fireplace && fireplace!.m_canTurnOff)) _prefabs[hash] = Kind.Fire;
             else if (VerdantGrowth.IsGrowing(hash)) _prefabs[hash] = Kind.Growing;
             else if (prefab.GetComponent<BaseAI>() && character && !character!.IsBoss() && !character.IsPlayer()) _prefabs[hash] = Kind.Creature;
-            else if (prefab.GetComponent<Fermenter>()) _prefabs[hash] = Kind.Fermenter;
+            else if (RiteSpeedup.KindOf(hash) != WeatherKind.None) _prefabs[hash] = Kind.Station;
         }
         Plugin.ModLogger.LogDebug($"Rite-sensitive prefabs: {_prefabs.Count}.");
         return true;

@@ -94,17 +94,7 @@ internal static class WardPatches
 internal static class UnmakingPatch
 {
     private const string Feature = "Unmaking Rite";
-    // Upgrades past this level (from other mods) give back nothing more.
-    private const int MaxLevel = 4;
-
-    private static readonly HashSet<ItemDrop.ItemData.ItemType> Gear =
-    [
-        ItemDrop.ItemData.ItemType.OneHandedWeapon, ItemDrop.ItemData.ItemType.TwoHandedWeapon, ItemDrop.ItemData.ItemType.TwoHandedWeaponLeft,
-        ItemDrop.ItemData.ItemType.Bow, ItemDrop.ItemData.ItemType.Shield, ItemDrop.ItemData.ItemType.Helmet, ItemDrop.ItemData.ItemType.Chest,
-        ItemDrop.ItemData.ItemType.Legs, ItemDrop.ItemData.ItemType.Hands, ItemDrop.ItemData.ItemType.Shoulder, ItemDrop.ItemData.ItemType.Utility,
-        ItemDrop.ItemData.ItemType.Tool, ItemDrop.ItemData.ItemType.Torch, ItemDrop.ItemData.ItemType.Trinket,
-        ItemDrop.ItemData.ItemType.Attach_Atgeir
-    ];
+    private static readonly List<UnmakingReturns.Return> Returns = [];
 
     private static void Postfix(Incinerator __instance, ref IEnumerator __result) => __result = Wrap(__result, __instance);
 
@@ -128,26 +118,18 @@ internal static class UnmakingPatch
         {
             // The same checks the game makes before burning.
             if (!incinerator.m_nview.IsValid() || !incinerator.m_nview.IsOwner() || incinerator.m_container.IsInUse()) return null;
+            if (!ObliteratorSwitch.IsOn(incinerator)) return null;
             Inventory inventory = incinerator.m_container.GetInventory();
-            if (!PluginConfig.IsEnabled(WeatherKind.Unmaking) || ObliteratorKeys.Pick(inventory, out _, out _) != WeatherKind.Unmaking) return null;
+            if (!PluginConfig.IsEnabled(WeatherKind.Unmaking) || !ObliteratorKeys.Contains(ObliteratorKeys.PickAll(inventory), WeatherKind.Unmaking)) return null;
 
-            float share = Mathf.Clamp01(PluginConfig.UnmakingPercent.Value / 100f);
             Dictionary<GameObject, int> back = [];
             foreach (ItemDrop.ItemData item in new List<ItemDrop.ItemData>(inventory.GetAllItems()))
             {
-                if (!Gear.Contains(item.m_shared.m_itemType) || item.m_shared.m_maxStackSize != 1) continue;
-                Recipe? recipe = ObjectDB.instance.GetRecipe(item);
-                if (!recipe || recipe!.m_resources == null || recipe.m_resources.Length == 0) continue;
-                int level = Mathf.Clamp(item.m_quality, 1, MaxLevel);
-                foreach (Piece.Requirement requirement in recipe.m_resources)
+                if (!UnmakingReturns.Returns(item, Returns)) continue;
+                foreach (UnmakingReturns.Return part in Returns)
                 {
-                    if (!requirement.m_resItem) continue;
-                    int cost = 0;
-                    for (int l = 1; l <= level; l++) cost += requirement.GetAmount(l);
-                    int amount = Mathf.FloorToInt(cost * share * item.m_stack);
-                    if (amount <= 0) continue;
-                    GameObject prefab = requirement.m_resItem.gameObject;
-                    back[prefab] = (back.TryGetValue(prefab, out int had) ? had : 0) + amount;
+                    GameObject prefab = part.Item.gameObject;
+                    back[prefab] = (back.TryGetValue(prefab, out int had) ? had : 0) + part.Amount;
                 }
                 inventory.RemoveItem(item);
             }

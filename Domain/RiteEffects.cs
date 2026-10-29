@@ -8,33 +8,27 @@ namespace JoksterCube.TempestRite.Domain;
 
 // What the Domain rites do, made visible in this game (only for players with the mod; nothing is sent): the game's own
 // effects, recolored and shown for a moment.
-// - Verdant: now and then a green sparkle (the game's "picked" effect) on a plant or bush that grows faster.
-// - Packward: a fleeing creature drips with fear (the game's "wet" drops).
-// - Carrion: an animal walking to the obliterator trails a green smell (the game's poison cloud).
+// (Motes on what the Verdant, Vat-Boil and Pitch-Bellows Rites speed up are shown by RiteSpeedup.)
+// - Packward: a creature shunning the area drips with fear (the game's "wet" drops).
+// - Carrion: a creature walking to the obliterator trails a green smell (the game's poison cloud).
 internal static class RiteEffects
 {
     private const string Feature = "Rite effects";
     private const float Interval = 1.5f;
     // Effects only show within this far of the player.
     private const float ShowRange = 80f;
-    private const int SparklesPerTick = 3;
     // The same creature shows its effect again only after this long.
     private const float CreatureRepeat = 3f;
     private const float CreatureEffectSeconds = 2.5f;
-    private const float SparkleSeconds = 3f;
 
-    private const string SparkleEffect = "vfx_pickable_pick";
     private const string FearEffect = "vfx_Wet";
     private const string SmellEffect = "vfx_Poison";
 
-    private static readonly Color SparkleColor = new(0.45f, 1f, 0.4f, 1f);
     private static readonly Color FearColor = new(0.75f, 0.85f, 1f, 1f);
     private static readonly Color SmellColor = new(0.6f, 0.85f, 0.2f, 0.8f);
-    private static readonly int FleeUntil = "TempestRite_FleeUntil".GetStableHashCode();
 
     private static float _next;
     private static readonly Dictionary<ZDOID, float> LastShown = [];
-    private static readonly List<ZDO> Growing = [];
     private static readonly List<ZDOID> Forget = [];
 
     internal static void ClearSession()
@@ -72,72 +66,54 @@ internal static class RiteEffects
         _next = Time.time + Interval;
         Player? player = Player.m_localPlayer;
         if (!player || !ZNetScene.instance || !ZNet.instance) return;
-        bool verdant = WeatherState.IsActive(WeatherKind.Verdant) && PluginConfig.ShowVerdantSparkles.IsOn();
         bool creatures = PluginConfig.ShowCreatureEffects.IsOn();
         bool packward = creatures && WeatherState.IsActive(WeatherKind.Packward);
         bool carrion = creatures && WeatherState.IsActive(WeatherKind.Carrion);
-        if (!verdant && !packward && !carrion) return;
+        if (!packward && !carrion) return;
 
-        try { Show(player!.transform.position, verdant, packward, carrion); }
+        try { Show(player!.transform.position); }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
     }
 
-    // While the Packward Rite goes on, a line in the log now and then: what it reaches and what flees, to tell why a
-    // creature doesn't.
+    // While the Packward or Carrion Rite goes on, a line in the log now and then: what it reaches and what it steers, to
+    // tell why a creature isn't.
     private const float ReportInterval = 10f;
     private static float _nextReport;
 
     internal static void Report()
     {
-        if (!WeatherState.IsActive(WeatherKind.Packward) || Time.time < _nextReport || !ZNetScene.instance || !ZNet.instance) return;
+        WeatherKind kind = WeatherState.Active(EffectSlot.Creatures);
+        if (kind == WeatherKind.None || Time.time < _nextReport || !ZNetScene.instance || !ZNet.instance) return;
         _nextReport = Time.time + ReportInterval;
-        int inReach = 0, owned = 0, fleeing = 0;
+        int inReach = 0, owned = 0, steered = 0;
         long me = ZDOMan.GetSessionID();
-        long now = ZNet.instance.GetTime().Ticks;
-        foreach (KeyValuePair<ZDO, ZNetView> instance in ZNetScene.instance.m_instances)
+        foreach (Character character in Character.GetAllCharacters())
         {
-            ZNetView view = instance.Value;
-            if (!view || !view.GetComponent<MonsterAI>()) continue;
-            Character? character = view.GetComponent<Character>();
-            if (!character || character!.IsBoss() || character.IsTamed()) continue;
-            if (!WeatherState.Reaches(WeatherKind.Packward, character.transform.position)) continue;
+            if (!character || character.IsPlayer() || !character.GetBaseAI() || !character.m_nview || !character.m_nview.IsValid()) continue;
+            if (!WeatherState.Reaches(kind, character.transform.position, CreatureRites.Buffer)) continue;
             inReach++;
-            if (instance.Key.GetOwner() == me) owned++;
-            if (instance.Key.GetLong(FleeUntil, 0L) > now) fleeing++;
+            if (character.m_nview.GetZDO().GetOwner() == me) owned++;
+            if (CreatureRites.ShownBy(character) != CreatureRites.Shown.None) steered++;
         }
-        Vector3 at = WeatherState.Position(WeatherKind.Packward);
-        Plugin.ModLogger.LogDebug($"Packward Rite at ({at.x:0}, {at.z:0}): {inReach} creatures within reach, {owned} run by this game, {fleeing} fleeing.");
+        Vector3 at = WeatherState.Position(kind);
+        string doing = kind == WeatherKind.Packward ? "shunning the area" : "walking to the obliterator";
+        Plugin.ModLogger.LogDebug($"{WeatherKinds.Name(kind)} at ({at.x:0}, {at.z:0}): {inReach} creatures within reach, {owned} run by this game, {steered} {doing}.");
     }
 
-    private static void Show(Vector3 here, bool verdant, bool packward, bool carrion)
+    private static void Show(Vector3 here)
     {
-        Growing.Clear();
-        long now = ZNet.instance.GetTime().Ticks;
-        HashSet<int> lured = PluginConfig.CarrionPrefabs();
         foreach (KeyValuePair<ZDO, ZNetView> instance in ZNetScene.instance.m_instances)
         {
             ZDO zdo = instance.Key;
             Vector3 position = zdo.GetPosition();
             if (Utils.DistanceXZ(position, here) > ShowRange) continue;
-            int prefab = zdo.GetPrefab();
-
-            if (verdant && VerdantGrowth.IsGrowing(prefab))
-            {
-                if (WeatherState.Reaches(WeatherKind.Verdant, position) && StillGrowing(zdo)) Growing.Add(zdo);
-                continue;
-            }
-
             ZNetView view = instance.Value;
             if (!view) continue;
-            if (packward && zdo.GetLong(FleeUntil, 0L) > now) Creature(zdo, view, FearEffect, FearColor);
-            else if (carrion && lured.Contains(prefab) && Lured(view, position)) Creature(zdo, view, SmellEffect, SmellColor);
-        }
-
-        for (int i = 0; i < SparklesPerTick && Growing.Count > 0; i++)
-        {
-            int index = UnityEngine.Random.Range(0, Growing.Count);
-            Spawn(SparkleEffect, Growing[index].GetPosition(), null, SparkleColor, SparkleSeconds);
-            Growing.RemoveAt(index);
+            Character? character = view.GetComponent<Character>();
+            if (!character) continue;
+            CreatureRites.Shown shown = CreatureRites.ShownBy(character!);
+            if (shown == CreatureRites.Shown.Scared) Creature(zdo, view, FearEffect, FearColor);
+            else if (shown == CreatureRites.Shown.Drawn) Creature(zdo, view, SmellEffect, SmellColor);
         }
 
         // Creatures gone or long not seen are forgotten.
@@ -146,23 +122,6 @@ internal static class RiteEffects
             if (Time.time - shown.Value > 60f) Forget.Add(shown.Key);
         foreach (ZDOID id in Forget) LastShown.Remove(id);
     }
-
-    // Planted and not grown yet, or a picked bush waiting to regrow.
-    private static bool StillGrowing(ZDO zdo) =>
-        zdo.GetLong(ZDOVars.s_plantTime, 0L) > 0L || zdo.GetBool(ZDOVars.s_picked);
-
-    // On its way to the obliterator: within reach, not already there, not fighting or scared.
-    private static bool Lured(ZNetView view, Vector3 position)
-    {
-        if (!WeatherState.Reaches(WeatherKind.Carrion, position)) return false;
-        if (Utils.DistanceXZ(position, WeatherState.Position(WeatherKind.Carrion)) <= 10f) return false;
-        BaseAI? ai = view.GetComponent<BaseAI>();
-        Character? character = view.GetComponent<Character>();
-        return ai && !ai!.IsAlerted() && character && !character!.IsTamed();
-    }
-
-    // The game's sparkle, in a color, for a moment (Vat-Boil bubbles).
-    internal static void Sparkle(Vector3 position, Color color, float seconds) => Spawn(SparkleEffect, position, null, color, seconds);
 
     private static void Creature(ZDO zdo, ZNetView view, string effect, Color color)
     {

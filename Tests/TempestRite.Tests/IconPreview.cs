@@ -53,6 +53,46 @@ public class IconPreview
         finally { WeatherIcons.PreviewArt = null; }
     }
 
+    // The rites page's tab emblems, which use none of the game's art: only TEMPESTRITE_ICON_OUT is needed.
+    [Fact]
+    public void Render_tab_emblems()
+    {
+        string? output = Environment.GetEnvironmentVariable("TEMPESTRITE_ICON_OUT");
+        if (string.IsNullOrEmpty(output)) return;
+        Directory.CreateDirectory(output);
+        foreach (RiteGroup group in WeatherKinds.Groups) Write(Path.Combine(output, $"Tab{group}.rgba"), WeatherIcons.RenderTab(group));
+        Write(Path.Combine(output, "Flap.rgba"), WeatherIcons.RenderFlap());
+        Write(Path.Combine(output, "RitesBook.rgba"), WeatherIcons.RenderRitesBook());
+    }
+
+    // The Packward and Carrion icons over creatures, white (the game tints them): only TEMPESTRITE_ICON_OUT is needed.
+    // Unlike the others, row 0 is at the bottom and they are 192 x 139.
+    [Fact]
+    public void Render_creature_icons()
+    {
+        string? output = Environment.GetEnvironmentVariable("TEMPESTRITE_ICON_OUT");
+        if (string.IsNullOrEmpty(output)) return;
+        Directory.CreateDirectory(output);
+        Write(Path.Combine(output, "CreatureDrawn.rgba"), CreatureIcons.RenderDrawn(), CreatureIcons.Width, CreatureIcons.Height);
+        Write(Path.Combine(output, "CreatureScared.rgba"), CreatureIcons.RenderScared(), CreatureIcons.Width, CreatureIcons.Height);
+    }
+
+    private static void Write(string path, Color[] colors, int width = 64, int height = 64)
+    {
+        byte[] bytes = new byte[colors.Length * 4];
+        for (int i = 0; i < colors.Length; i++)
+        {
+            bytes[i * 4] = Byte(colors[i].r);
+            bytes[i * 4 + 1] = Byte(colors[i].g);
+            bytes[i * 4 + 2] = Byte(colors[i].b);
+            bytes[i * 4 + 3] = Byte(colors[i].a);
+        }
+        using BinaryWriter writer = new(File.Create(path));
+        writer.Write(width);
+        writer.Write(height);
+        writer.Write(bytes);
+    }
+
     private static byte Byte(float value) => (byte)Math.Round(Math.Clamp(value, 0f, 1f) * 255f);
 
     private static (int, int, byte[]) Read(string path)

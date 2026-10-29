@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using JoksterCube.TempestRite.Common;
 using JoksterCube.TempestRite.Domain.Networking;
@@ -10,20 +11,26 @@ namespace JoksterCube.TempestRite.Domain;
 internal static class ObliteratorHints
 {
     private static readonly StringBuilder Text = new();
+    private static readonly List<UnmakingReturns.Return> Returns = [];
 
-    // Lever: the rite pulling it performs.
+    // Lever: the rites pulling it performs, one per line.
     internal static string Lever(Incinerator incinerator)
     {
-        WeatherKind kind = ObliteratorKeys.Pick(incinerator.m_container.GetInventory(), out _, out _);
-        if (kind == WeatherKind.None || !ObliteratorKeys.IsKnown(kind)) return string.Empty;
-        if (!WeatherSync.LocalPlayerMayChange()) return "\n" + Messages.LeverNotAllowed;
-        return "\n" + string.Format(Messages.LeverBrings, WeatherKinds.Colored(kind), Explain(kind));
+        Text.Clear();
+        bool on = ObliteratorSwitch.IsOn(incinerator);
+        foreach (ObliteratorKeys.Picked picked in ObliteratorKeys.PickAll(incinerator.m_container.GetInventory()))
+            if (ObliteratorKeys.IsKnown(picked.Kind))
+                Text.Append('\n').AppendFormat(Messages.LeverBrings, WeatherKinds.Colored(picked.Kind), Explain(picked.Kind));
+        if (Text.Length == 0) return string.Empty;
+        if (!on) return "\n" + Messages.LeverSwitchedOff;
+        return WeatherSync.LocalPlayerMayChange() ? Text.ToString() : "\n" + Messages.LeverNotAllowed;
     }
 
-    // Hatch: every item that performs a rite.
-    internal static string Hatch()
+    // Hatch: every item that performs a rite. Nothing while the obliterator's rites are off.
+    internal static string Hatch(Container hatch)
     {
         Text.Clear();
+        if (!ObliteratorSwitch.IsOn(hatch)) return string.Empty;
         foreach (WeatherKind kind in ObliteratorKeys.Known())
         {
             if (Text.Length == 0) Text.Append('\n').Append(Messages.HatchTitle);
@@ -33,23 +40,30 @@ internal static class ObliteratorHints
         return Text.ToString();
     }
 
-    // Item tooltip in the open obliterator: whether this item decides the rite, needs more of it, or just burns.
-    // keyItem: the deciding item, or null when none has enough in.
-    internal static string Tooltip(Inventory inventory, ItemDrop.ItemData item, ItemDrop.ItemData? keyItem, WeatherKind kind, bool several)
+    // Item tooltip in the open obliterator: whether this item's rite is performed, needs more of it, or is kept out by a
+    // rite before it (then the item just burns). Gear the Unmaking Rite unmakes says so, the materials shown under it.
+    // picked: the rites the burn performs.
+    internal static string Tooltip(Inventory inventory, ItemDrop.ItemData item, IReadOnlyList<ObliteratorKeys.Picked> picked)
     {
-        if (item == keyItem)
-            return ObliteratorKeys.IsKnown(kind)
-                ? string.Format(several && Explaining ? Messages.TooltipDecidesOfSeveral : Messages.TooltipDecides, WeatherKinds.Colored(kind), Explain(kind))
-                : string.Empty;
         WeatherKind own = ObliteratorKeys.KindOf(item);
-        if (own == WeatherKind.None || !ObliteratorKeys.IsKnown(own)) return string.Empty;
+        if (own == WeatherKind.None) return Unmade(item, picked);
+        if (!ObliteratorKeys.IsKnown(own)) return string.Empty;
+        if (ObliteratorKeys.Contains(picked, own)) return string.Format(Messages.TooltipDecides, WeatherKinds.Colored(own), Explain(own));
         int amount = ObliteratorKeys.Amount(own);
         int count = ObliteratorKeys.Count(inventory, own);
         if (count < amount)
             return Explaining
                 ? string.Format(Messages.TooltipNeedsMore, amount, WeatherKinds.Colored(own), count)
                 : string.Format(Messages.TooltipNeedsMoreShort, amount);
-        return Explaining ? Messages.TooltipOverruled : Messages.TooltipOverruledShort;
+        WeatherKind first = ObliteratorKeys.ClashingWith(picked, own);
+        return Explaining && first != WeatherKind.None ? string.Format(Messages.TooltipOverruled, WeatherKinds.Colored(first)) : Messages.TooltipOverruledShort;
+    }
+
+    private static string Unmade(ItemDrop.ItemData item, IReadOnlyList<ObliteratorKeys.Picked> picked)
+    {
+        if (!ObliteratorKeys.Contains(picked, WeatherKind.Unmaking) || !ObliteratorKeys.IsKnown(WeatherKind.Unmaking)) return string.Empty;
+        if (!UnmakingReturns.Returns(item, Returns)) return string.Empty;
+        return string.Format(Returns.Count > 0 ? Messages.TooltipUnmade : Messages.TooltipUnmadeNothing, WeatherKinds.Colored(WeatherKind.Unmaking));
     }
 
     internal static bool Explaining => PluginConfig.ShowExplanations.IsOn();

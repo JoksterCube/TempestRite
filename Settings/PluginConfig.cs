@@ -17,43 +17,70 @@ internal static class PluginConfig
     internal static ConfigEntry<float> DomainRadius = null!;
     internal static ConfigEntry<float> BlessingRange = null!;
     internal static ConfigEntry<Toggle> RequireModOnClients = null!;
+    internal static ConfigEntry<Toggle> AdminLocked = null!;
 
-    // 02 - 31: one section per rite.
+    // 02 - 34: one section per rite.
     internal static ConfigEntry<Toggle> SovereignSanctuary = null!;
-    internal static ConfigEntry<float> UnmakingPercent = null!;
+    internal static ConfigEntry<float> UnmakingReturn = null!;
+    internal static ConfigEntry<Toggle> UnmakingUpgradeMaterials = null!;
     internal static ConfigEntry<float> LuminaryRange = null!;
+    internal static ConfigEntry<float> LuminaryStrength = null!;
+    internal static ConfigEntry<float> LuminaryBodyLight = null!;
+    internal static ConfigEntry<Toggle> LuminaryShadows = null!;
     internal static ConfigEntry<float> DrawRange = null!;
+    internal static ConfigEntry<float> SkalCooldown = null!;
     internal static ConfigEntry<float> SerpentMultiplier = null!;
     internal static ConfigEntry<float> FishMultiplier = null!;
     internal static ConfigEntry<float> BigFishMultiplier = null!;
-    internal static ConfigEntry<float> VatBoilTimeCut = null!;
-    internal static ConfigEntry<float> FoodFloorPercent = null!;
-    internal static ConfigEntry<float> VeinSpreadPercent = null!;
-    internal static ConfigEntry<float> VeinShatterAtPercent = null!;
-    internal static ConfigEntry<string> VeinItems = null!;
-    internal static ConfigEntry<float> WearReductionPercent = null!;
+    internal static ConfigEntry<float> VatBoilSpeedMultiplier = null!;
+    internal static ConfigEntry<float> PitchBellowsSpeedMultiplier = null!;
+    internal static ConfigEntry<float> FoodFloor = null!;
+    internal static ConfigEntry<float> LootMultiplier = null!;
+    internal static ConfigEntry<float> OneExtraChance = null!;
+    internal static ConfigEntry<float> TwoExtraChance = null!;
+    internal static ConfigEntry<float> VeinSpread = null!;
+    internal static ConfigEntry<float> VeinShatterAt = null!;
+    internal static ConfigEntry<string> VeinExcluded = null!;
+    internal static ConfigEntry<float> WearMultiplier = null!;
     internal static ConfigEntry<Toggle> GraveBeacon = null!;
-    internal static ConfigEntry<float> TrophyMultiplier = null!;
-    internal static ConfigEntry<string> TreeItems = null!;
+    internal static ConfigEntry<Toggle> GraveReequip = null!;
+    internal static ConfigEntry<float> LuckMultiplier = null!;
+    internal static ConfigEntry<int> ForgeBreakPenalty = null!;
     private static readonly Dictionary<WeatherKind, WeatherConfig> Rites = [];
-    internal static ConfigEntry<string> CarrionCreatures = null!;
-    internal static ConfigEntry<float> VerdantGrowthPercent = null!;
+    internal static ConfigEntry<string> CarrionExcluded = null!;
+    internal static ConfigEntry<float> CarrionSenses = null!;
+    internal static ConfigEntry<string> PackwardExcluded = null!;
+    internal static ConfigEntry<float> PackwardFightSeconds = null!;
+    internal static ConfigEntry<float> VerdantGrowthMultiplier = null!;
     internal static ConfigEntry<float> CrimsonPause = null!;
     internal static ConfigEntry<string> CrimsonEnvironment = null!;
     internal static ConfigEntry<string> BloodmoonBase = null!;
+    internal static ConfigEntry<string> CrimsonRewardItem = null!;
+    internal static ConfigEntry<int> CrimsonRewardPerKill = null!;
+    internal static ConfigEntry<Toggle> CrimsonBubble = null!;
+    internal static ConfigEntry<string> RagnarokBosses = null!;
+    internal static ConfigEntry<int> RagnarokBossCount = null!;
+    internal static ConfigEntry<float> RagnarokPause = null!;
+    internal static ConfigEntry<string> RagnarokTreasure = null!;
+    internal static ConfigEntry<Toggle> RagnarokBubble = null!;
+    internal static ConfigEntry<string> RagnarokEnvironment = null!;
+    internal static ConfigEntry<string> RagnarokSkyBase = null!;
 
-    // 32 - Display
+    // 35 - Display
     internal static ConfigEntry<Toggle> ShowStatus = null!;
     internal static ConfigEntry<Toggle> ShowLeverHint = null!;
     internal static ConfigEntry<Toggle> ShowHatchHint = null!;
     internal static ConfigEntry<Toggle> ShowItemHighlight = null!;
     internal static ConfigEntry<Toggle> ShowExplanations = null!;
-    internal static ConfigEntry<Toggle> ShowRitesFlap = null!;
     internal static ConfigEntry<Toggle> ShowVerdantSparkles = null!;
-    internal static ConfigEntry<Toggle> ShowFermenterBubbles = null!;
+    internal static ConfigEntry<Toggle> ShowVatBoilMotes = null!;
+    internal static ConfigEntry<Toggle> ShowPitchBellowsMotes = null!;
     internal static ConfigEntry<Toggle> ShowBlessingLightning = null!;
     internal static ConfigEntry<Toggle> ShowCreatureEffects = null!;
+    internal static ConfigEntry<Toggle> ShowCreatureIcons = null!;
+    internal static ConfigEntry<Toggle> ShowDomainEffects = null!;
     internal static ConfigEntry<Toggle> ShowMessages = null!;
+    internal static ConfigEntry<Toggle> ShowRiteUnlocks = null!;
 
     internal static void Build(ConfigFile config, ConfigSync configSync)
     {
@@ -64,6 +91,9 @@ internal static class PluginConfig
         DomainRadius = ConfigOptions.Config(General.DomainRadius);
         BlessingRange = ConfigOptions.Config(General.BlessingRange);
         RequireModOnClients = ConfigOptions.Config(General.RequireModOnClients);
+        AdminLocked = ConfigOptions.Config(General.AdminLocked);
+        // As ServerSync's locking setting, only admins can change it, and changing it refreshes which settings are read-only.
+        configSync.AddLockingConfigEntry(AdminLocked);
 
         Add(WeatherKind.Clear, Clear);
         Add(WeatherKind.Thunderstorm, Thunderstorm);
@@ -72,7 +102,7 @@ internal static class PluginConfig
         Add(WeatherKind.Aurora, Aurora);
         Add(WeatherKind.PolarDay, PolarDay);
         Add(WeatherKind.PolarNight, PolarNight);
-        Add(WeatherKind.Tailwind, Tailwind);
+        Add(WeatherKind.GaleBreath, GaleBreath);
         Add(WeatherKind.NoMist, NoMist);
         Add(WeatherKind.Sootfall, Sootfall);
         Add(WeatherKind.AbyssalSurge, AbyssalSurge);
@@ -80,40 +110,69 @@ internal static class PluginConfig
         FishMultiplier = ConfigOptions.Config(Constants.Groups.FishMultiplier);
         BigFishMultiplier = ConfigOptions.Config(Constants.Groups.BigFishMultiplier);
         Add(WeatherKind.Packward, Packward);
+        PackwardExcluded = ConfigOptions.Config(Constants.Groups.PackwardExcluded);
+        PackwardFightSeconds = ConfigOptions.Config(Constants.Groups.PackwardFightSeconds);
         Add(WeatherKind.Carrion, Carrion);
-        CarrionCreatures = ConfigOptions.Config(Constants.Groups.CarrionCreatures);
+        CarrionExcluded = ConfigOptions.Config(Constants.Groups.CarrionExcluded);
+        CarrionSenses = ConfigOptions.Config(Constants.Groups.CarrionSenses);
         Add(WeatherKind.Verdant, Verdant);
-        VerdantGrowthPercent = ConfigOptions.Config(Constants.Groups.VerdantGrowthPercent);
+        VerdantGrowthMultiplier = ConfigOptions.Config(Constants.Groups.VerdantGrowthMultiplier);
         Add(WeatherKind.VatBoil, VatBoil);
-        VatBoilTimeCut = ConfigOptions.Config(Constants.Groups.VatBoilTimeCut);
+        VatBoilSpeedMultiplier = ConfigOptions.Config(Constants.Groups.VatBoilSpeedMultiplier);
+        Add(WeatherKind.PitchBellows, PitchBellows);
+        PitchBellowsSpeedMultiplier = ConfigOptions.Config(Constants.Groups.PitchBellowsSpeedMultiplier);
         Add(WeatherKind.AmberMend, AmberMend);
         Add(WeatherKind.SovereignWard, SovereignWard);
         SovereignSanctuary = ConfigOptions.Config(Constants.Groups.SovereignSanctuary);
         Add(WeatherKind.Unmaking, Unmaking);
-        UnmakingPercent = ConfigOptions.Config(Constants.Groups.UnmakingPercent);
+        UnmakingReturn = ConfigOptions.Config(Constants.Groups.UnmakingReturn);
+        UnmakingUpgradeMaterials = ConfigOptions.Config(Constants.Groups.UnmakingUpgradeMaterials);
         Add(WeatherKind.Grounding, Grounding);
         Add(WeatherKind.CryptDelver, CryptDelver);
+        LootMultiplier = ConfigOptions.Config(Constants.Groups.LootMultiplier);
+        OneExtraChance = ConfigOptions.Config(Constants.Groups.OneExtraChance);
+        TwoExtraChance = ConfigOptions.Config(Constants.Groups.TwoExtraChance);
         Add(WeatherKind.GlacialSatiety, GlacialSatiety);
-        FoodFloorPercent = ConfigOptions.Config(Constants.Groups.FoodFloorPercent);
+        FoodFloor = ConfigOptions.Config(Constants.Groups.FoodFloor);
         Add(WeatherKind.VeinShatter, VeinShatter);
-        VeinSpreadPercent = ConfigOptions.Config(Constants.Groups.VeinSpreadPercent);
-        VeinShatterAtPercent = ConfigOptions.Config(Constants.Groups.VeinShatterAtPercent);
-        VeinItems = ConfigOptions.Config(Constants.Groups.VeinItems);
+        VeinSpread = ConfigOptions.Config(Constants.Groups.VeinSpread);
+        VeinShatterAt = ConfigOptions.Config(Constants.Groups.VeinShatterAt);
+        VeinExcluded = ConfigOptions.Config(Constants.Groups.VeinExcluded);
         Add(WeatherKind.CarapaceTemper, CarapaceTemper);
-        WearReductionPercent = ConfigOptions.Config(Constants.Groups.WearReductionPercent);
+        WearMultiplier = ConfigOptions.Config(Constants.Groups.WearMultiplier);
         Add(WeatherKind.GraveBind, GraveBind);
         GraveBeacon = ConfigOptions.Config(Constants.Groups.GraveBeacon);
+        GraveReequip = ConfigOptions.Config(Constants.Groups.GraveReequip);
         Add(WeatherKind.FortunesBoon, FortunesBoon);
-        TrophyMultiplier = ConfigOptions.Config(Constants.Groups.TrophyMultiplier);
-        TreeItems = ConfigOptions.Config(Constants.Groups.TreeItems);
+        LuckMultiplier = ConfigOptions.Config(Constants.Groups.LuckMultiplier);
+        ForgeBreakPenalty = ConfigOptions.Config(Constants.Groups.ForgeBreakPenalty);
         Add(WeatherKind.Luminary, Luminary);
         LuminaryRange = ConfigOptions.Config(Constants.Groups.LuminaryRange);
+        LuminaryStrength = ConfigOptions.Config(Constants.Groups.LuminaryStrength);
+        LuminaryBodyLight = ConfigOptions.Config(Constants.Groups.LuminaryBodyLight);
+        LuminaryShadows = ConfigOptions.Config(Constants.Groups.LuminaryShadows);
         Add(WeatherKind.AbyssalDraw, AbyssalDraw);
         DrawRange = ConfigOptions.Config(Constants.Groups.DrawRange);
+        Add(WeatherKind.Tailwind, Tailwind);
+        Add(WeatherKind.Skal, Skal);
+        SkalCooldown = ConfigOptions.Config(Constants.Groups.SkalCooldown);
+        Add(WeatherKind.SkyCall, SkyCall);
+        Add(WeatherKind.AnvilSpark, AnvilSpark);
         Add(WeatherKind.Crimson, Crimson);
         CrimsonPause = ConfigOptions.Config(Constants.Groups.CrimsonPause);
+        CrimsonRewardItem = ConfigOptions.Config(Constants.Groups.CrimsonRewardItem);
+        CrimsonRewardPerKill = ConfigOptions.Config(Constants.Groups.CrimsonRewardPerKill);
+        CrimsonBubble = ConfigOptions.Config(Constants.Groups.CrimsonBubble);
         CrimsonEnvironment = ConfigOptions.Config(Constants.Groups.CrimsonEnvironment);
         BloodmoonBase = ConfigOptions.Config(Constants.Groups.BloodmoonBase);
+        Add(WeatherKind.Ragnarok, Ragnarok);
+        RagnarokBosses = ConfigOptions.Config(Constants.Groups.RagnarokBosses);
+        RagnarokBossCount = ConfigOptions.Config(Constants.Groups.RagnarokBossCount);
+        RagnarokPause = ConfigOptions.Config(Constants.Groups.RagnarokPause);
+        RagnarokTreasure = ConfigOptions.Config(Constants.Groups.RagnarokTreasure);
+        RagnarokBubble = ConfigOptions.Config(Constants.Groups.RagnarokBubble);
+        RagnarokEnvironment = ConfigOptions.Config(Constants.Groups.RagnarokEnvironment);
+        RagnarokSkyBase = ConfigOptions.Config(Constants.Groups.RagnarokSkyBase);
         Add(WeatherKind.Sanctuary, Sanctuary);
         Add(WeatherKind.Reset, Reset);
 
@@ -122,15 +181,18 @@ internal static class PluginConfig
         ShowHatchHint = ConfigOptions.Config(Display.ShowHatchHint);
         ShowItemHighlight = ConfigOptions.Config(Display.ShowItemHighlight);
         ShowExplanations = ConfigOptions.Config(Display.ShowExplanations);
-        ShowRitesFlap = ConfigOptions.Config(Display.ShowRitesFlap);
         ShowVerdantSparkles = ConfigOptions.Config(Display.ShowVerdantSparkles);
-        ShowFermenterBubbles = ConfigOptions.Config(Display.ShowFermenterBubbles);
+        ShowVatBoilMotes = ConfigOptions.Config(Display.ShowVatBoilMotes);
+        ShowPitchBellowsMotes = ConfigOptions.Config(Display.ShowPitchBellowsMotes);
         ShowBlessingLightning = ConfigOptions.Config(Display.ShowBlessingLightning);
         ShowCreatureEffects = ConfigOptions.Config(Display.ShowCreatureEffects);
+        ShowCreatureIcons = ConfigOptions.Config(Display.ShowCreatureIcons);
+        ShowDomainEffects = ConfigOptions.Config(Display.ShowDomainEffects);
         ShowMessages = ConfigOptions.Config(Display.ShowMessages);
+        ShowRiteUnlocks = ConfigOptions.Config(Display.ShowRiteUnlocks);
     }
 
-    private static void Add(WeatherKind kind, WeatherGroup group) => Rites[kind] = new WeatherConfig(group);
+    private static void Add(WeatherKind kind, RiteSettings group) => Rites[kind] = new WeatherConfig(group);
 
     internal static WeatherConfig? For(WeatherKind kind) => Rites.TryGetValue(kind, out WeatherConfig config) ? config : null;
 
@@ -141,17 +203,17 @@ internal static class PluginConfig
         WeatherKinds.Group(kind) == RiteGroup.Domain ? DomainRadius.Value : For(kind)?.Radius?.Value ?? 0f;
 
     private static readonly PrefabList CarrionList = new();
+    private static readonly PrefabList PackwardList = new();
     private static readonly PrefabList VeinList = new();
-    private static readonly PrefabList TreeList = new();
 
-    // The prefab hashes of the animals the Carrion Rite draws.
-    internal static HashSet<int> CarrionPrefabs() => CarrionList.Read(CarrionCreatures.Value);
+    // The prefab hashes of the creatures the Carrion Rite doesn't draw.
+    internal static HashSet<int> CarrionExcludedPrefabs() => CarrionList.Read(CarrionExcluded.Value);
 
-    // The prefab hashes of the items whose veins the Vein-Shatter Rite shatters.
-    internal static HashSet<int> VeinPrefabs() => VeinList.Read(VeinItems.Value);
+    // The prefab hashes of the creatures the Packward Rite leaves alone.
+    internal static HashSet<int> PackwardExcludedPrefabs() => PackwardList.Read(PackwardExcluded.Value);
 
-    // The prefab hashes of the items felled trees always drop under the Fortune's Boon Rite.
-    internal static HashSet<int> TreePrefabs() => TreeList.Read(TreeItems.Value);
+    // The prefab hashes of the mineables (or items they drop) the Vein-Shatter Rite leaves alone.
+    internal static HashSet<int> VeinExcludedPrefabs() => VeinList.Read(VeinExcluded.Value);
 
     // A comma separated list of prefab names, read again whenever the setting changes.
     private sealed class PrefabList
@@ -185,7 +247,7 @@ internal sealed class WeatherConfig
 
     internal float Seconds => (Minutes?.Value ?? 0f) * 60f;
 
-    internal WeatherConfig(WeatherGroup group)
+    internal WeatherConfig(RiteSettings group)
     {
         Enabled = ConfigOptions.Config(group.Enabled);
         if (group.Minutes != null) Minutes = ConfigOptions.Config(group.Minutes);

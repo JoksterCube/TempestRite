@@ -16,6 +16,8 @@ using static JoksterCube.TempestRite.Settings.Constants.Plugin;
 namespace JoksterCube.TempestRite;
 
 [BepInPlugin(ModGUID, ModName, ModVersion)]
+// Loaded after AzuHoverStats when it's installed, to show Verdant Rite times in its hover text (see AzuHoverStatsPatches).
+[BepInDependency("Azumatt.AzuHoverStats", BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin
 {
     internal static readonly ManualLogSource ModLogger = BepInEx.Logging.Logger.CreateLogSource(ModName);
@@ -23,7 +25,8 @@ public class Plugin : BaseUnityPlugin
 
     // ModRequired stays false: the mod checks itself (see RequireMod), so the server's Require Mod On Clients setting can
     // let players without it join. Versions must match exactly.
-    // Always locked: synced settings come only from the server's config file (see EnforceServerConfigPatch).
+    // Always locked: synced settings come only from the server's config file, or also from admins in game when the
+    // server's Admin Locked setting is on (see EnforceServerConfigPatch).
     internal static readonly ConfigSync ServerConfigSync = new(ModGUID)
     {
         DisplayName = ModName,
@@ -68,14 +71,19 @@ public class Plugin : BaseUnityPlugin
         WeatherSync.Update();
         WeatherStore.Update();
         Blessings.Update();
+        KinshipRites.Update();
+        DomainAnchors.Update();
         CrimsonRaids.Update();
-        VerdantGrowth.Update();
+        RagnarokRush.Update();
+        IncursionArena.Update();
+        RiteSpeedup.Update();
         DomainWork.Update();
         GearWear.Update();
         GraveBeacon.Update();
         BlessingLights.Update();
         ItemDraw.Update();
         RiteEffects.Update();
+        DomainVisuals.Update();
         WeatherStatus.Update();
     }
 

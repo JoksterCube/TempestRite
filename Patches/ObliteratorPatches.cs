@@ -14,10 +14,72 @@ internal static class ObliteratorPatches
     {
         private const string Feature = "Obliterator lever";
 
+        // A Crimson or Ragnarök Rite going on forbids the rites in it: the lever doesn't move and nothing burns.
+        private static bool Prefix(Incinerator __instance, ref bool __result)
+        {
+            if (PatchGuard.IsDisabled(Feature) || !__instance.m_container) return true;
+            try
+            {
+                string? why = ObliteratorPull.Refused(__instance);
+                if (why == null) return true;
+                if (Player.m_localPlayer) Player.m_localPlayer.Message(MessageHud.MessageType.Center, why);
+                __result = false;
+                return false;
+            }
+            catch (Exception exception)
+            {
+                PatchGuard.Fail(Feature, exception);
+                return true;
+            }
+        }
+
         private static void Postfix(Incinerator __instance, bool __result)
         {
             if (!__result || PatchGuard.IsDisabled(Feature)) return;
-            try { ObliteratorPull.Pulled(__instance); }
+            try
+            {
+                RiteDiscovery.FoundObliterator();
+                ObliteratorPull.Pulled(__instance);
+            }
+            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        }
+    }
+
+    // A key item found for the first time makes its rite known: a "New rite" popup (see RiteDiscovery).
+    [HarmonyPatch(typeof(Player), nameof(Player.AddKnownItem))]
+    private static class ItemLearned
+    {
+        private const string Feature = "New rite popup";
+
+        private static void Prefix(Player __instance, ItemDrop.ItemData item, out WeatherKind __state)
+        {
+            __state = WeatherKind.None;
+            if (PatchGuard.IsDisabled(Feature) || item?.m_shared == null) return;
+            try { __state = RiteDiscovery.BeforeLearning(__instance, item); }
+            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        }
+
+        private static void Postfix(WeatherKind __state)
+        {
+            if (__state == WeatherKind.None || PatchGuard.IsDisabled(Feature)) return;
+            try { RiteDiscovery.AfterLearning(__state); }
+            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        }
+    }
+
+    // Building an obliterator finds it (see RiteDiscovery). PlacePiece only runs for the local player.
+    [HarmonyPatch(typeof(Player), nameof(Player.PlacePiece))]
+    private static class Built
+    {
+        private const string Feature = "Obliterator found";
+
+        private static void Postfix(Player __instance, Piece piece)
+        {
+            if (PatchGuard.IsDisabled(Feature) || __instance != Player.m_localPlayer || !piece) return;
+            try
+            {
+                if (piece.GetComponentInChildren<Incinerator>(true)) RiteDiscovery.FoundObliterator();
+            }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
     }
@@ -69,7 +131,7 @@ internal static class ObliteratorPatches
             {
                 if (!ObliteratorKeys.IsObliteratorHatch(__instance, out _)) return;
                 if (__instance.m_checkGuardStone && !PrivateArea.CheckAccess(__instance.transform.position, 0f, false)) return;
-                __result += ObliteratorHints.Hatch();
+                __result += ObliteratorHints.Hatch(__instance);
             }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
@@ -85,6 +147,20 @@ internal static class ObliteratorPatches
         {
             if (PatchGuard.IsDisabled(Feature)) return;
             try { RitesFlap.Update(__instance); }
+            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        }
+    }
+
+    // What the Unmaking Rite gives back, shown under the tooltip of gear it unmakes in the open obliterator.
+    [HarmonyPatch(typeof(InventoryGui), nameof(InventoryGui.Update))]
+    private static class UnmakingRow
+    {
+        private const string Feature = "Unmaking tooltip";
+
+        private static void Postfix(InventoryGui __instance)
+        {
+            if (PatchGuard.IsDisabled(Feature)) return;
+            try { UnmakingTooltip.Update(__instance); }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
     }

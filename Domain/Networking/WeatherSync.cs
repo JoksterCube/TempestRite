@@ -11,8 +11,9 @@ namespace JoksterCube.TempestRite.Domain.Networking;
 // are the server themselves. Players ask the server to perform a rite; it checks who may, then tells everyone with the
 // mod. Players joining later ask it what's going on and how long each has left. Only players whose version matched the
 // server's take part.
+// One burn can perform several rites: they are asked for, performed and told together.
 // Blessings aren't kept by the server: it tells everyone where one was performed, and the players standing there
-// receive it (see Blessings).
+// receive it (see Blessings). Kinship rites go out the same way, and everyone receives them (see KinshipRites).
 internal static class WeatherSync
 {
     private const float StateRequestRetry = 10f;
@@ -23,7 +24,9 @@ internal static class WeatherSync
     private enum Refusal
     {
         AdminsOnly = 1,
-        Disabled = 2
+        Disabled = 2,
+        // A Crimson or Ragnarök Rite going on forbids it; the reason follows.
+        Incursion = 3
     }
 
     private static bool _stateReceived;
@@ -36,7 +39,6 @@ internal static class WeatherSync
         rpc.Register<ZPackage>(Rpcs.StateRequest, RPC_StateRequest);
         rpc.Register<ZPackage>(Rpcs.State, RPC_State);
         rpc.Register<ZPackage>(Rpcs.Refused, RPC_Refused);
-        rpc.Register<ZPackage>(Rpcs.Blessing, RPC_Blessing);
     }
 
     internal static void ClearSession()
@@ -61,15 +63,17 @@ internal static class WeatherSync
     internal static bool LocalPlayerMayChange() =>
         WeatherPermissions.Allowed(PluginConfig.WhoCanChange.Value, ZNet.instance && ZNet.instance.LocalPlayerIsAdminOrHost());
 
-    // The local player burnt a key item in the obliterator at position.
-    internal static void RequestChange(WeatherKind kind, Vector3 position)
+    // The local player burnt key items in the obliterator at position: the rites they perform, in order.
+    internal static void RequestChange(List<WeatherKind> kinds, Vector3 position)
     {
-        if (!ZNet.instance || ZRoutedRpc.instance == null || !PluginConfig.IsEnabled(kind)) return;
+        if (!ZNet.instance || ZRoutedRpc.instance == null) return;
+        kinds = kinds.FindAll(PluginConfig.IsEnabled);
+        if (kinds.Count == 0) return;
 
         if (!ZNet.instance.IsServer())
         {
             ZPackage package = new();
-            package.Write((int)kind);
+            WriteKinds(package, kinds);
             package.Write(position);
             ZRoutedRpc.instance.InvokeRoutedRPC(Rpcs.Request, package);
             return;
@@ -81,7 +85,7 @@ internal static class WeatherSync
             PlayerMessages.Warning(Messages.RefusedAdminsOnly);
             return;
         }
-        Perform(kind, position, ZRoutedRpc.instance.m_id, Player.m_localPlayer ? Player.m_localPlayer.GetPlayerName() : string.Empty);
+        Perform(kinds, position, ZRoutedRpc.instance.m_id, Player.m_localPlayer ? Player.m_localPlayer.GetPlayerName() : string.Empty);
     }
 
     // ---- Server ----
@@ -89,83 +93,107 @@ internal static class WeatherSync
     private static void RPC_Request(long sender, ZPackage package)
     {
         if (!IsServer() || !IsValidatedPeer(sender, out ZNetPeer? peer)) return;
-        WeatherKind kind = (WeatherKind)package.ReadInt();
+        List<WeatherKind> kinds = ReadKinds(package);
         Vector3 position = package.ReadVector3();
 
-        if (!PluginConfig.IsEnabled(kind))
+        List<WeatherKind> enabled = kinds.FindAll(PluginConfig.IsEnabled);
+        if (enabled.Count == 0)
         {
             Refuse(sender, Refusal.Disabled);
             return;
         }
         if (!WeatherPermissions.Allowed(PluginConfig.WhoCanChange.Value, IsAdmin(peer!)))
         {
-            Plugin.ModLogger.LogInfo($"Refused {kind} performed by {peer!.m_playerName}: admins only.");
+            Plugin.ModLogger.LogInfo($"Refused {string.Join(", ", kinds)} performed by {peer!.m_playerName}: admins only.");
             Refuse(sender, Refusal.AdminsOnly);
             return;
         }
-        Perform(kind, position, sender, peer!.m_playerName);
+        Perform(enabled, position, sender, peer!.m_playerName);
     }
 
-    // On the server: performs the rite and tells everyone with the mod.
-    private static void Perform(WeatherKind kind, Vector3 position, long callerId, string callerName)
+    // On the server: performs the rites of one burn, in order, and tells everyone with the mod. A rite clashing with
+    // one before it is left out, as the obliterator picks them (see KeyItemPicker), and so is one a Crimson or Ragnarök
+    // Rite going on forbids (the player pulling the lever was told already, and nothing burnt; this is for the rare
+    // case it came about in between).
+    private static void Perform(List<WeatherKind> kinds, Vector3 position, long callerId, string callerName)
     {
         bool byHost = callerId == ZRoutedRpc.instance.m_id;
-        if (WeatherKinds.Personal(kind))
+        List<WeatherKind> rites = [];
+        List<WeatherKind> blessings = [];
+        List<WeatherKind> done = [];
+        string? refused = null;
+        foreach (WeatherKind kind in kinds)
         {
-            Plugin.ModLogger.LogInfo($"{callerName} performed the {WeatherKinds.Name(kind)} at ({position.x:0}, {position.z:0}).");
-            ZPackage blessing = BlessingPackage(kind, position, callerId, callerName);
-            foreach (ZNetPeer peer in ZNet.instance.GetPeers())
-                if (peer.m_uid != 0 && RpcHandlers.ValidatedPeers.Contains(peer.m_rpc))
-                    ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, Rpcs.Blessing, blessing);
-            // The host's own player too.
-            if (Player.m_localPlayer) Blessings.Performed(kind, position, byHost, callerName);
-            return;
+            if (!WeatherKinds.IsKnown(kind) || done.Exists(d => WeatherKinds.Clashes(d, kind))) continue;
+            if (IncursionArena.RiteRefused(kind, position) is { } why)
+            {
+                Plugin.ModLogger.LogInfo($"Refused the {WeatherKinds.Name(kind)} performed by {callerName}: {why}.");
+                refused ??= why;
+                continue;
+            }
+            done.Add(kind);
+            if (WeatherKinds.Personal(kind) || WeatherKinds.ForEveryone(kind))
+            {
+                Plugin.ModLogger.LogInfo($"{callerName} performed the {WeatherKinds.Name(kind)} at ({position.x:0}, {position.z:0}).");
+                blessings.Add(kind);
+                continue;
+            }
+            WeatherState.Start(kind, callerName, position);
+            CrimsonRaids.Performed(kind);
+            RagnarokRush.Performed(kind);
+            Log(callerName, kind);
+            rites.Add(kind);
         }
+        if (refused != null)
+        {
+            if (byHost) PlayerMessages.Warning(refused);
+            else Refuse(callerId, Refusal.Incursion, refused);
+        }
+        if (done.Count == 0) return;
 
-        WeatherState.Start(kind, callerName, position);
-        CrimsonRaids.Performed(kind);
-        Log(callerName, kind);
-        if (Player.m_localPlayer) WeatherState.Announce(kind, byLocalPlayer: byHost, callerName);
-        WeatherStore.Save();
-        SendStateToValidatedPeers(kind, callerId, callerName);
-    }
-
-    private static void RPC_StateRequest(long sender, ZPackage _)
-    {
-        if (!IsServer() || !IsValidatedPeer(sender, out ZNetPeer? _)) return;
-        ZRoutedRpc.instance.InvokeRoutedRPC(sender, Rpcs.State, StatePackage(WeatherKind.None, callerId: 0L, string.Empty));
-    }
-
-    private static void Refuse(long target, Refusal refusal)
-    {
-        ZPackage package = new();
-        package.Write((int)refusal);
-        ZRoutedRpc.instance.InvokeRoutedRPC(target, Rpcs.Refused, package);
-    }
-
-    // announced: the rite just performed, which players are told about (None: nothing to tell).
-    private static void SendStateToValidatedPeers(WeatherKind announced, long callerId, string callerName)
-    {
-        ZPackage package = StatePackage(announced, callerId, callerName);
+        // The host's own player too.
+        if (Player.m_localPlayer) Announce(rites, blessings, position, byLocalPlayer: byHost, callerName);
+        if (rites.Count > 0) WeatherStore.Save();
+        ZPackage package = StatePackage(rites, blessings, position, callerId, callerName);
         foreach (ZNetPeer peer in ZNet.instance.GetPeers())
             if (peer.m_uid != 0 && RpcHandlers.ValidatedPeers.Contains(peer.m_rpc))
                 ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, Rpcs.State, package);
     }
 
-    private static ZPackage StatePackage(WeatherKind announced, long callerId, string callerName)
+    // On the server, after it changed what is going on by itself (the Crimson Rite breaking off): saves it and tells
+    // everyone with the mod.
+    internal static void Broadcast()
+    {
+        if (!IsServer() || ZRoutedRpc.instance == null) return;
+        WeatherStore.Save();
+        ZPackage package = StatePackage([], [], Vector3.zero, callerId: 0L, string.Empty);
+        foreach (ZNetPeer peer in ZNet.instance.GetPeers())
+            if (peer.m_uid != 0 && RpcHandlers.ValidatedPeers.Contains(peer.m_rpc))
+                ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, Rpcs.State, package);
+    }
+
+    private static void RPC_StateRequest(long sender, ZPackage _)
+    {
+        if (!IsServer() || !IsValidatedPeer(sender, out ZNetPeer? _)) return;
+        ZRoutedRpc.instance.InvokeRoutedRPC(sender, Rpcs.State, StatePackage([], [], Vector3.zero, callerId: 0L, string.Empty));
+    }
+
+    private static void Refuse(long target, Refusal refusal, string reason = "")
+    {
+        ZPackage package = new();
+        package.Write((int)refusal);
+        package.Write(reason);
+        ZRoutedRpc.instance.InvokeRoutedRPC(target, Rpcs.Refused, package);
+    }
+
+    // The rites going on, and what was just performed, which players are told about (nothing when they only ask what's
+    // going on): rites everyone shares, and blessings for the players standing at position (kinship rites for all).
+    private static ZPackage StatePackage(List<WeatherKind> rites, List<WeatherKind> blessings, Vector3 position, long callerId, string callerName)
     {
         ZPackage package = new();
         WriteEntries(package, WeatherState.Entries());
-        package.Write((int)announced);
-        package.Write(callerId);
-        package.Write(callerName);
-        return package;
-    }
-
-    private static ZPackage BlessingPackage(WeatherKind kind, Vector3 position, long callerId, string callerName)
-    {
-        ZPackage package = new();
-        package.Write((int)kind);
+        WriteKinds(package, rites);
+        WriteKinds(package, blessings);
         package.Write(position);
         package.Write(callerId);
         package.Write(callerName);
@@ -178,29 +206,37 @@ internal static class WeatherSync
     {
         if (!ZNet.instance || ZNet.instance.IsServer() || sender != ZRoutedRpc.instance.GetServerPeerID()) return;
         List<WeatherState.Entry> entries = ReadEntries(package);
-        WeatherKind announced = (WeatherKind)package.ReadInt();
+        List<WeatherKind> rites = ReadKinds(package);
+        List<WeatherKind> blessings = ReadKinds(package);
+        Vector3 position = package.ReadVector3();
         long callerId = package.ReadLong();
         string callerName = package.ReadString();
 
         _stateReceived = true;
         WeatherState.SetAll(entries);
-        if (announced != WeatherKind.None) WeatherState.Announce(announced, byLocalPlayer: callerId == ZRoutedRpc.instance.m_id, callerName);
+        Announce(rites, blessings, position, byLocalPlayer: callerId == ZRoutedRpc.instance.m_id, callerName);
     }
 
-    private static void RPC_Blessing(long sender, ZPackage package)
+    // Tells the local player what one burn performed, all in one message.
+    private static void Announce(List<WeatherKind> rites, List<WeatherKind> blessings, Vector3 position, bool byLocalPlayer, string callerName)
     {
-        if (!ZNet.instance || ZNet.instance.IsServer() || sender != ZRoutedRpc.instance.GetServerPeerID()) return;
-        WeatherKind kind = (WeatherKind)package.ReadInt();
-        Vector3 position = package.ReadVector3();
-        long callerId = package.ReadLong();
-        string callerName = package.ReadString();
-        if (WeatherKinds.Personal(kind)) Blessings.Performed(kind, position, callerId == ZRoutedRpc.instance.m_id, callerName);
+        using PlayerMessages.Gathering _ = PlayerMessages.Together();
+        foreach (WeatherKind kind in rites) WeatherState.Announce(kind, byLocalPlayer, callerName);
+        Blessings.Performed(blessings.FindAll(WeatherKinds.Personal), position, byLocalPlayer, callerName);
+        KinshipRites.Performed(blessings.FindAll(WeatherKinds.ForEveryone), byLocalPlayer, callerName);
     }
 
     private static void RPC_Refused(long sender, ZPackage package)
     {
         if (!ZNet.instance || ZNet.instance.IsServer() || sender != ZRoutedRpc.instance.GetServerPeerID()) return;
-        PlayerMessages.Warning((Refusal)package.ReadInt() == Refusal.Disabled ? Messages.RefusedDisabled : Messages.RefusedAdminsOnly);
+        Refusal refusal = (Refusal)package.ReadInt();
+        string reason = package.ReadString();
+        PlayerMessages.Warning(refusal switch
+        {
+            Refusal.Disabled => Messages.RefusedDisabled,
+            Refusal.Incursion => reason,
+            _ => Messages.RefusedAdminsOnly
+        });
     }
 
     // ---- Shared helpers ----
@@ -228,6 +264,20 @@ internal static class WeatherSync
             package.Write(entry.CalledBy);
             package.Write(entry.Position);
         }
+    }
+
+    private static void WriteKinds(ZPackage package, List<WeatherKind> kinds)
+    {
+        package.Write(kinds.Count);
+        foreach (WeatherKind kind in kinds) package.Write((int)kind);
+    }
+
+    private static List<WeatherKind> ReadKinds(ZPackage package)
+    {
+        int count = package.ReadInt();
+        List<WeatherKind> kinds = new(count);
+        for (int i = 0; i < count; i++) kinds.Add((WeatherKind)package.ReadInt());
+        return kinds;
     }
 
     private static List<WeatherState.Entry> ReadEntries(ZPackage package)

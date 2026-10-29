@@ -44,6 +44,117 @@ public class KeyItemPickerTests
     [Fact]
     public void Ignores_items_that_call_nothing() =>
         Assert.Equal(1, KeyItemPicker.PickIndex([(WeatherKind.None, 9, 0), (WeatherKind.Rain, 0, 3)]));
+
+    [Fact]
+    public void Nothing_to_pick_all() =>
+        Assert.Empty(KeyItemPicker.PickAll(new List<(WeatherKind, int, int)>()));
+
+    [Fact]
+    public void Rites_in_different_slots_all_go_in_order() =>
+        // Rain (weather), Sun Zenith (daylight), Verdant (domain), two blessings and the Unmaking Rite: none clash.
+        Assert.Equal(
+            [WeatherKind.Rain, WeatherKind.PolarDay, WeatherKind.Verdant, WeatherKind.CryptDelver, WeatherKind.FortunesBoon, WeatherKind.Unmaking],
+            KeyItemPicker.PickAll([
+                (WeatherKind.FortunesBoon, 1, 0), (WeatherKind.Unmaking, 2, 0), (WeatherKind.Verdant, 2, 1),
+                (WeatherKind.PolarDay, 1, 2), (WeatherKind.Rain, 0, 2), (WeatherKind.CryptDelver, 0, 0)
+            ]));
+
+    [Fact]
+    public void Same_slot_keeps_the_first() =>
+        // Thunderstorm is lower than Clear: Clear is left out, Sun Zenith still goes.
+        Assert.Equal([WeatherKind.Thunderstorm, WeatherKind.PolarDay],
+            KeyItemPicker.PickAll([(WeatherKind.Clear, 0, 1), (WeatherKind.Thunderstorm, 5, 2), (WeatherKind.PolarDay, 3, 1)]));
+
+    [Fact]
+    public void Packward_and_Carrion_share_a_slot() =>
+        Assert.Equal([WeatherKind.Carrion, WeatherKind.Verdant],
+            KeyItemPicker.PickAll([(WeatherKind.Packward, 3, 0), (WeatherKind.Carrion, 0, 1), (WeatherKind.Verdant, 1, 0)]));
+
+    [Fact]
+    public void A_rite_appears_once_however_many_stacks() =>
+        Assert.Equal([WeatherKind.Rain], KeyItemPicker.PickAll([(WeatherKind.Rain, 3, 0), (WeatherKind.Rain, 0, 2), (WeatherKind.Rain, 1, 1)]));
+
+    [Fact]
+    public void Equilibrium_first_keeps_out_what_it_ends() =>
+        // Equilibrium goes first: Rain is left out, the Domain and blessing rites still go.
+        Assert.Equal([WeatherKind.Reset, WeatherKind.Verdant, WeatherKind.GraveBind],
+            KeyItemPicker.PickAll([(WeatherKind.Rain, 1, 1), (WeatherKind.Reset, 0, 2), (WeatherKind.Verdant, 2, 1), (WeatherKind.GraveBind, 0, 0)]));
+
+    [Fact]
+    public void Rite_first_keeps_out_what_would_end_it() =>
+        Assert.Equal([WeatherKind.Crimson, WeatherKind.Mist],
+            KeyItemPicker.PickAll([(WeatherKind.Crimson, 0, 2), (WeatherKind.Sanctuary, 1, 2), (WeatherKind.Reset, 2, 2), (WeatherKind.Mist, 0, 0)]));
+
+    [Fact]
+    public void Incursion_first_keeps_out_domain_rites() =>
+        // Ragnarök goes first: Verdant and Packward are left out, the weather and the blessing still go.
+        Assert.Equal([WeatherKind.Ragnarok, WeatherKind.Rain, WeatherKind.GraveBind],
+            KeyItemPicker.PickAll([(WeatherKind.Verdant, 1, 1), (WeatherKind.Ragnarok, 0, 2), (WeatherKind.Rain, 1, 2),
+                (WeatherKind.Packward, 2, 0), (WeatherKind.GraveBind, 0, 0)]));
+
+    [Fact]
+    public void Domain_rite_first_keeps_out_the_incursion() =>
+        Assert.Equal([WeatherKind.Verdant, WeatherKind.Packward],
+            KeyItemPicker.PickAll([(WeatherKind.Verdant, 0, 2), (WeatherKind.Crimson, 1, 2), (WeatherKind.Packward, 2, 2)]));
+
+    [Fact]
+    public void Grounding_clashes_only_with_domain_rites() =>
+        Assert.Equal([WeatherKind.Grounding, WeatherKind.Rain],
+            KeyItemPicker.PickAll([(WeatherKind.Grounding, 0, 2), (WeatherKind.Packward, 1, 2), (WeatherKind.Rain, 2, 2)]));
+}
+
+public class RiteClashTests
+{
+    [Theory]
+    [InlineData((int)WeatherKind.Rain, (int)WeatherKind.Rain)]
+    [InlineData((int)WeatherKind.Rain, (int)WeatherKind.Clear)]
+    [InlineData((int)WeatherKind.PolarDay, (int)WeatherKind.PolarNight)]
+    [InlineData((int)WeatherKind.Packward, (int)WeatherKind.Carrion)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.Crimson)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.PolarDay)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.GaleBreath)]
+    [InlineData((int)WeatherKind.GaleBreath, (int)WeatherKind.GaleBreath)]
+    [InlineData((int)WeatherKind.Grounding, (int)WeatherKind.SovereignWard)]
+    [InlineData((int)WeatherKind.Sanctuary, (int)WeatherKind.Crimson)]
+    [InlineData((int)WeatherKind.Sanctuary, (int)WeatherKind.Ragnarok)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.Ragnarok)]
+    [InlineData((int)WeatherKind.Crimson, (int)WeatherKind.Ragnarok)]
+    [InlineData((int)WeatherKind.Crimson, (int)WeatherKind.Verdant)]
+    [InlineData((int)WeatherKind.Crimson, (int)WeatherKind.SovereignWard)]
+    [InlineData((int)WeatherKind.Ragnarok, (int)WeatherKind.Packward)]
+    [InlineData((int)WeatherKind.Ragnarok, (int)WeatherKind.PitchBellows)]
+    [InlineData((int)WeatherKind.CryptDelver, (int)WeatherKind.CryptDelver)]
+    public void Clash(int a, int b)
+    {
+        Assert.True(WeatherKinds.Clashes((WeatherKind)a, (WeatherKind)b));
+        Assert.True(WeatherKinds.Clashes((WeatherKind)b, (WeatherKind)a));
+    }
+
+    [Theory]
+    [InlineData((int)WeatherKind.Rain, (int)WeatherKind.PolarNight)]
+    [InlineData((int)WeatherKind.Aurora, (int)WeatherKind.GaleBreath)]
+    [InlineData((int)WeatherKind.PolarDay, (int)WeatherKind.GaleBreath)]
+    [InlineData((int)WeatherKind.Tailwind, (int)WeatherKind.GaleBreath)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.Verdant)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.CryptDelver)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.Tailwind)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.Sanctuary)]
+    [InlineData((int)WeatherKind.Reset, (int)WeatherKind.Grounding)]
+    [InlineData((int)WeatherKind.Grounding, (int)WeatherKind.Crimson)]
+    [InlineData((int)WeatherKind.Grounding, (int)WeatherKind.Ragnarok)]
+    [InlineData((int)WeatherKind.Crimson, (int)WeatherKind.Rain)]
+    [InlineData((int)WeatherKind.Crimson, (int)WeatherKind.CryptDelver)]
+    [InlineData((int)WeatherKind.Ragnarok, (int)WeatherKind.Skal)]
+    [InlineData((int)WeatherKind.Ragnarok, (int)WeatherKind.Grounding)]
+    [InlineData((int)WeatherKind.Sanctuary, (int)WeatherKind.Rain)]
+    [InlineData((int)WeatherKind.CryptDelver, (int)WeatherKind.FortunesBoon)]
+    [InlineData((int)WeatherKind.Unmaking, (int)WeatherKind.Reset)]
+    [InlineData((int)WeatherKind.Verdant, (int)WeatherKind.VatBoil)]
+    public void No_clash(int a, int b)
+    {
+        Assert.False(WeatherKinds.Clashes((WeatherKind)a, (WeatherKind)b));
+        Assert.False(WeatherKinds.Clashes((WeatherKind)b, (WeatherKind)a));
+    }
 }
 
 public class EnvironmentTableTests
@@ -93,6 +204,7 @@ public class WeatherKindTests
         Assert.Equal(EffectSlot.Weather, WeatherKinds.Slot(WeatherKind.Mist));
         Assert.Equal(EffectSlot.Daylight, WeatherKinds.Slot(WeatherKind.PolarDay));
         Assert.Equal(EffectSlot.Daylight, WeatherKinds.Slot(WeatherKind.PolarNight));
+        Assert.Equal(EffectSlot.Wind, WeatherKinds.Slot(WeatherKind.GaleBreath));
         Assert.Equal(EffectSlot.Mistlands, WeatherKinds.Slot(WeatherKind.NoMist));
         // Sootfall has its own slot, so it can go on together with True Sight.
         Assert.Equal(EffectSlot.Ashlands, WeatherKinds.Slot(WeatherKind.Sootfall));
@@ -112,10 +224,19 @@ public class WeatherKindTests
         Assert.Equal(19, (int)WeatherKind.VatBoil);
         Assert.Equal(26, (int)WeatherKind.AbyssalSurge);
         Assert.Equal(30, (int)WeatherKind.Unmaking);
-        Assert.False(WeatherKinds.IsKnown((WeatherKind)31));
+        Assert.Equal(31, (int)WeatherKind.Skal);
+        Assert.Equal(32, (int)WeatherKind.SkyCall);
+        Assert.Equal(33, (int)WeatherKind.Ragnarok);
+        Assert.Equal(34, (int)WeatherKind.AnvilSpark);
+        Assert.Equal(35, (int)WeatherKind.GaleBreath);
+        Assert.Equal(11, (int)EffectSlot.Wind);
+        Assert.Equal(36, (int)WeatherKind.PitchBellows);
+        Assert.Equal(12, (int)EffectSlot.Smelting);
+        Assert.False(WeatherKinds.IsKnown((WeatherKind)37));
         Assert.False(WeatherKinds.Lasts(WeatherKind.Unmaking));
         Assert.True(WeatherKinds.Personal(WeatherKind.Luminary));
         Assert.True(WeatherKinds.Personal(WeatherKind.AbyssalDraw));
+        Assert.True(WeatherKinds.Personal(WeatherKind.Tailwind));
         Assert.True(WeatherKinds.IsDomainSlot(WeatherKinds.Slot(WeatherKind.SovereignWard)));
         Assert.False(WeatherKinds.Lasts(WeatherKind.Grounding));
         Assert.False(WeatherKinds.Lasts(WeatherKind.Reset));
@@ -193,15 +314,18 @@ public class RiteGroupTests
     public void Groups_hold_their_rites()
     {
         Assert.Equal(RiteGroup.Atmospheric, WeatherKinds.Group(WeatherKind.Aurora));
-        Assert.Equal(RiteGroup.Celestial, WeatherKinds.Group(WeatherKind.Tailwind));
+        Assert.Equal(RiteGroup.Celestial, WeatherKinds.Group(WeatherKind.GaleBreath));
+        Assert.Equal(RiteGroup.Blessings, WeatherKinds.Group(WeatherKind.Tailwind));
         Assert.Equal(RiteGroup.BiomeMastery, WeatherKinds.Group(WeatherKind.AbyssalSurge));
         Assert.Equal(RiteGroup.Domain, WeatherKinds.Group(WeatherKind.Verdant));
         Assert.Equal(RiteGroup.Domain, WeatherKinds.Group(WeatherKind.VatBoil));
+        Assert.Equal(RiteGroup.Domain, WeatherKinds.Group(WeatherKind.PitchBellows));
         Assert.Equal(RiteGroup.Domain, WeatherKinds.Group(WeatherKind.AmberMend));
         Assert.Equal(RiteGroup.Blessings, WeatherKinds.Group(WeatherKind.CryptDelver));
         Assert.Equal(RiteGroup.Blessings, WeatherKinds.Group(WeatherKind.FortunesBoon));
-        Assert.Equal(RiteGroup.Incursions, WeatherKinds.Group(WeatherKind.Sanctuary));
-        Assert.Equal(RiteGroup.Incursions, WeatherKinds.Group(WeatherKind.Reset));
+        Assert.Equal(RiteGroup.Reckoning, WeatherKinds.Group(WeatherKind.Sanctuary));
+        Assert.Equal(RiteGroup.Reckoning, WeatherKinds.Group(WeatherKind.Reset));
+        Assert.Equal(RiteGroup.Reckoning, WeatherKinds.Group(WeatherKind.Unmaking));
     }
 
     [Fact]
@@ -209,7 +333,9 @@ public class RiteGroupTests
     {
         Assert.True(WeatherKinds.Located(WeatherKind.Packward));
         Assert.True(WeatherKinds.Located(WeatherKind.Crimson));
+        Assert.True(WeatherKinds.Located(WeatherKind.Ragnarok));
         Assert.True(WeatherKinds.Located(WeatherKind.VatBoil));
+        Assert.True(WeatherKinds.Located(WeatherKind.PitchBellows));
         Assert.True(WeatherKinds.Located(WeatherKind.AmberMend));
         Assert.False(WeatherKinds.Located(WeatherKind.Rain));
         Assert.False(WeatherKinds.Located(WeatherKind.AbyssalSurge));
@@ -232,6 +358,27 @@ public class RiteGroupTests
     }
 
     [Fact]
+    public void Kinship_rites_last_for_everyone_without_a_slot()
+    {
+        foreach (WeatherKind kind in WeatherKinds.All)
+        {
+            bool kinship = WeatherKinds.Group(kind) == RiteGroup.Kinship;
+            Assert.Equal(kinship, WeatherKinds.ForEveryone(kind));
+            if (!kinship) continue;
+            Assert.True(WeatherKinds.Lasts(kind), kind.ToString());
+            Assert.False(WeatherKinds.Personal(kind), kind.ToString());
+            Assert.False(WeatherKinds.HasSlot(kind), kind.ToString());
+            Assert.False(WeatherKinds.Located(kind), kind.ToString());
+        }
+        Assert.True(WeatherKinds.ForEveryone(WeatherKind.Skal));
+        Assert.True(WeatherKinds.ForEveryone(WeatherKind.SkyCall));
+        Assert.True(WeatherKinds.ForEveryone(WeatherKind.AnvilSpark));
+        Assert.False(WeatherKinds.Clashes(WeatherKind.AnvilSpark, WeatherKind.SkyCall));
+        Assert.False(WeatherKinds.Clashes(WeatherKind.Skal, WeatherKind.SkyCall));
+        Assert.False(WeatherKinds.Ends(WeatherKind.Reset, WeatherKind.SkyCall));
+    }
+
+    [Fact]
     public void Slots_are_listed_in_the_order_of_their_numbers()
     {
         for (int i = 0; i < WeatherKinds.Slots.Length; i++) Assert.Equal(i, (int)WeatherKinds.Slots[i]);
@@ -245,7 +392,11 @@ public class RiteGroupTests
     {
         Assert.Equal(EffectSlot.Weather, WeatherKinds.Slot(WeatherKind.Aurora));
         Assert.Equal(EffectSlot.Daylight, WeatherKinds.Slot(WeatherKind.PolarNight));
-        Assert.Equal(EffectSlot.Wind, WeatherKinds.Slot(WeatherKind.Tailwind));
+        Assert.Equal(EffectSlot.Wind, WeatherKinds.Slot(WeatherKind.GaleBreath));
+        // Vat-Boil and Pitch-Bellows each have their own, so both can go on at once.
+        Assert.NotEqual(WeatherKinds.Slot(WeatherKind.VatBoil), WeatherKinds.Slot(WeatherKind.PitchBellows));
+        Assert.True(WeatherKinds.Ends(WeatherKind.Grounding, WeatherKind.PitchBellows));
+        Assert.False(WeatherKinds.Ends(WeatherKind.Reset, WeatherKind.PitchBellows));
         // Packward and Carrion share a slot: one replaces the other.
         Assert.Equal(WeatherKinds.Slot(WeatherKind.Packward), WeatherKinds.Slot(WeatherKind.Carrion));
     }
@@ -256,6 +407,7 @@ public class RiteGroupTests
         Assert.True(WeatherKinds.IsDomainSlot(WeatherKinds.Slot(WeatherKind.Verdant)));
         Assert.True(WeatherKinds.IsDomainSlot(WeatherKinds.Slot(WeatherKind.Carrion)));
         Assert.True(WeatherKinds.IsDomainSlot(WeatherKinds.Slot(WeatherKind.VatBoil)));
+        Assert.True(WeatherKinds.IsDomainSlot(WeatherKinds.Slot(WeatherKind.PitchBellows)));
         Assert.True(WeatherKinds.IsDomainSlot(WeatherKinds.Slot(WeatherKind.AmberMend)));
         Assert.False(WeatherKinds.IsDomainSlot(WeatherKinds.Slot(WeatherKind.AbyssalSurge)));
         Assert.False(WeatherKinds.IsDomainSlot(WeatherKinds.Slot(WeatherKind.Rain)));
@@ -323,5 +475,65 @@ public class WeatherBiomesTests
             Assert.NotEmpty(WeatherKinds.Name(kind));
             Assert.NotEmpty(WeatherKinds.Plain(kind));
         }
+    }
+}
+
+public class ConfigNameTests
+{
+    // BepInEx refuses these in section and key names and the plugin then fails to load.
+    private static readonly char[] Invalid = ['=', '\n', '\t', '\\', '"', '\'', '[', ']'];
+
+    [Fact]
+    public void Section_and_key_names_are_valid_for_BepInEx()
+    {
+        var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Public;
+        var types = new List<System.Type> { typeof(Settings.Constants.Groups) };
+        types.AddRange(typeof(Settings.Constants.Groups).GetNestedTypes(flags));
+
+        int checkedCount = 0;
+        foreach (var type in types)
+        foreach (var field in type.GetFields(flags))
+        {
+            var infos = new List<object?>();
+            object? value = field.GetValue(null);
+            if (value is Settings.RiteSettings rite)
+                infos.AddRange([rite.Enabled, rite.Minutes, rite.KeyItem, rite.KeyAmount, rite.Environments, rite.Radius]);
+            else if (field.FieldType.IsGenericType && field.FieldType.GetGenericTypeDefinition() == typeof(Settings.ConfigInfo<>))
+                infos.Add(value);
+
+            foreach (var info in infos)
+            {
+                if (info == null) continue;
+                foreach (var prop in new[] { "Group", "Name" })
+                {
+                    string text = (string)info.GetType().GetProperty(prop, flags | System.Reflection.BindingFlags.Instance)!.GetValue(info)!;
+                    Assert.True(text.IndexOfAny(Invalid) < 0, $"{field.Name}.{prop} has an invalid character: {text}");
+                }
+                checkedCount++;
+            }
+        }
+        Assert.True(checkedCount > 30);
+    }
+}
+
+public class KinshipSaveTests
+{
+    [Fact]
+    public void Sky_call_wait_reads_back()
+    {
+        string text = KinshipRites.Format(321.5f, 600f, "Ale, Wright");
+        Assert.True(KinshipRites.TryParse(text, out float remaining, out float duration, out string calledBy));
+        Assert.Equal(321.5f, remaining);
+        Assert.Equal(600f, duration);
+        Assert.Equal("Ale  Wright", calledBy);
+    }
+
+    [Fact]
+    public void Skips_bad_or_finished_waits()
+    {
+        Assert.False(KinshipRites.TryParse("", out _, out _, out _));
+        Assert.False(KinshipRites.TryParse("abc,600,x", out _, out _, out _));
+        Assert.False(KinshipRites.TryParse("0,600,x", out _, out _, out _));
     }
 }

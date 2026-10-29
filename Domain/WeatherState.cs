@@ -8,6 +8,8 @@ namespace JoksterCube.TempestRite.Domain;
 
 // The rites going on in this game: at most one per slot, each with its own time. Rites that work around an obliterator
 // (the Domain rites, Crimson) also keep where it is. Blessings are kept apart, by each player (see Blessings).
+// While a Crimson or Ragnarök Rite goes on, no Domain rite works within its bubble: one performed at an obliterator
+// inside it is cancelled as it starts, and one reaching into it from outside does nothing there until it ends.
 //
 // Time is counted with the game clock (Time.time), not world time: sleeping skips world time, and a rite performed
 // for 30 minutes should last 30 minutes of play. Over the network only the time left is sent, so each game counts
@@ -51,35 +53,66 @@ internal static class WeatherState
         return s.Kind != WeatherKind.None && Time.time < s.EndTime ? s.Kind : WeatherKind.None;
     }
 
-    // Blessings are the local player's own (see Blessings); the rest are shared.
-    internal static bool IsActive(WeatherKind kind) => WeatherKinds.Personal(kind)
-        ? Blessings.IsActive(kind)
+    // Blessings and what kinship rites leave are the local player's own (see Blessings, KinshipRites); the rest are
+    // shared.
+    internal static bool IsActive(WeatherKind kind) =>
+        WeatherKinds.Personal(kind) ? Blessings.IsActive(kind)
+        : WeatherKinds.ForEveryone(kind) ? KinshipRites.IsActive(kind)
         : WeatherKinds.HasSlot(kind) && Active(WeatherKinds.Slot(kind)) == kind;
 
-    internal static float Remaining(WeatherKind kind) => WeatherKinds.Personal(kind)
-        ? Blessings.Remaining(kind)
+    internal static float Remaining(WeatherKind kind) =>
+        WeatherKinds.Personal(kind) ? Blessings.Remaining(kind)
+        : WeatherKinds.ForEveryone(kind) ? KinshipRites.Remaining(kind)
         : IsActive(kind) ? Of(WeatherKinds.Slot(kind)).EndTime - Time.time : 0f;
 
-    internal static float Duration(WeatherKind kind) => WeatherKinds.Personal(kind)
-        ? Blessings.Duration(kind)
+    internal static float Duration(WeatherKind kind) =>
+        WeatherKinds.Personal(kind) ? Blessings.Duration(kind)
+        : WeatherKinds.ForEveryone(kind) ? KinshipRites.Duration(kind)
         : IsActive(kind) ? Of(WeatherKinds.Slot(kind)).Duration : 0f;
 
-    internal static string CalledBy(WeatherKind kind) => WeatherKinds.Personal(kind)
-        ? Blessings.CalledBy(kind)
+    internal static string CalledBy(WeatherKind kind) =>
+        WeatherKinds.Personal(kind) ? Blessings.CalledBy(kind)
+        : WeatherKinds.ForEveryone(kind) ? KinshipRites.CalledBy(kind)
         : IsActive(kind) ? Of(WeatherKinds.Slot(kind)).CalledBy : string.Empty;
 
     // Where a located rite was performed.
     internal static Vector3 Position(WeatherKind kind) =>
         IsActive(kind) && WeatherKinds.HasSlot(kind) ? Of(WeatherKinds.Slot(kind)).Position : Vector3.zero;
 
-    // Whether a point is within a located rite's reach. Rites that aren't located reach everywhere.
+    // Whether a point is within a located rite's reach. Rites that aren't located reach everywhere. A Domain rite
+    // doesn't reach into a Crimson or Ragnarök Rite's bubble.
     internal static bool Reaches(WeatherKind kind, Vector3 point, float extra = 0f)
     {
         if (!IsActive(kind)) return false;
         if (!WeatherKinds.Located(kind)) return true;
         float radius = PluginConfig.Radius(kind) + extra;
-        return Utils.DistanceXZ(point, Position(kind)) <= radius;
+        return Utils.DistanceXZ(point, Position(kind)) <= radius && !Suspended(kind, point);
     }
+
+    // Whether a Domain rite does nothing at this point: it is within a Crimson or Ragnarök Rite's bubble.
+    internal static bool Suspended(WeatherKind kind, Vector3 point)
+    {
+        if (!IsDomain(kind)) return false;
+        if (RaidPaused(kind)) return true;
+        WeatherKind incursion = Active(EffectSlot.Incursion);
+        return incursion != WeatherKind.None && Utils.DistanceXZ(point, Of(EffectSlot.Incursion).Position) <= PluginConfig.Radius(incursion);
+    }
+
+    // Whether a raid reaches into a Packward or Carrion Rite's area: the rite stops steering creatures and its time
+    // stands still until the raid ends. Every game knows where the raid is, so each pauses on its own clock.
+    internal static bool RaidPaused(WeatherKind kind)
+    {
+        if (kind is not (WeatherKind.Packward or WeatherKind.Carrion) || !IsActive(kind)) return false;
+        return RaidOverlaps(Of(WeatherKinds.Slot(kind)));
+    }
+
+    private static bool RaidOverlaps(Slot s)
+    {
+        RandomEvent? raid = RandEventSystem.instance ? RandEventSystem.instance.GetCurrentRandomEvent() : null;
+        return raid != null && Utils.DistanceXZ(raid.m_pos, s.Position) <= raid.m_eventRange + PluginConfig.Radius(s.Kind);
+    }
+
+    private static bool IsDomain(WeatherKind kind) => WeatherKinds.HasSlot(kind) && WeatherKinds.IsDomainSlot(WeatherKinds.Slot(kind));
 
     // Whether the local player is where a rite shows: everywhere, or near the obliterator for located rites.
     internal static bool ShowsHere(WeatherKind kind)
@@ -117,8 +150,42 @@ internal static class WeatherState
     // Takes what the server says is going on: slots it doesn't mention are cleared.
     internal static void SetAll(List<Entry> entries)
     {
+        // The Domain rites going on before: the server may have cancelled some for a Crimson or Ragnarök Rite.
+        List<(WeatherKind kind, Vector3 position)> domains = [];
+        foreach (Slot s in Slots)
+            if (s.Kind != WeatherKind.None && Time.time < s.EndTime && IsDomain(s.Kind)) domains.Add((s.Kind, s.Position));
         foreach (Slot s in Slots) Reset(s);
         foreach (Entry entry in entries) Set(entry);
+        foreach ((WeatherKind kind, Vector3 position) in domains)
+            if (!IsActive(kind) && InBubble(position)) TellCancelled(kind, position);
+    }
+
+    // When a Crimson or Ragnarök Rite starts: the Domain rites performed at an obliterator within its bubble are cancelled.
+    private static void CancelDomains()
+    {
+        foreach (Slot s in Slots)
+        {
+            if (s.Kind == WeatherKind.None || !IsDomain(s.Kind) || !InBubble(s.Position)) continue;
+            WeatherKind kind = s.Kind;
+            Vector3 position = s.Position;
+            Reset(s);
+            Plugin.ModLogger.LogInfo($"The {WeatherKinds.Name(kind)} is cancelled: its obliterator is within the {WeatherKinds.Name(Active(EffectSlot.Incursion))}'s bubble.");
+            TellCancelled(kind, position);
+        }
+    }
+
+    private static bool InBubble(Vector3 point)
+    {
+        WeatherKind incursion = Active(EffectSlot.Incursion);
+        return incursion != WeatherKind.None && Utils.DistanceXZ(point, Of(EffectSlot.Incursion).Position) <= PluginConfig.Radius(incursion);
+    }
+
+    // Told to players near the cancelled rite's obliterator.
+    private static void TellCancelled(WeatherKind kind, Vector3 position)
+    {
+        Player? player = Player.m_localPlayer;
+        if (!player || Utils.DistanceXZ(player!.transform.position, position) > PluginConfig.Radius(kind)) return;
+        PlayerMessages.TopLeft(string.Format(Messages.DomainCancelled, WeatherKinds.Name(kind), WeatherKinds.Name(Active(EffectSlot.Incursion))));
     }
 
     internal static void Clear()
@@ -127,27 +194,28 @@ internal static class WeatherState
     }
 
     // Performs a rite in this game (for its player, or for a player through this server). The Equilibrium Rite ends
-    // every rite but the Domain ones, the Grounding Rite only the Domain ones, the Sanctuary Rite the Crimson Rite (and
-    // the server ends the raid, see CrimsonRaids).
+    // every rite but the Domain ones, the Grounding Rite only the Domain ones, the Sanctuary Rite the Crimson and
+    // Ragnarök Rites (and the server ends the raid and the bosses, see CrimsonRaids and RagnarokRush).
     internal static void Start(WeatherKind kind, string calledBy, Vector3 position)
     {
-        switch (kind)
+        if (kind is WeatherKind.Reset or WeatherKind.Grounding or WeatherKind.Sanctuary)
         {
-            case WeatherKind.Reset:
-                foreach (EffectSlot slot in WeatherKinds.Slots)
-                    if (!WeatherKinds.IsDomainSlot(slot)) Reset(Of(slot));
-                return;
-            case WeatherKind.Grounding:
-                foreach (EffectSlot slot in WeatherKinds.Slots)
-                    if (WeatherKinds.IsDomainSlot(slot)) Reset(Of(slot));
-                return;
-            case WeatherKind.Sanctuary:
-                Reset(Of(EffectSlot.Incursion));
-                return;
+            foreach (Slot s in Slots)
+                if (s.Kind != WeatherKind.None && WeatherKinds.Ends(kind, s.Kind)) Reset(s);
+            return;
         }
         WeatherConfig? config = PluginConfig.For(kind);
         if (config == null || !WeatherKinds.HasSlot(kind)) return;
         Set(new Entry(kind, config.Seconds, config.Seconds, calledBy, position));
+        if (WeatherKinds.IsIncursion(kind)) CancelDomains();
+    }
+
+    // Ends a rite going on at once, without its ended message: the server says why (see CrimsonRaids).
+    internal static void End(WeatherKind kind)
+    {
+        if (!WeatherKinds.HasSlot(kind)) return;
+        Slot s = Of(WeatherKinds.Slot(kind));
+        if (s.Kind == kind) Reset(s);
     }
 
     // Every frame: says when a rite has run out (located ones only near their obliterator).
@@ -156,11 +224,14 @@ internal static class WeatherState
         foreach (EffectSlot slot in WeatherKinds.Slots)
         {
             Slot s = Of(slot);
-            if (s.Kind == WeatherKind.None || Time.time < s.EndTime) continue;
+            if (s.Kind == WeatherKind.None) continue;
+            // Paused by a raid: the end moves on with the clock.
+            if (slot == EffectSlot.Creatures && Time.time < s.EndTime && RaidOverlaps(s)) s.EndTime += Time.deltaTime;
+            if (Time.time < s.EndTime) continue;
             bool shown = !WeatherKinds.Located(s.Kind) || NearPlayer(s);
             string message = EndedMessage(slot, s.Kind);
             Reset(s);
-            if (shown) PlayerMessages.TopLeft(message);
+            if (shown && message.Length > 0) PlayerMessages.TopLeft(message);
         }
     }
 
@@ -173,14 +244,16 @@ internal static class WeatherState
     private static string EndedMessage(EffectSlot slot, WeatherKind kind) => slot switch
     {
         EffectSlot.Daylight => Messages.EndedDaylight,
+        EffectSlot.Wind => Messages.EndedGaleBreath,
         EffectSlot.Mistlands => Messages.EndedMistlands,
         EffectSlot.Ashlands => Messages.EndedAshlands,
-        EffectSlot.Wind => Messages.EndedWind,
         EffectSlot.Fermenting => Messages.EndedVatBoil,
+        EffectSlot.Smelting => Messages.EndedPitchBellows,
         EffectSlot.Mending => Messages.EndedAmberMend,
         EffectSlot.Ocean => Messages.EndedAbyssalSurge,
         EffectSlot.Ward => Messages.EndedSovereignWard,
-        EffectSlot.Incursion => Messages.EndedIncursion,
+        // The Ragnarök Rite's end is told by the server, with how it went (see RagnarokArena).
+        EffectSlot.Incursion => kind == WeatherKind.Ragnarok ? string.Empty : Messages.EndedIncursion,
         EffectSlot.Verdant => Messages.EndedVerdant,
         EffectSlot.Creatures => kind == WeatherKind.Carrion ? Messages.EndedCarrion : Messages.EndedPackward,
         _ => Messages.EndedWeather

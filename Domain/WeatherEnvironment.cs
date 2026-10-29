@@ -56,14 +56,16 @@ internal static class WeatherEnvironment
     // Called by the game's environment update when something else sets the weather, so it isn't ours.
     internal static void NotOverriding() => Overriding = false;
 
-    // The Crimson Rite's blood moon, near its obliterator: over everything else, raids' own skies too.
-    internal static string? Crimson(EnvMan envMan)
+    // The Crimson Rite's blood moon or the Ragnarök Rite's burning sky, near its obliterator: over everything else,
+    // raids' and bosses' own skies too.
+    internal static string? Incursion(EnvMan envMan)
     {
-        if (!WeatherState.IsActive(WeatherKind.Crimson)) return null;
+        WeatherKind kind = WeatherState.Active(EffectSlot.Incursion);
+        if (kind == WeatherKind.None) return null;
         Camera? camera = Utils.GetMainCamera();
-        if (!camera || !WeatherState.Reaches(WeatherKind.Crimson, camera!.transform.position)) return null;
+        if (!camera || !WeatherState.Reaches(kind, camera!.transform.position)) return null;
         CustomEnvironments.Ensure(envMan);
-        string name = PluginConfig.CrimsonEnvironment.Value;
+        string name = kind == WeatherKind.Ragnarok ? PluginConfig.RagnarokEnvironment.Value : PluginConfig.CrimsonEnvironment.Value;
         return Exists(envMan, name) ? name : null;
     }
 

@@ -74,10 +74,11 @@ internal static class Blessings
         return zdo != null && zdo.GetBool(FullKey);
     }
 
-    // A blessing was performed at an obliterator: the lightning strikes the players standing there, and the local
-    // player receives it if they are one of them.
-    internal static void Performed(WeatherKind kind, Vector3 position, bool byLocalPlayer, string calledBy)
+    // Blessings were performed at an obliterator by one burn: the lightning strikes the players standing there once,
+    // and the local player receives them all if they are one of them.
+    internal static void Performed(IReadOnlyList<WeatherKind> kinds, Vector3 position, bool byLocalPlayer, string calledBy)
     {
+        if (kinds.Count == 0) return;
         float range = PluginConfig.BlessingRange.Value;
         Nearby.Clear();
         Player.GetPlayersInRange(position, range, Nearby);
@@ -86,15 +87,20 @@ internal static class Blessings
                 if (player && !player.IsDead()) BlessingLightning.Strike(player.transform.position);
 
         Player? me = Player.m_localPlayer;
-        string what = WeatherKinds.Colored(kind);
-        if (me && !me!.IsDead() && Nearby.Contains(me))
+        bool received = me && !me!.IsDead() && Nearby.Contains(me);
+        string who = string.IsNullOrEmpty(calledBy) ? Messages.SomeoneName : calledBy;
+        foreach (WeatherKind kind in kinds)
         {
-            Grant(kind, calledBy);
-            string who = string.IsNullOrEmpty(calledBy) ? Messages.SomeoneName : calledBy;
-            PlayerMessages.Center(byLocalPlayer ? string.Format(Messages.BlessedByYou, what) : string.Format(Messages.BlessedBy, who, what));
+            if (!WeatherKinds.Personal(kind)) continue;
+            string what = WeatherKinds.Colored(kind);
+            if (received)
+            {
+                Grant(kind, calledBy);
+                PlayerMessages.Center(byLocalPlayer ? string.Format(Messages.BlessedByYou, what) : string.Format(Messages.BlessedBy, who, what));
+            }
+            else if (byLocalPlayer)
+                PlayerMessages.Center(string.Format(Messages.BlessingMissed, what, Mathf.RoundToInt(range)));
         }
-        else if (byLocalPlayer)
-            PlayerMessages.Center(string.Format(Messages.BlessingMissed, what, Mathf.RoundToInt(range)));
     }
 
     private static void Grant(WeatherKind kind, string calledBy)
@@ -134,6 +140,15 @@ internal static class Blessings
             if (_changed || Time.time >= _nextSave) Save(player);
         }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+    }
+
+    // A blessing used up before its time (the Fortune's Boon Rite saving an item at the forge): it ends now.
+    internal static void End(WeatherKind kind)
+    {
+        if (!Kept.Remove(kind)) return;
+        _changed = true;
+        PlayerMessages.TopLeft(string.Format(Messages.BlessingEnded, WeatherKinds.Colored(kind)));
+        if (Player.m_localPlayer) WriteOnCharacter(Player.m_localPlayer);
     }
 
     // The local player died: every blessing ends.

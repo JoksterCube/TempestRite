@@ -18,8 +18,8 @@ internal static class EnvironmentPatch
         if (PatchGuard.IsDisabled(Feature)) return;
         try
         {
-            // The blood moon wins over raids' own skies, not over a sky set from the console.
-            if (string.IsNullOrEmpty(__instance.m_debugEnv) && WeatherEnvironment.Crimson(__instance) is { } moon)
+            // The blood moon and the burning sky win over raids' and bosses' own skies, not over a sky set from the console.
+            if (string.IsNullOrEmpty(__instance.m_debugEnv) && WeatherEnvironment.Incursion(__instance) is { } moon)
             {
                 WeatherEnvironment.NotOverriding();
                 __result = moon;

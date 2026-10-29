@@ -79,6 +79,11 @@
     <Reference Include="assembly_utils">
       <HintPath>$(PublicizedAssembliesPath)\assembly_utils_publicized.dll</HintPath>
     </Reference>
+    <!-- Only for the signature of Minimap.AddPin (its PlatformUserID parameter). -->
+    <Reference Include="Splatform">
+      <HintPath>$(CorlibPath)\Splatform.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="assembly_guiutils">
       <HintPath>$(CorlibPath)\assembly_guiutils.dll</HintPath>
     </Reference>
@@ -112,6 +117,9 @@
     </Reference>
     <Reference Include="UnityEngine.ParticleSystemModule">
       <HintPath>$(CorlibPath)\UnityEngine.ParticleSystemModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(CorlibPath)\UnityEngine.AudioModule.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>$(CorlibPath)\Unity.TextMeshPro.dll</HintPath>
@@ -161,11 +169,38 @@
       <PackageDir>$(ProjectDir)\Thunderstore\$(PackageName)</PackageDir>
     </PropertyGroup>
   </Target>
+  <PropertyGroup>
+    <ModConfigFile>JoksterCube.$(AssemblyName).cfg</ModConfigFile>
+  </PropertyGroup>
   <Target Name="CopyOutputDLL" AfterTargets="TempestRiteGetAssemblyVersion">
     <Error Text="DLL not found in target directory." Condition="!Exists('$(TargetDir)$(AssemblyName).dll')" />
     <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath)" OverwriteReadOnlyFiles="true" />
+    <!-- Each test starts from a newly generated config with the default values. -->
+    <Delete Files="$(BepInExPath)\config\$(ModConfigFile)" Condition="'$(BepInExPath)' != ''" />
     <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath2)" OverwriteReadOnlyFiles="true" Condition="Exists('$(CopyOutputDLLPath2)')" />
     <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll" DestinationFolder="$(CopyOutputDLLPath3)" OverwriteReadOnlyFiles="true" Condition="Exists('$(CopyOutputDLLPath3)')" />
+  </Target>
+  <!--
+    Uploads the built DLL to the test server's Docker container.
+      dotnet build -p:Deploy=true                       upload only
+      dotnet build -p:Deploy=true -p:DeployRestart=true upload and restart the server
+    DeployHost / DeployContainer come from environment.props.user.
+  -->
+  <Target Name="DeployToServer" AfterTargets="CopyOutputDLL" Condition=" '$(Deploy)' == 'true' ">
+    <Error Text="Set DeployHost (e.g. user@host) in environment.props.user to deploy." Condition=" '$(DeployHost)' == '' " />
+    <Error Text="Set DeployContainer in environment.props.user to deploy." Condition=" '$(DeployContainer)' == '' " />
+    <PropertyGroup>
+      <_DeployTmp>/tmp/$(AssemblyName).dll</_DeployTmp>
+      <_DeployCopy>docker cp $(_DeployTmp) $(DeployContainer):/config/bepinex/plugins/ &amp;&amp; docker cp $(_DeployTmp) $(DeployContainer):/opt/valheim/bepinex/BepInEx/plugins/ &amp;&amp; rm $(_DeployTmp)</_DeployCopy>
+      <!-- The server generates a new config with the default values when it next starts. -->
+      <_DeployResetConfig>docker exec $(DeployContainer) rm -f /config/bepinex/$(ModConfigFile)</_DeployResetConfig>
+    </PropertyGroup>
+    <Message Importance="high" Text="Deploying $(AssemblyName).dll to $(DeployHost) ($(DeployContainer))" />
+    <Exec Command="scp -q -o BatchMode=yes &quot;$(TargetDir)$(AssemblyName).dll&quot; $(DeployHost):$(_DeployTmp)" />
+    <Exec Command="ssh -o BatchMode=yes $(DeployHost) &quot;$(_DeployCopy)&quot;" />
+    <Exec Command="ssh -o BatchMode=yes $(DeployHost) &quot;$(_DeployResetConfig)&quot;" />
+    <Exec Command="ssh -o BatchMode=yes $(DeployHost) &quot;docker restart $(DeployContainer)&quot;" Condition=" '$(DeployRestart)' == 'true' " />
+    <Message Importance="high" Text="Deployed. Restart the server to load it (or build with -p:DeployRestart=true)." Condition=" '$(DeployRestart)' != 'true' " />
   </Target>
   <Target Name="CopyReadMeToTSFolder" AfterTargets="CopyOutputDLL" Condition=" ('$(Configuration)|$(Platform)' == 'Release|AnyCPU') And ('$(OS)' == 'Windows_NT') ">
     <Copy SourceFiles="README.md" DestinationFolder="$(PackageDir)" OverwriteReadOnlyFiles="true" />

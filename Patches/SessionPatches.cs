@@ -18,7 +18,17 @@ internal static class SessionPatches
         private static void Postfix()
         {
             if (PatchGuard.IsDisabled(Feature) || ZRoutedRpc.instance == null) return;
-            try { WeatherSync.Register(ZRoutedRpc.instance); }
+            try
+            {
+                WeatherSync.Register(ZRoutedRpc.instance);
+                VeinShatterPatch.Register(ZRoutedRpc.instance);
+                KinshipRites.Register(ZRoutedRpc.instance);
+                DomainAnchors.Register(ZRoutedRpc.instance);
+                CrimsonRaids.Register(ZRoutedRpc.instance);
+                CrimsonArena.Register(ZRoutedRpc.instance);
+                RagnarokRush.Register(ZRoutedRpc.instance);
+                RagnarokArena.Register(ZRoutedRpc.instance);
+            }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
     }

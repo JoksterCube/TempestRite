@@ -106,13 +106,30 @@ public class RagnarokLootTests
     }
 
     [Fact]
-    public void Picks_different_bosses_weakest_first()
+    public void Picks_different_bosses()
     {
         int next = 0;
         List<int> picked = RagnarokLoot.PickBosses([4, 0, 2, 6], 3, n => next++ % n);
         Assert.Equal(3, picked.Count);
         Assert.Equal(picked.Distinct().Count(), picked.Count);
-        Assert.Equal(picked.OrderBy(p => p), picked);
+    }
+
+    // Every boss comes equally often, and at every turn equally often: not weakest first.
+    [Fact]
+    public void Every_boss_and_order_equally_likely()
+    {
+        System.Random rng = new(7);
+        int[,] at = new int[3, 4];
+        const int runs = 40000;
+        for (int run = 0; run < runs; run++)
+        {
+            List<int> picked = RagnarokLoot.PickBosses([0, 1, 2, 3], 3, n => rng.Next(n));
+            for (int turn = 0; turn < 3; turn++) at[turn, picked[turn]]++;
+        }
+        // Each boss at each turn: a quarter of the runs.
+        for (int turn = 0; turn < 3; turn++)
+            for (int boss = 0; boss < 4; boss++)
+                Assert.InRange(at[turn, boss], runs / 4 * 0.95, runs / 4 * 1.05);
     }
 
     [Fact]
@@ -121,5 +138,14 @@ public class RagnarokLootTests
         Assert.Equal([0, 0, 0], RagnarokLoot.PickBosses([0], 3, _ => 0));
         Assert.Equal(3, RagnarokLoot.PickBosses([0, 1], 3, _ => 0).Count);
         Assert.Empty(RagnarokLoot.PickBosses([], 3, _ => 0));
+    }
+
+    [Fact]
+    public void Spare_bosses_fill_in_before_any_comes_again()
+    {
+        Assert.Equal([0, 1, 3], RagnarokLoot.PickBosses([0], [3, 1], 3, _ => 0).OrderBy(p => p));
+        Assert.Equal([0, 2, 5], RagnarokLoot.PickBosses([2, 0], [5, 0], 3, _ => 0).OrderBy(p => p));
+        Assert.Equal([0, 0, 1], RagnarokLoot.PickBosses([0], [1], 3, _ => 0).OrderBy(p => p));
+        Assert.Empty(RagnarokLoot.PickBosses([], [1, 2], 3, _ => 0));
     }
 }

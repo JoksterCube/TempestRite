@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace JoksterCube.TempestRite.Domain;
 
-// The Ragnarök Rite's treasure table, like a dungeon chest's: one item rolled for each boss slain. The table lists
+// The Ragnarök Rite's treasure table, like a dungeon chest's: rolled a few times for each boss slain. The table lists
 // treasures from the least to the most precious ("Amber: 3-6, AmberPearl: 2-5, Ruby: 2-4, SilverNecklace: 1-3"), and
 // each boss has a strength from 0 (the weakest in the Bosses setting) to 1 (the strongest). A boss most likely gives
 // the treasure at its own place in the table, less likely those near it: Eikthyr mostly amber, Yagluth and the Queen
@@ -111,21 +111,38 @@ internal static class RagnarokLoot
         return rolled;
     }
 
-    // Picks count bosses (by their place in the Bosses setting) among the eligible ones: different ones while there
-    // are enough, then again from all of them; weakest first. random(n): 0 to n - 1.
-    internal static List<int> PickBosses(IList<int> eligible, int count, Func<int, int> random)
+    // Picks count bosses (by their place in the Bosses setting): different ones from the eligible while there are
+    // enough, then different ones from the spare (bosses some but not all have slain), and only then again from all of
+    // them, in a random order: each boss has the same chance to come, and to come at any turn. random(n): 0 to n - 1.
+    internal static List<int> PickBosses(IList<int> eligible, int count, Func<int, int> random) =>
+        PickBosses(eligible, [], count, random);
+
+    internal static List<int> PickBosses(IList<int> eligible, IList<int> spare, int count, Func<int, int> random)
     {
         List<int> picked = [];
         if (eligible.Count == 0 || count <= 0) return picked;
+        List<int> all = [.. eligible];
+        foreach (int place in spare)
+            if (!all.Contains(place)) all.Add(place);
         List<int> left = [.. eligible];
+        List<int> spareLeft = all.GetRange(eligible.Count, all.Count - eligible.Count);
         while (picked.Count < count)
         {
-            if (left.Count == 0) left.AddRange(eligible);
+            if (left.Count == 0)
+            {
+                if (spareLeft.Count > 0) (left, spareLeft) = (spareLeft, []);
+                else left.AddRange(all);
+            }
             int at = random(left.Count);
             picked.Add(left[at]);
             left.RemoveAt(at);
         }
-        picked.Sort();
+        // Spare bosses were picked last: the order is shuffled so they can come at any turn too.
+        for (int i = picked.Count - 1; i > 0; i--)
+        {
+            int j = random(i + 1);
+            (picked[i], picked[j]) = (picked[j], picked[i]);
+        }
         return picked;
     }
 }

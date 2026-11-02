@@ -11,7 +11,7 @@ namespace JoksterCube.TempestRite.Domain;
 
 // Blessings: rites given only to the players standing near the obliterator when it burns (within Blessings Range, the
 // range Forsaken powers are shared in). Each player keeps their own: they aren't sent to others or kept by the server,
-// the Equilibrium Rite doesn't end them, and death does.
+// no rite ends them, and death does.
 // - They are saved with the character, so logging out and back in keeps them.
 // - Which ones a player has is also written on their character for other games to read (a creature's drops are
 //   worked out by the game that owns it, which may not be the killer's).
@@ -64,7 +64,21 @@ internal static class Blessings
         return zdo != null && (zdo.GetInt(BlessedKey) & Bit(kind)) != 0;
     }
 
-    private static int Bit(WeatherKind kind) => 1 << ((int)kind % 31);
+    // Each blessing's own bit on the character: its place among the blessings, by number (every game runs the same
+    // version, so they agree). Fewer than 31 blessings, so none share one.
+    private static Dictionary<WeatherKind, int>? _bits;
+
+    private static int Bit(WeatherKind kind)
+    {
+        if (_bits == null)
+        {
+            List<WeatherKind> blessings = [.. Array.FindAll(WeatherKinds.All, WeatherKinds.Personal)];
+            blessings.Sort((a, b) => ((int)a).CompareTo((int)b));
+            _bits = [];
+            for (int i = 0; i < blessings.Count && i < 31; i++) _bits[blessings[i]] = 1 << i;
+        }
+        return _bits.TryGetValue(kind, out int bit) ? bit : 0;
+    }
 
     // Whether a player's inventory has no empty slot left, as written on them (players without the mod: never).
     internal static bool IsFull(Player player)
@@ -88,18 +102,18 @@ internal static class Blessings
 
         Player? me = Player.m_localPlayer;
         bool received = me && !me!.IsDead() && Nearby.Contains(me);
-        string who = string.IsNullOrEmpty(calledBy) ? Messages.SomeoneName : calledBy;
+        // Only the blessed hear of it (see RiteNews), and who performed it when nobody stood there.
         foreach (WeatherKind kind in kinds)
         {
             if (!WeatherKinds.Personal(kind)) continue;
-            string what = WeatherKinds.Colored(kind);
             if (received)
             {
-                Grant(kind, calledBy);
-                PlayerMessages.Center(byLocalPlayer ? string.Format(Messages.BlessedByYou, what) : string.Format(Messages.BlessedBy, who, what));
+                if (WeatherKinds.InstantBlessing(kind)) SoulTether.Received(position);
+                else Grant(kind, calledBy);
+                RiteNews.Add(RiteNews.Told(kind, byLocalPlayer, calledBy, WeatherKinds.Performed(kind)));
             }
             else if (byLocalPlayer)
-                PlayerMessages.Center(string.Format(Messages.BlessingMissed, what, Mathf.RoundToInt(range)));
+                RiteNews.Add(RiteNews.Told(kind, true, calledBy, Messages.BlessingMissed));
         }
     }
 
@@ -109,6 +123,13 @@ internal static class Blessings
         if (config == null || config.Seconds <= 0f) return;
         Kept[kind] = new Held { EndTime = Time.time + config.Seconds, Duration = config.Seconds, CalledBy = calledBy };
         _changed = true;
+    }
+
+    // Given by the console (addstatus): for its full time, as if received at an obliterator.
+    internal static void Give(WeatherKind kind, string calledBy)
+    {
+        Grant(kind, calledBy);
+        if (Player.m_localPlayer) WriteOnCharacter(Player.m_localPlayer);
     }
 
     // Every frame: picks up the character's saved blessings, ends those run out, and writes them down.
@@ -142,7 +163,8 @@ internal static class Blessings
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
     }
 
-    // A blessing used up before its time (the Fortune's Boon Rite saving an item at the forge): it ends now.
+    // A blessing used up before its time (the Fortune's Boon Rite saving an item at the forge), or its status cleared:
+    // it ends now.
     internal static void End(WeatherKind kind)
     {
         if (!Kept.Remove(kind)) return;
@@ -221,7 +243,12 @@ internal static class BlessingLightning
     private const float Seconds = 6f;
     private static GameObject? _prefab;
 
-    internal static void Strike(Vector3 position)
+    internal static void Strike(Vector3 position) => Make(position, soundOnly: false);
+
+    // Only the strike's thunder, nothing to see: for those who turned the lightning off.
+    internal static void Thunder(Vector3 position) => Make(position, soundOnly: true);
+
+    private static void Make(Vector3 position, bool soundOnly)
     {
         GameObject? prefab = Prefab();
         if (!prefab) return;
@@ -236,6 +263,11 @@ internal static class BlessingLightning
             Strip<ZSyncTransform>(strike);
             Strip<Rigidbody>(strike);
             Strip<ZNetView>(strike);
+            if (soundOnly)
+            {
+                foreach (Renderer renderer in strike.GetComponentsInChildren<Renderer>(true)) renderer.enabled = false;
+                foreach (Light light in strike.GetComponentsInChildren<Light>(true)) light.enabled = false;
+            }
             strike.transform.SetParent(null, true);
             UnityEngine.Object.Destroy(strike, Seconds);
         }

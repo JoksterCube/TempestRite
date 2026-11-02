@@ -13,8 +13,9 @@ namespace JoksterCube.TempestRite.Domain;
 // for the players' side: the kill count, the reward; IncursionArena for the bubble, portals and the map).
 // - The Crimson Rite: while it goes on, the server keeps a raid going at the obliterator: when one ends, the next starts
 //   after a short pause, picked among the raids the players within the radius are ready for (player based raids and
-//   World Advancement Progression's private raids too), with no wait and no base needed, preferring those that fit the
-//   biome; lightning strikes the obliterator as each raid after the first comes. No other raid starts anywhere
+//   World Advancement Progression's private raids too), with no wait and no base needed, each coming as often as the
+//   others, and raids below the players brought up to them (see RaidCatchUp); lightning strikes the obliterator as each raid after the first comes, and the last raid's creatures still
+//   inside die. No other raid starts anywhere
 //   meanwhile (see CrimsonPatch), and one going on elsewhere is replaced. Creatures slain inside are counted. It breaks off when the obliterator is destroyed or everyone inside has fallen
 //   or left; when its time runs out, the obliterator receives a reward for each kill.
 // - The Sanctuary Rite: ends the raid going on at once, and with it the Crimson Rite (no reward).
@@ -54,6 +55,12 @@ internal static class CrimsonRaids
     private static bool _resumed;
     private static bool _warned;
     private static string? _lastRaid;
+    // How often each raid came during this rite.
+    private static readonly Dictionary<string, int> Given = [];
+    // The catch-up of the raid going on, told to everyone again now and then (for those who come later).
+    private static int _steps;
+    private static float _nextTell;
+    private const float TellInterval = 10f;
 
     // A reward the obliterator's owner hasn't been reached for yet.
     private static ZDOID _rewardAt = ZDOID.None;
@@ -83,6 +90,9 @@ internal static class CrimsonRaids
         _resumed = false;
         _warned = false;
         _lastRaid = null;
+        Given.Clear();
+        _steps = 0;
+        _nextTell = 0f;
         _rewardAt = ZDOID.None;
         _rewardAmount = 0;
         _rewardTries = 0;
@@ -102,10 +112,6 @@ internal static class CrimsonRaids
                     RandEventSystem.instance.ResetRandomEvent();
                 }
                 if (_running) Stop(Ending.Ended);
-                break;
-            case WeatherKind.Reset:
-                // The Equilibrium Rite ends the Crimson Rite too.
-                if (_running && !Active) Stop(Ending.Ended);
                 break;
             case WeatherKind.Crimson:
                 // The first raid comes right away.
@@ -153,6 +159,8 @@ internal static class CrimsonRaids
         _performed = false;
         _warned = false;
         _lastRaid = null;
+        Given.Clear();
+        _steps = 0;
         _nextStart = 0f;
         _nextCheck = Time.time + CheckInterval;
         _center = WeatherState.Position(WeatherKind.Crimson);
@@ -170,7 +178,7 @@ internal static class CrimsonRaids
             Stop(Ending.Obliterator);
             return true;
         }
-        if (AnyoneAliveInside())
+        if (PlayersAliveInside() > 0)
         {
             _someoneInside = true;
             _emptySince = -1f;
@@ -189,12 +197,13 @@ internal static class CrimsonRaids
         return true;
     }
 
-    private static bool AnyoneAliveInside()
+    private static int PlayersAliveInside()
     {
         float radius = PluginConfig.Radius(WeatherKind.Crimson);
+        int inside = 0;
         foreach (ZDO zdo in ZNet.instance.GetAllCharacterZDOS())
-            if (!zdo.GetBool(ZDOVars.s_dead) && Utils.DistanceXZ(zdo.GetPosition(), _center) <= radius) return true;
-        return false;
+            if (!zdo.GetBool(ZDOVars.s_dead) && Utils.DistanceXZ(zdo.GetPosition(), _center) <= radius) inside++;
+        return inside;
     }
 
     // Ends it: stops its raid, and tells everyone how it went. Survived: its time ran out, the obliterator gets the reward.
@@ -213,8 +222,14 @@ internal static class CrimsonRaids
             WeatherSync.Broadcast();
         }
 
-        int reward = ending == Ending.Survived ? _kills * Mathf.Max(0, PluginConfig.CrimsonRewardPerKill.Value) : 0;
-        Plugin.ModLogger.LogInfo($"Crimson Rite ended ({ending}) with {_kills} kills" + (reward > 0 ? $", reward {reward} {PluginConfig.CrimsonRewardItem.Value}." : "."));
+        // The reward grows with the players alive inside as it is given (see PartyReward).
+        int players = Mathf.Max(1, PlayersAliveInside());
+        float multiplier = PartyReward.Multiplier(players, PluginConfig.CrimsonRewardPerPlayer.Value);
+        int reward = ending == Ending.Survived
+            ? PartyReward.Scale(_kills * Mathf.Max(0, PluginConfig.CrimsonRewardPerKill.Value), multiplier, UnityEngine.Random.value)
+            : 0;
+        Plugin.ModLogger.LogInfo($"Crimson Rite ended ({ending}) with {_kills} kills, {players} players (x{multiplier:0.##})" +
+            (reward > 0 ? $", reward {reward} {PluginConfig.CrimsonRewardItem.Value}." : "."));
         if (reward > 0)
         {
             if (_obliterator.IsNone() || ZDOMan.instance.GetZDO(_obliterator) == null) _obliterator = FindObliterator(_center);
@@ -283,13 +298,14 @@ internal static class CrimsonRaids
         if (oursGoingOn)
         {
             _nextStart = Time.time + PluginConfig.CrimsonPause.Value;
+            if (Time.time >= _nextTell) TellCatchUp(current!.m_name);
             return;
         }
         // One going on elsewhere is replaced at once; after ours ends, the next comes after the pause.
         if (current == null && Time.time < _nextStart) return;
         _nextStart = Time.time + PluginConfig.CrimsonPause.Value;
 
-        RandomEvent? raid = Pick(raids, _center);
+        RandomEvent? raid = Pick(raids, _center, out int raidTier, out int partyTier);
         if (raid == null)
         {
             if (!_warned) Plugin.ModLogger.LogWarning("Crimson Rite: no raid the players at the obliterator are ready for.");
@@ -297,20 +313,65 @@ internal static class CrimsonRaids
             return;
         }
         _warned = false;
-        // Each raid after the first is announced by lightning on the obliterator.
-        if (_lastRaid != null) ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.CrimsonWave, _center);
+        // Each raid after the first is announced by lightning on the obliterator, and the last one's creatures still
+        // inside die (in the games that have them, see CrimsonArena; here those nobody's game has), so raids don't fight
+        // each other.
+        if (_lastRaid != null)
+        {
+            ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.CrimsonWave, _center);
+            IncursionArena.SweepOnServer(_center, PluginConfig.Radius(WeatherKind.Crimson), Messages.CrimsonName);
+        }
         _lastRaid = raid.m_name;
+        Given[raid.m_name] = (Given.TryGetValue(raid.m_name, out int given) ? given : 0) + 1;
+        _steps = RaidCatchUp.Steps(raidTier, partyTier);
+        // Told first, so the players' games know it before the raid's first creatures spawn there.
+        TellCatchUp(raid.m_name);
         Starting = true;
         try { raids.SetRandomEvent(raid, _center); }
         finally { Starting = false; }
-        Plugin.ModLogger.LogInfo($"Crimson Rite: started the raid {raid.m_name}.");
+        Plugin.ModLogger.LogInfo($"Crimson Rite: started the raid {raid.m_name} (tier {raidTier}, players' tier {partyTier}" +
+            (_steps > 0 ? $", caught up {_steps} steps)." : ")."));
+    }
+
+    // Everyone's game (the raid's creatures spawn there): how many steps the raid is caught up (see CrimsonSpawnPatches).
+    private static void TellCatchUp(string raid)
+    {
+        _nextTell = Time.time + TellInterval;
+        ZRoutedRpc.instance?.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.CrimsonCatchUp, raid, _steps, _center);
+    }
+
+    // The bosses' keys and what each drops (a raid may need a boss's trophy known), weakest first.
+    private static void ReadBosses(List<string> keys, List<ICollection<string>> items)
+    {
+        foreach (BossRoster.Boss boss in BossRoster.Read(Messages.CrimsonName))
+        {
+            keys.Add(boss.Key);
+            HashSet<string> drops = new(StringComparer.OrdinalIgnoreCase);
+            GameObject? prefab = ZNetScene.instance ? ZNetScene.instance.GetPrefab(boss.Prefab) : null;
+            CharacterDrop? drop = prefab ? prefab!.GetComponent<CharacterDrop>() : null;
+            if (drop && drop!.m_drops != null)
+                foreach (CharacterDrop.Drop item in drop.m_drops)
+                    if (item.m_prefab) drops.Add(item.m_prefab.name);
+            items.Add(drops);
+        }
+    }
+
+    private static int RaidTier(RandomEvent raid, List<string> bossKeys, List<ICollection<string>> bossItems)
+    {
+        List<string> keys = [.. raid.m_requiredGlobalKeys, .. raid.m_altRequiredPlayerKeysAny, .. raid.m_altRequiredPlayerKeysAll];
+        List<string> items = [];
+        foreach (ItemDrop item in raid.m_altRequiredKnownItems)
+            if (item) items.Add(item.gameObject.name);
+        return RaidCatchUp.RaidTier(keys, items, bossKeys, bossItems);
     }
 
     // The raids the players within the radius are ready for, as the game decides it for each player (world or player
-    // keys, World Advancement Progression's private keys), leaving out only where they are and their base. Raids that
-    // fit the obliterator's biome go first, then any; the last one isn't picked again when there are others.
-    private static RandomEvent? Pick(RandEventSystem raids, Vector3 center)
+    // keys, World Advancement Progression's private keys), leaving out only where they are and their base; the one that
+    // came least so far comes (see RaidCatchUp.Choose). raidTier, partyTier: see RaidCatchUp.
+    private static RandomEvent? Pick(RandEventSystem raids, Vector3 center, out int raidTier, out int partyTier)
     {
+        raidTier = -1;
+        partyTier = -1;
         RandEventSystem.RefreshPlayerEventData();
         bool byPlayer = ZoneSystem.instance.GetGlobalKey(GlobalKeys.PlayerEvents) || AdvancementProgression.PrivateRaids();
         float radius = PluginConfig.Radius(WeatherKind.Crimson);
@@ -320,31 +381,50 @@ internal static class CrimsonRaids
         bool everyone = inside.Count == 0;
         if (everyone) inside = RandEventSystem.s_playerEventDatas;
 
+        List<string> bossKeys = [];
+        List<ICollection<string>> bossItems = [];
+        ReadBosses(bossKeys, bossItems);
+
         List<RandomEvent> ready = [];
-        List<RandomEvent> fitting = [];
+        List<int> tiers = [];
+        List<string> names = [];
+        List<bool> fitting = [];
+        // Each player's tier: the strongest raid they are ready for (with no player's data, the world's).
+        List<int> playerTiers = [];
+        for (int i = 0; i < Mathf.Max(1, inside.Count); i++) playerTiers.Add(-1);
         List<RandEventSystem.PlayerEventData> one = new(1);
         foreach (RandomEvent raid in raids.m_events)
         {
             if (!raid.m_enabled || !raid.m_random) continue;
+            int tier = RaidTier(raid, bossKeys, bossItems);
             bool readyForIt = false;
-            foreach (RandEventSystem.PlayerEventData player in inside)
+            for (int i = 0; i < inside.Count; i++)
             {
+                RandEventSystem.PlayerEventData player = inside[i];
                 one.Clear();
                 one.Add(player);
                 if (!raids.HaveGlobalKeys(raid, one)) continue;
                 if (byPlayer && (player.possibleEvents == null || !player.possibleEvents.Contains(raid.m_name))) continue;
                 readyForIt = true;
-                break;
+                playerTiers[i] = Mathf.Max(playerTiers[i], tier);
             }
             // Without any player's data, the world's keys alone (as raids go without player based raids).
-            if (inside.Count == 0 && !byPlayer) readyForIt = raids.HaveGlobalKeys(raid, inside);
+            if (inside.Count == 0 && !byPlayer && raids.HaveGlobalKeys(raid, inside))
+            {
+                readyForIt = true;
+                playerTiers[0] = Mathf.Max(playerTiers[0], tier);
+            }
             if (!readyForIt) continue;
             ready.Add(raid);
-            if (raids.InValidBiome(raid, center)) fitting.Add(raid);
+            tiers.Add(tier);
+            names.Add(raid.m_name);
+            fitting.Add(raids.InValidBiome(raid, center));
         }
-        List<RandomEvent> from = fitting.Count > 0 ? fitting : ready;
-        if (from.Count > 1) from.RemoveAll(r => r.m_name == _lastRaid);
-        return from.Count > 0 ? from[UnityEngine.Random.Range(0, from.Count)] : null;
+        int chosen = RaidCatchUp.Choose(names, fitting, Given, _lastRaid, n => UnityEngine.Random.Range(0, n));
+        if (chosen < 0) return null;
+        raidTier = tiers[chosen];
+        partyTier = RaidCatchUp.PartyTier(playerTiers);
+        return ready[chosen];
     }
 
     private static bool IsServer() => ZNet.instance && ZNet.instance.IsServer();
@@ -383,5 +463,43 @@ internal static class AdvancementProgression
             _config = null;
             return false;
         }
+    }
+
+    private const string KeyManagerType = "VentureValheim.Progression.KeyManager";
+    // Where it saves the local player's own keys on their character (lower case, separated by commas).
+    private const string SavedKeys = "VV_PrivateKeys";
+
+    private static bool _lookedKeys;
+    private static PropertyInfo? _instance;
+    private static PropertyInfo? _keysList;
+
+    // Whether the local player has this key of their own: the game gives a boss's key only to the player whose game had
+    // the boss, but World Advancement Progression gives it to everyone near. Its live keys, else those saved.
+    internal static bool HasPrivateKey(Player player, string key)
+    {
+        if (string.IsNullOrEmpty(key)) return false;
+        string lower = key.ToLowerInvariant();
+        try
+        {
+            if (!_lookedKeys)
+            {
+                _lookedKeys = true;
+                Type? type = null;
+                foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+                    if ((type = assembly.GetType(KeyManagerType, throwOnError: false)) != null) break;
+                _instance = type?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+                _keysList = type?.GetProperty("PrivateKeysList", BindingFlags.Public | BindingFlags.Instance);
+            }
+            object? manager = _instance?.GetValue(null);
+            if (manager != null && _keysList?.GetValue(manager) is HashSet<string> keys && keys.Contains(lower)) return true;
+        }
+        catch (Exception)
+        {
+            _instance = null;
+        }
+        if (!player || !player.m_customData.TryGetValue(SavedKeys, out string saved)) return false;
+        foreach (string part in saved.Split(','))
+            if (part.Trim().ToLowerInvariant() == lower) return true;
+        return false;
     }
 }

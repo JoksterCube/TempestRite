@@ -10,7 +10,8 @@ using static JoksterCube.TempestRite.Settings.Constants.Plugin;
 namespace JoksterCube.TempestRite.Domain;
 
 // On the server (and in single player or when hosting), called effects are saved with the world, so they go on with
-// the time they had left after a restart. One small file per world, in BepInEx/config/JoksterCube.TempestRite/.
+// the time they had left after a restart, and so is when and where the rites that speed things up went on (see
+// RiteHistory). One small file per world, in BepInEx/config/JoksterCube.TempestRite/.
 internal static class WeatherStore
 {
     private const float SaveInterval = 30f;
@@ -49,6 +50,8 @@ internal static class WeatherStore
     {
         if (_world == null || !ZNet.instance || !ZNet.instance.IsServer()) return;
         string text = Format(WeatherState.Entries());
+        string spans = RiteHistory.Format(RiteHistory.All);
+        if (spans.Length > 0) text = text.Length > 0 ? text + "\n" + spans : spans;
         if (text == _lastSaved) return;
         try
         {
@@ -79,6 +82,7 @@ internal static class WeatherStore
             string text = File.ReadAllText(path);
             List<WeatherState.Entry> entries = Parse(text);
             foreach (WeatherState.Entry entry in entries) WeatherState.Set(entry);
+            RiteHistory.Load(RiteHistory.Parse(text), ZNet.instance.GetTimeSeconds());
             _lastSaved = text;
             if (entries.Count > 0)
                 Plugin.ModLogger.LogInfo($"Rites go on: {string.Join(", ", entries.Select(e => $"{e.Kind} ({TimeText.Duration(e.Remaining)} left)"))}.");

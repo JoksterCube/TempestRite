@@ -34,6 +34,21 @@ internal static class GlacialSatietyPatch
     }
 }
 
+// The Carapace Temper Rite: item tooltips show the tempered durability under the game's own (not in the crafting list).
+[HarmonyPatch(typeof(ItemDrop.ItemData), nameof(ItemDrop.ItemData.GetTooltip),
+    typeof(ItemDrop.ItemData), typeof(int), typeof(bool), typeof(float), typeof(int), typeof(bool))]
+internal static class TemperedTooltipPatch
+{
+    private const string Feature = "Carapace Temper tooltip";
+
+    private static void Postfix(ItemDrop.ItemData item, int qualityLevel, bool crafting, ref string __result)
+    {
+        if (crafting || item == null || PatchGuard.IsDisabled(Feature)) return;
+        try { __result = GearWear.AddTooltipLine(item, qualityLevel, __result); }
+        catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+    }
+}
+
 // Death ends every blessing. Under the Grave-Bind Rite the skills aren't lowered, and the tombstone gets a beam.
 internal static class DeathPatches
 {
@@ -62,7 +77,11 @@ internal static class DeathPatches
         {
             _graveBound = false;
             if (PatchGuard.IsDisabled(Feature)) return;
-            try { Blessings.Died(__instance); }
+            try
+            {
+                PetPouch.Died(__instance);
+                Blessings.Died(__instance);
+            }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
     }
@@ -88,27 +107,53 @@ internal static class DeathPatches
             if (!_makesTombstone) return;
             _tombstoneAt = __instance.GetCenterPoint();
             // Before the game takes the gear off.
-            try { GraveGear.Remember(__instance, _tombstoneAt); }
+            try { GraveGear.Remember(__instance); }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
 
-        private static void Postfix()
+        private static void Postfix() => _makesTombstone = false;
+    }
+
+    // The game sets up the tombstone it just made (inside CreateTombStone): under the Grave-Bind Rite it is marked as
+    // bound, gets the gear note, and the beam.
+    [HarmonyPatch(typeof(TombStone), nameof(TombStone.Setup))]
+    private static class GraveMade
+    {
+        private static void Postfix(TombStone __instance)
         {
-            if (!_makesTombstone) return;
-            _makesTombstone = false;
-            try { GraveBeacon.Place(_tombstoneAt); }
+            if (!_makesTombstone || !Player.m_localPlayer) return;
+            try
+            {
+                GraveGear.Bind(__instance);
+                GraveBeacon.Mark(Player.m_localPlayer, _tombstoneAt, __instance.m_nview.GetZDO().m_uid);
+            }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
     }
 
-    // Take All on the Grave-Bind tombstone: everything is in the inventory now.
+    // Pointing at a bound tombstone says so, under its name.
+    [HarmonyPatch(typeof(TombStone), nameof(TombStone.GetHoverText))]
+    private static class GraveHover
+    {
+        private static void Postfix(TombStone __instance, ref string __result)
+        {
+            if (string.IsNullOrEmpty(__result) || PatchGuard.IsDisabled(Feature)) return;
+            try
+            {
+                if (!GraveGear.IsBound(__instance)) return;
+                string line = "<color=#8FD3FF>" + Messages.GraveBindHover + "</color>";
+                int end = __result.IndexOf('\n');
+                __result = end < 0 ? __result + "\n" + line : __result.Substring(0, end) + "\n" + line + __result.Substring(end);
+            }
+            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        }
+    }
+
+    // Take All on a bound tombstone: everything is in the inventory now.
     [HarmonyPatch(typeof(TombStone), nameof(TombStone.OnTakeAllSuccess))]
     private static class GraveTakenAll
     {
-        private static void Postfix(TombStone __instance)
-        {
-            if (GraveGear.IsTheGrave(__instance)) GraveGear.Reequip();
-        }
+        private static void Postfix(TombStone __instance) => GraveGear.Reequip(__instance);
     }
 
     // The Grave-Bind tombstone emptied by hand: the game removes it once it is empty and closed, in the game holding it
@@ -120,7 +165,7 @@ internal static class DeathPatches
         {
             if (!__instance.m_nview.IsValid() || !__instance.m_nview.IsOwner()) return;
             if (__instance.m_container.IsInUse() || __instance.m_container.GetInventory().NrOfItems() > 0) return;
-            if (GraveGear.IsTheGrave(__instance)) GraveGear.Reequip();
+            GraveGear.Reequip(__instance);
         }
     }
 }
@@ -357,8 +402,8 @@ internal static class VeinShatterPatch
 }
 
 // The Fortune's Boon Rite, for the local player (the game of the player acting makes every lucky roll).
-// - The skills' lucky rolls for extra items come more often: crafting (the cauldron too), the cooking station and
-//   picking crops and other pickables. The game's chance is raised just for that call and put back right after.
+// - The skills' lucky rolls for extra items come more often: crafting (the cauldron too) and the cooking station by
+//   FortuneLuck, for as long as the blessing lasts; picking crops and other pickables here, just for that call.
 // - The Forge of Potential (a crafting station marked as upgrader) rolls one number per upgrade: under the material's
 //   upgrade chance it succeeds, within its break chance of the top the item is destroyed, in between it loses a level.
 //   A roll that would destroy the item takes the losing path instead, with the level set to the Forge Break Penalty
@@ -369,8 +414,6 @@ internal static class FortunePatches
 
     private static bool Blessed(Character? who) =>
         !PatchGuard.IsDisabled(Feature) && who && who == Player.m_localPlayer && Blessings.IsActive(WeatherKind.FortunesBoon);
-
-    private static float Raised(float chance) => Mathf.Min(1f, chance * Mathf.Max(1f, PluginConfig.LuckMultiplier.Value));
 
     // An upgrade at the forge, worked out under the blessing.
     private sealed class Upgrade(ItemDrop.ItemData.SharedData material, string prefab, string name, int level)
@@ -389,23 +432,16 @@ internal static class FortunePatches
     [HarmonyPatch(typeof(InventoryGui), nameof(InventoryGui.DoCrafting))]
     private static class Crafting
     {
-        private static void Prefix(InventoryGui __instance, Player player, out float __state)
+        private static void Prefix(InventoryGui __instance, Player player)
         {
-            __state = -1f;
             _upgrade = null;
             if (!Blessed(player)) return;
-            try
-            {
-                __state = __instance.m_craftBonusChance;
-                __instance.m_craftBonusChance = Raised(__state);
-                _upgrade = AtForge(__instance, player);
-            }
+            try { _upgrade = AtForge(__instance, player); }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
 
-        private static Exception? Finalizer(Exception? __exception, InventoryGui __instance, float __state)
+        private static Exception? Finalizer(Exception? __exception)
         {
-            if (__state >= 0f) __instance.m_craftBonusChance = __state;
             Upgrade? upgrade = _upgrade;
             _upgrade = null;
             if (upgrade != null)
@@ -436,7 +472,7 @@ internal static class FortunePatches
             string name = Localization.instance != null ? Localization.instance.Localize(upgrade.Name) : upgrade.Name;
             // Always shown: it replaces the game's own message about the failed upgrade.
             if (Player.m_localPlayer)
-                Player.m_localPlayer.Message(MessageHud.MessageType.Center, string.Format(Messages.FortuneSavedItem, name, upgrade.SavedLevel));
+                Player.m_localPlayer.Message(MessageHud.MessageType.Center, string.Format(Messages.FortuneSavedItem, name));
             Blessings.End(WeatherKind.FortunesBoon);
         }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
@@ -478,24 +514,6 @@ internal static class FortunePatches
         }
     }
 
-    [HarmonyPatch(typeof(CookingStation), nameof(CookingStation.OnInteract))]
-    private static class Cooking
-    {
-        private static void Prefix(Humanoid user, out float __state)
-        {
-            __state = -1f;
-            if (!Blessed(user) || !InventoryGui.instance) return;
-            __state = InventoryGui.instance.m_craftBonusChance;
-            InventoryGui.instance.m_craftBonusChance = Raised(__state);
-        }
-
-        private static Exception? Finalizer(Exception? __exception, float __state)
-        {
-            if (__state >= 0f && InventoryGui.instance) InventoryGui.instance.m_craftBonusChance = __state;
-            return __exception;
-        }
-    }
-
     [HarmonyPatch(typeof(Pickable), nameof(Pickable.Interact))]
     private static class Picking
     {
@@ -504,7 +522,7 @@ internal static class FortunePatches
             __state = -1f;
             if (!Blessed(character)) return;
             __state = __instance.m_maxLevelBonusChance;
-            __instance.m_maxLevelBonusChance = Raised(__state);
+            __instance.m_maxLevelBonusChance = FortuneLuck.Raised(__state);
         }
 
         private static Exception? Finalizer(Exception? __exception, Pickable __instance, float __state)
@@ -677,6 +695,63 @@ internal static class CryptDelverPatches
             if (!inventory.AddItem(item))
                 ItemDrop.DropItem(item, item.m_stack, chest.transform.position + Vector3.up, Quaternion.identity);
         }
-        PlayerMessages.TopLeft(string.Format(Messages.CryptDelverFound, extra));
+        PlayerMessages.TopLeft(Messages.CryptDelverFound);
+        Celebrate(chest, extra);
+    }
+
+    // ---- Sparkles and sound on the chest ----
+
+    // The game's own: the sparkle burst of dropped loot, the jingle of coins set down and the chime of a secret found.
+    private const string SparklePrefab = "vfx_lootspawn";
+    private const string CoinsPrefab = "sfx_coins_placed";
+    private const string ChimePrefab = "sfx_secretfound";
+    private const float SparkleHeight = 0.6f;
+    private const float SmallSparkle = 1.2f;
+    private const float BigSparkle = 2.2f;
+    // The ring of sparkles round the chest when it gives two or more.
+    private const int RingCount = 5;
+    private const float RingSpread = 0.7f;
+    private const float RingScale = 0.9f;
+    private const float EffectSeconds = 6f;
+
+    // Shown only to the player who opened the chest. One more item: sparkles over it and coins jingling. Two or more:
+    // bigger sparkles, a ring more of them all round it and a chime as well.
+    private static void Celebrate(Container chest, int extra)
+    {
+        if (!ZNetScene.instance) return;
+        Vector3 top = chest.transform.position + Vector3.up * SparkleHeight;
+        bool big = extra >= 2;
+        Show(SparklePrefab, top, Quaternion.identity, big ? BigSparkle : SmallSparkle);
+        if (big)
+            for (int i = 0; i < RingCount; i++)
+            {
+                float angle = (i + UnityEngine.Random.value * 0.5f) * Mathf.PI * 2f / RingCount;
+                Vector3 outward = new(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                Show(SparklePrefab, top + outward * RingSpread, Quaternion.LookRotation(outward), RingScale);
+            }
+        Show(CoinsPrefab, top, Quaternion.identity, 1f);
+        if (big) Show(ChimePrefab, top, Quaternion.identity, 1f);
+    }
+
+    // Makes a game effect here for this player only (never one sent to others), its particles scaled.
+    private static void Show(string name, Vector3 at, Quaternion rotation, float scale)
+    {
+        GameObject prefab = ZNetScene.instance.GetPrefab(name);
+        if (!prefab || prefab.GetComponent<ZNetView>())
+        {
+            Plugin.ModLogger.LogWarning($"{name} not found: the {Feature} plays without it.");
+            return;
+        }
+        GameObject made = UnityEngine.Object.Instantiate(prefab, at, rotation);
+        if (!Mathf.Approximately(scale, 1f))
+        {
+            made.transform.localScale = prefab.transform.localScale * scale;
+            foreach (ParticleSystem particles in made.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                ParticleSystem.MainModule main = particles.main;
+                main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+            }
+        }
+        UnityEngine.Object.Destroy(made, EffectSeconds);
     }
 }

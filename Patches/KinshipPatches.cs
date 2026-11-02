@@ -6,8 +6,8 @@ using UnityEngine;
 
 namespace JoksterCube.TempestRite.Patches;
 
-// The kinship rites: nothing hurts a player while they get ready for and toast to the Skål Rite, roar to the Sky-Call Rite or flex to the
-// Anvil-Spark Rite. Worked out in the player's own game, where every hit on them is applied.
+// The kinship rites: nothing hurts a player while they get ready for and toast to the Skål Rite, roar to the Sky-Call Rite, flex to the
+// Anvil-Spark Rite or cheer to the Eldhrímnir Rite, or kneels to answer the Rally-Horn Rite's call. Worked out in the player's own game, where every hit on them is applied.
 [HarmonyPatch(typeof(Character), nameof(Character.RPC_Damage))]
 internal static class KinshipShieldPatch
 {
@@ -19,7 +19,7 @@ internal static class KinshipShieldPatch
         try
         {
             if (__instance is not Player || !__instance.m_nview || !__instance.m_nview.IsOwner()) return true;
-            return !KinshipRites.Shielded(__instance);
+            return !KinshipRites.Shielded(__instance) && !RallyHorn.Holds(__instance);
         }
         catch (Exception exception)
         {
@@ -27,6 +27,20 @@ internal static class KinshipShieldPatch
             return true;
         }
     }
+}
+
+// The Rally-Horn Rite: its Rally Call slot beside the Guardian Power, drawn the same way the game draws the power.
+[HarmonyPatch(typeof(Hud), nameof(Hud.UpdateGuardianPower))]
+internal static class RallyHornHudPatch
+{
+    private static void Postfix(Hud __instance) => RallyHorn.UpdateHud(__instance);
+}
+
+// The Domain Border slot beside the Guardian Power, drawn the same way the game draws the power.
+[HarmonyPatch(typeof(Hud), nameof(Hud.UpdateGuardianPower))]
+internal static class DomainBorderHudPatch
+{
+    private static void Postfix(Hud __instance) => DomainBorder.UpdateHud(__instance);
 }
 
 // The kinship rites: while a player stops what they're doing for a rite's emote, and while they do it, their controls
@@ -43,7 +57,7 @@ internal static class KinshipHoldPatch
         if (PatchGuard.IsDisabled(Feature)) return;
         try
         {
-            if (!KinshipRites.Holds(__instance)) return;
+            if (!KinshipRites.Holds(__instance) && !RallyHorn.Holds(__instance)) return;
             movedir = Vector3.zero;
             attack = attackHold = secondaryAttack = secondaryAttackHold = false;
             block = blockHold = jump = crouch = run = autoRun = dodge = false;

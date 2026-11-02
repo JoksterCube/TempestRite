@@ -118,6 +118,9 @@
     <Reference Include="UnityEngine.ParticleSystemModule">
       <HintPath>$(CorlibPath)\UnityEngine.ParticleSystemModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(CorlibPath)\UnityEngine.AnimationModule.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.AudioModule">
       <HintPath>$(CorlibPath)\UnityEngine.AudioModule.dll</HintPath>
     </Reference>
@@ -128,6 +131,12 @@
   <ItemGroup>
     <!-- Shared chest mod building blocks; merged into TempestRite.dll by ILRepack (see ILRepack.targets). -->
     <ProjectReference Include="..\ChestKit\ChestKit\ChestKit.csproj" />
+    <!-- Shared ability slots beside the Guardian Power (the Rally-Horn Rite's Rally Call); merged the same way. -->
+    <ProjectReference Include="..\AbilityKit\AbilityKit\AbilityKit.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Texts in English; other languages are files next to the DLL (see Translations in ChestKit). -->
+    <EmbeddedResource Include="Translations\English.json" LogicalName="TempestRite.English.json" />
   </ItemGroup>
   <ItemGroup>
     <!-- Unit tests live in their own project. -->
@@ -225,6 +234,8 @@
     </ItemGroup>
     <MakeDir Directories="$(PackageDir)" />
     <Copy SourceFiles="@(PackageFiles)" DestinationFolder="$(PackageDir)" />
+    <!-- The English texts, as a template for translations (the mod itself reads them from inside the DLL). -->
+    <Copy SourceFiles="$(ProjectDir)Translations\English.json" DestinationFiles="$(PackageDir)\Translations\$(AssemblyName).English.json" />
     <ZipDirectory SourceDirectory="$(PackageDir)" DestinationFile="Thunderstore\$(PackageName).zip" Overwrite="true" />
     <RemoveDir Directories="$(PackageDir)" />
   </Target>
@@ -235,6 +246,7 @@
     </ItemGroup>
     <MakeDir Directories="$(PackageDir)" />
     <Copy SourceFiles="@(NexusPackageFiles)" DestinationFolder="$(PackageDir)" />
+    <Copy SourceFiles="$(ProjectDir)Translations\English.json" DestinationFiles="$(PackageDir)\Translations\$(AssemblyName).English.json" />
     <ZipDirectory SourceDirectory="$(PackageDir)" DestinationFile="Nexus\$(PackageName).zip" Overwrite="true" />
     <RemoveDir Directories="$(PackageDir)" />
   </Target>

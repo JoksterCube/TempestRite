@@ -23,11 +23,23 @@ internal static class SessionPatches
                 WeatherSync.Register(ZRoutedRpc.instance);
                 VeinShatterPatch.Register(ZRoutedRpc.instance);
                 KinshipRites.Register(ZRoutedRpc.instance);
+                RallyHorn.Register(ZRoutedRpc.instance);
+                RallyPending.Register(ZRoutedRpc.instance);
                 DomainAnchors.Register(ZRoutedRpc.instance);
                 CrimsonRaids.Register(ZRoutedRpc.instance);
                 CrimsonArena.Register(ZRoutedRpc.instance);
                 RagnarokRush.Register(ZRoutedRpc.instance);
                 RagnarokArena.Register(ZRoutedRpc.instance);
+                HoardBaneRush.Register(ZRoutedRpc.instance);
+                HoardBaneArena.Register(ZRoutedRpc.instance);
+                IncursionWatch.Register(ZRoutedRpc.instance);
+                IncursionPending.Register(ZRoutedRpc.instance);
+                WardPatches.Register(ZRoutedRpc.instance);
+                SoulTether.Register(ZRoutedRpc.instance);
+                ElderSprout.Register(ZRoutedRpc.instance);
+                PlumeFall.Register(ZRoutedRpc.instance);
+                KindleSave.Register(ZRoutedRpc.instance);
+                PetPouch.Register(ZRoutedRpc.instance);
             }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }

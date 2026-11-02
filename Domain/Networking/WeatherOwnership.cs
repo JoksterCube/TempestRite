@@ -12,9 +12,18 @@ namespace JoksterCube.TempestRite.Domain.Networking;
 //   Rite): during weather and daylight rites;
 // - spreading fire going out in rain, fires that rain puts out: during weather rites;
 // - plants and bushes near a Verdant Rite's obliterator (they grow faster);
-// - creatures near a Packward or Carrion Rite's obliterator (they keep out, or come);
+// - creatures near a Packward or Carrion Rite's obliterator (they keep out, or come), tamed animals near a Kindred
+//   Rite's (they breed and grow faster) and its eggs (they hatch faster);
 // - fermenters and cooking stations near a Vat-Boil Rite's obliterator, smelters and kilns near a Pitch-Bellows
-//   Rite's (they work faster).
+//   Rite's (they work faster);
+// - creature spawners (nests, body piles...) near a Harrow-Spur Rite's obliterator (they spawn faster).
+// - ballistas near a Sentry-Sight Rite's obliterator (they pick their targets), sap extractors, eitr refineries and
+//   ancient roots near a Taproot-Surge Rite's (they work faster), items on the ground near a Pitch-Seal Rite's (they
+//   don't despawn), wisp fountains and eternal pyres near a Primal-Hearth Rite's (they draw more);
+// - wisp fountains and eternal pyres, and the wisps and embers on their way to them: also during daylight rites (the
+//   Midnight Rite's night is only night on games with the mod, so only those draw wisps then and keep them).
+// Plants, stations and tamed animals still owed time from a rite that went on while nobody was near (see RiteSpeedup)
+// are handed out the same way, also after the rite ended, so they make it up.
 // This only matters when the server lets players without the mod join (Require Mod On Clients off). The server already
 // hands out objects to players every 2 seconds; right after, it moves these objects from players without the mod to
 // a player with it who is near. Objects already owned by a player with the mod are left alone.
@@ -25,6 +34,8 @@ internal static class WeatherOwnership
     private const float FireRange = 48f;
     // Creatures are taken a little before they reach a located rite's radius.
     private const float CreatureMargin = 20f;
+    // Lured wisps and embers are taken this far from a Primal-Hearth Rite's radius (they are sent from up to 25 m away).
+    private const float LuredMargin = 30f;
 
     private enum Kind
     {
@@ -34,7 +45,13 @@ internal static class WeatherOwnership
         Growing,
         Creature,
         // Sped up by a rite (see RiteSpeedup.KindOf).
-        Station
+        Station,
+        // A creature spawner with the game's SpawnArea (see SpawnerSpur).
+        Nest,
+        // A wisp fountain or eternal pyre (see LureSurge).
+        Lure,
+        // A wisp or ember on its way to one.
+        Lured
     }
 
     private static Dictionary<int, Kind>? _prefabs;
@@ -57,7 +74,14 @@ internal static class WeatherOwnership
         || WeatherState.IsActive(WeatherKind.Packward)
         || WeatherState.IsActive(WeatherKind.Carrion)
         || WeatherState.IsActive(WeatherKind.VatBoil)
-        || WeatherState.IsActive(WeatherKind.PitchBellows);
+        || WeatherState.IsActive(WeatherKind.PitchBellows)
+        || WeatherState.IsActive(WeatherKind.Kindred)
+        || WeatherState.IsActive(WeatherKind.HarrowSpur)
+        || WeatherState.IsActive(WeatherKind.SentrySight)
+        || WeatherState.IsActive(WeatherKind.TaprootSurge)
+        || WeatherState.IsActive(WeatherKind.MantleAnchor)
+        || WeatherState.IsActive(WeatherKind.PrimalHearth)
+        || RiteHistory.Any;
 
     // Whether the object at position should go to a player with the mod within reach, and how near they must be.
     // weatherHere: a weather rite shows at that position.
@@ -72,12 +96,22 @@ internal static class WeatherOwnership
                 reach = FireRange;
                 return weatherHere;
             case Kind.Growing:
-                return WeatherState.Reaches(WeatherKind.Verdant, position);
+                return WeatherState.Reaches(WeatherKind.Verdant, position) || RiteSpeedup.Owed(zdo, position);
             case Kind.Creature:
                 return (WeatherState.Reaches(WeatherKind.Packward, position, CreatureMargin) && CreatureRites.Steered(zdo, WeatherKind.Packward))
-                    || (WeatherState.Reaches(WeatherKind.Carrion, position, CreatureMargin) && CreatureRites.Steered(zdo, WeatherKind.Carrion));
+                    || (WeatherState.Reaches(WeatherKind.Carrion, position, CreatureMargin) && CreatureRites.Steered(zdo, WeatherKind.Carrion))
+                    || (WeatherState.Reaches(WeatherKind.Kindred, position) && zdo.GetBool(ZDOVars.s_tamed)
+                        && RiteSpeedup.KindOf(zdo.GetPrefab()) == WeatherKind.Kindred)
+                    || (zdo.GetBool(ZDOVars.s_tamed) && RiteSpeedup.Owed(zdo, position));
             case Kind.Station:
-                return WeatherState.Reaches(RiteSpeedup.KindOf(zdo.GetPrefab()), position);
+                return WeatherState.Reaches(RiteSpeedup.KindOf(zdo.GetPrefab()), position) || RiteSpeedup.Owed(zdo, position);
+            case Kind.Nest:
+                return SpawnerSpur.Reaches(zdo.GetPrefab(), position);
+            case Kind.Lure:
+                return WeatherState.Active(EffectSlot.Daylight) != WeatherKind.None || WeatherState.Reaches(WeatherKind.PrimalHearth, position);
+            case Kind.Lured:
+                return WeatherState.Active(EffectSlot.Daylight) != WeatherKind.None
+                    || WeatherState.Reaches(WeatherKind.PrimalHearth, position, LuredMargin);
             default:
                 return false;
         }
@@ -124,7 +158,7 @@ internal static class WeatherOwnership
     // ---- Which objects ----
 
     // Found once from the game's prefabs: zone controllers and spawn points (spawning), anything weather can put out,
-    // plants and bushes that regrow, creatures (not bosses) and the stations rites speed up.
+    // plants and bushes that regrow, creatures (not bosses), the stations rites speed up and creature spawners.
     private static bool Prefabs()
     {
         if (_prefabs != null) return true;
@@ -138,6 +172,9 @@ internal static class WeatherOwnership
             Fireplace? fireplace = prefab.GetComponent<Fireplace>();
             Character? character = prefab.GetComponent<Character>();
             if (prefab.GetComponent<CreatureSpawner>()) _prefabs[hash] = Kind.Spawner;
+            else if (prefab.GetComponentInChildren<SpawnArea>(true)) _prefabs[hash] = Kind.Nest;
+            else if (prefab.GetComponentInChildren<WispSpawner>(true)) _prefabs[hash] = Kind.Lure;
+            else if (prefab.GetComponent<LuredWisp>()) _prefabs[hash] = Kind.Lured;
             else if (prefab.GetComponent<Fire>() || (fireplace && fireplace!.m_canTurnOff)) _prefabs[hash] = Kind.Fire;
             else if (VerdantGrowth.IsGrowing(hash)) _prefabs[hash] = Kind.Growing;
             else if (prefab.GetComponent<BaseAI>() && character && !character!.IsBoss() && !character.IsPlayer()) _prefabs[hash] = Kind.Creature;

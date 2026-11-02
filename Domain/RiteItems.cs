@@ -46,6 +46,29 @@ internal static class RiteItems
         return moved;
     }
 
+    // For a rite that counts each different item once (the Ragnarök Rite): moves one of this item into the obliterator,
+    // unless one is there already. Returns whether it moved.
+    internal static bool PutOne(Inventory from, Inventory to, WeatherKind kind, string item)
+    {
+        if (Contains(to, item)) return false;
+        foreach (ItemDrop.ItemData held in from.GetAllItems())
+        {
+            if (ObliteratorKeys.KindOf(held) != kind || !ObliteratorKeys.IsItem(held, item)) continue;
+            if (!Target(to, held, out int x, out int y, out _)) return false;
+            int before = held.m_stack;
+            to.MoveItemToThis(from, held, 1, x, y);
+            return held.m_stack < before;
+        }
+        return false;
+    }
+
+    internal static bool Contains(Inventory inventory, string item)
+    {
+        foreach (ItemDrop.ItemData there in inventory.GetAllItems())
+            if (ObliteratorKeys.IsItem(there, item)) return true;
+        return false;
+    }
+
     // Where to put it: a stack of the same item with room, or the first free slot from the bottom left.
     private static bool Target(Inventory inventory, ItemDrop.ItemData item, out int x, out int y, out int room)
     {

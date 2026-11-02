@@ -3,6 +3,7 @@ using System.Text;
 using JoksterCube.TempestRite.Common;
 using JoksterCube.TempestRite.Domain.Networking;
 using JoksterCube.TempestRite.Settings;
+using UnityEngine;
 using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Domain;
@@ -12,9 +13,12 @@ internal static class ObliteratorHints
 {
     private static readonly StringBuilder Text = new();
     private static readonly List<UnmakingReturns.Return> Returns = [];
+    private static readonly List<WeatherKind> ActiveKinds = [];
 
-    // Lever: the rites pulling it performs, one per line.
-    internal static string Lever(Incinerator incinerator)
+    // Lever: the rites pulling it performs, one per line, then the rites going on at this obliterator.
+    internal static string Lever(Incinerator incinerator) => LeverRites(incinerator) + Active(incinerator.transform.position);
+
+    private static string LeverRites(Incinerator incinerator)
     {
         Text.Clear();
         bool on = ObliteratorSwitch.IsOn(incinerator);
@@ -26,8 +30,11 @@ internal static class ObliteratorHints
         return WeatherSync.LocalPlayerMayChange() ? Text.ToString() : "\n" + Messages.LeverNotAllowed;
     }
 
-    // Hatch: every item that performs a rite. Nothing while the obliterator's rites are off.
-    internal static string Hatch(Container hatch)
+    // Hatch: every item that performs a rite (nothing while the obliterator's rites are off), then the rites going on
+    // at this obliterator.
+    internal static string Hatch(Container hatch) => HatchItems(hatch) + Active(hatch.transform.position);
+
+    private static string HatchItems(Container hatch)
     {
         Text.Clear();
         if (!ObliteratorSwitch.IsOn(hatch)) return string.Empty;
@@ -38,6 +45,38 @@ internal static class ObliteratorHints
         }
         if (Text.Length > 0 && !WeatherSync.LocalPlayerMayChange()) Text.Append('\n').Append(Messages.LeverNotAllowed);
         return Text.ToString();
+    }
+
+    // The rites performed at the obliterator standing here that still go on (the Domain rites, Crimson, Ragnarök).
+    internal static void ActiveAt(Vector3 at, List<WeatherKind> found)
+    {
+        found.Clear();
+        foreach (WeatherKind kind in WeatherKinds.All)
+            if (WeatherKinds.Located(kind) && WeatherState.IsActive(kind) && Utils.DistanceXZ(WeatherState.Position(kind), at) < CrimsonRaids.SamePlace)
+                found.Add(kind);
+    }
+
+    // Hover text: a title, then one line per rite going on here with its time left; nothing when none is.
+    internal static string Active(Vector3 at)
+    {
+        string lines = ActiveLines(at);
+        return lines.Length == 0 ? string.Empty : "\n" + Messages.ActiveTitle + "\n" + lines;
+    }
+
+    // One line per rite going on here with its time left ("paused" while a raid holds its time still).
+    internal static string ActiveLines(Vector3 at)
+    {
+        ActiveAt(at, ActiveKinds);
+        StringBuilder text = new();
+        foreach (WeatherKind kind in ActiveKinds)
+        {
+            string left = TimeText.Duration(WeatherState.Remaining(kind));
+            string time = WeatherKinds.Untimed(kind) ? Messages.ActiveUntimed
+                : string.Format(WeatherState.Suspended(kind, at) ? Messages.ActivePaused : Messages.ActiveLeft, left);
+            if (text.Length > 0) text.Append('\n');
+            text.AppendFormat(Messages.ActiveLine, WeatherKinds.Colored(kind), time);
+        }
+        return text.ToString();
     }
 
     // Item tooltip in the open obliterator: whether this item's rite is performed, needs more of it, or is kept out by a

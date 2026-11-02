@@ -1,4 +1,5 @@
-"""Renders every rite's status icon into Docs/Rites/<Kind>.png, for the README.
+"""Renders every rite's status icon into Docs/Rites/<Name>.png, for the README (<Name>: the rite's English name
+without " Rite", letters only, see IconPreview.FileName: Equilibrium.png, TrueSight.png, FortunesBoon.png).
 
 The icons are drawn by the mod's own code (WeatherIcons) from the game's sprites, so this:
 1. finds the sprites the icon code asks for (GameArt.Get / ItemIconPixels names in WeatherIcons.cs) in the game's
@@ -23,7 +24,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 GAME_DATA = sys.argv[1] if len(sys.argv) > 1 else r'C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data'
 OUT = os.path.join(ROOT, 'Docs', 'Rites')
 # Items whose icon isn't named after the item.
-ITEM_SPRITES = {'MeadTasty': 'potion_tasty'}
+ITEM_SPRITES = {'MeadTasty': 'potion_tasty', 'MeadHealthMajor': 'potion_health_major', 'MeadStaminaMinor': 'potion_stamina_minor',
+                'MeadEitrMinor': 'potion_eitr_minor'}
 
 
 def wanted():

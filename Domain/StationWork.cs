@@ -9,8 +9,9 @@ namespace JoksterCube.TempestRite.Domain;
 // - Vat-Boil, fermenters: the time they started is moved back, as the game works out how long they fermented from it.
 // - Vat-Boil, cooking stations (the cooking station, the iron one and the oven): each slot's cooked time moves on, but
 //   never past done; and while the rite reaches them, nothing cooked there burns (see VatBoilPatches).
-// - Pitch-Bellows, smelters, blast furnaces, charcoal kilns and eitr refineries: the seconds of work they owe are
-//   added to, and they work them off at once as usual, using up ore and fuel (and only with a roof, smoke clear...).
+// - Pitch-Bellows, smelters, blast furnaces and charcoal kilns: the seconds of work they owe are added to, and they
+//   work them off at once as usual, using up ore and fuel (and only with a roof, smoke clear...). Not the eitr
+//   refinery: the Taproot-Surge Rite speeds that up (see TaprootFlow).
 internal static class StationWork
 {
     internal static readonly SpedWork Fermenting = new FermenterWork();
@@ -44,6 +45,9 @@ internal static class StationWork
         internal override bool Busy(ZDO zdo, ZNetView view) =>
             view.GetComponent<Fermenter>() is { } fermenter && fermenter && fermenter.GetStatus() == Fermenter.Status.Fermenting
             && !fermenter.m_exposed && fermenter.m_hasRoof;
+
+        // When it started fermenting.
+        internal override double? Since(ZDO zdo) => RiteSpeedup.FromTicks(zdo.GetLong(ZDOVars.s_startTime, 0L));
 
         internal override void Hurry(ZDO zdo, ZNetView view, double seconds)
         {
@@ -99,30 +103,35 @@ internal static class StationWork
 
     private sealed class SmelterWork() : SpedWork(WeatherKind.PitchBellows)
     {
-        // The game counts at most this many seconds owed.
-        private const float MaxOwed = 3600f;
-
         internal override float Speed => PluginConfig.PitchBellowsSpeedMultiplier.Value;
         internal override bool ShowMotes => PluginConfig.ShowPitchBellowsMotes.IsOn();
 
-        // Those burning fuel (smelter, blast furnace, eitr refinery) and the charcoal kiln; not the windmill or the
+        // Those burning fuel (smelter, blast furnace) and the charcoal kiln; not the eitr refinery, the windmill or the
         // spinning wheel.
         internal override float? Takes(GameObject prefab)
         {
-            if (prefab.GetComponent<Smelter>() is not { } smelter || !smelter || smelter.m_windmill) return null;
+            if (prefab.GetComponent<Smelter>() is not { } smelter || !smelter || smelter.m_windmill || TaprootFlow.IsRefinery(prefab)) return null;
             if (smelter.m_fuelItem) return 1f;
             foreach (Smelter.ItemConversion conversion in smelter.m_conversion)
                 if (conversion.m_to && conversion.m_to.name == "Coal") return 1f;
             return null;
         }
 
-        internal override bool Busy(ZDO zdo, ZNetView view) =>
-            view.GetComponent<Smelter>() is { } smelter && smelter && smelter.GetQueueSize() > 0
-            && (smelter.m_maxFuel == 0 || smelter.GetFuel() > 0f) && (!smelter.m_requiresRoof || smelter.m_haveRoof) && !smelter.m_blockedSmoke;
+        internal override bool Busy(ZDO zdo, ZNetView view) => SmelterBusy(view);
 
-        internal override void Hurry(ZDO zdo, ZNetView view, double seconds) =>
-            zdo.Set(ZDOVars.s_accTime, Mathf.Min(zdo.GetFloat(ZDOVars.s_accTime) + (float)seconds, MaxOwed));
+        internal override void Hurry(ZDO zdo, ZNetView view, double seconds) => SmelterHurry(zdo, seconds);
 
         internal override Vector3 MotesAt(ZNetView view, Vector3 position) => Above(view, position);
     }
+
+    // A smelter with ore and fuel that can work (roof, smoke clear): also the eitr refinery under the Taproot-Surge Rite.
+    internal static bool SmelterBusy(ZNetView view) =>
+        view.GetComponent<Smelter>() is { } smelter && smelter && smelter.GetQueueSize() > 0
+        && (smelter.m_maxFuel == 0 || smelter.GetFuel() > 0f) && (!smelter.m_requiresRoof || smelter.m_haveRoof) && !smelter.m_blockedSmoke;
+
+    // The game counts at most this many seconds a smelter owes.
+    private const float MaxOwed = 3600f;
+
+    internal static void SmelterHurry(ZDO zdo, double seconds) =>
+        zdo.Set(ZDOVars.s_accTime, Mathf.Min(zdo.GetFloat(ZDOVars.s_accTime) + (float)seconds, MaxOwed));
 }

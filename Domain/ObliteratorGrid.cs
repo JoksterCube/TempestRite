@@ -8,8 +8,8 @@ using UnityEngine.UI;
 namespace JoksterCube.TempestRite.Domain;
 
 // In the open obliterator, the items of each rite the burn performs get a frame in its rite's color (a recolored copy
-// of the frame the game puts on items queued to equip): blue for weather, gold for daylight, violet for clearing a
-// biome's haze, pale for the Equilibrium Rite. Other rite items (without enough of them in yet, or kept out by a rite
+// of the frame the game puts on items queued to equip, see WeatherKinds.Color): blue atmospheric, gold celestial,
+// violet biome mastery, and so on. Other rite items (without enough of them in yet, or kept out by a rite
 // before them) get a dim gray one. Tooltips say what each performs, how many more are needed, or that they just burn.
 // When the burn performs the Unmaking Rite, the gear it unmakes is framed in its color too, and its tooltip shows what
 // comes back (see UnmakingTooltip).

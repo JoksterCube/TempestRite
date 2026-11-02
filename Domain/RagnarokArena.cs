@@ -9,7 +9,8 @@ namespace JoksterCube.TempestRite.Domain;
 // The Ragnarök Rite in each player's game (the server runs it, see RagnarokRush; the bubble, holding players and
 // creatures, portals and the map are IncursionArena's):
 // - says which of the bosses asked about the local player has slain;
-// - spawns a boss when the server asks this game to, within the bubble, struck by lightning, hunting the players;
+// - spawns a boss when the server asks this game to, within the bubble, struck by lightning, hunting
+//   the players, as strong as the server says (see RagnarokPower, and RagnarokPatches for their damage and drops);
 // - tells the server when a boss it owns falls;
 // - shows the bosses rising and falling (lightning strikes the obliterator as each falls), and how it ended, never
 //   which bosses are to come nor what treasure was won; clears out what it brought, dropping nothing;
@@ -27,7 +28,7 @@ internal static class RagnarokArena
     internal static void Register(ZRoutedRpc rpc)
     {
         rpc.Register<ZPackage, Vector3>(Rpcs.RagnarokAsk, RPC_Ask);
-        rpc.Register<string, Vector3, int>(Rpcs.RagnarokSpawn, RPC_Spawn);
+        rpc.Register<ZPackage>(Rpcs.RagnarokSpawn, RPC_Spawn);
         rpc.Register<int, Vector3>(Rpcs.RagnarokBegun, RPC_Begun);
         rpc.Register<ZPackage>(Rpcs.RagnarokBoss, RPC_Boss);
         rpc.Register<int, bool, Vector3>(Rpcs.RagnarokEnded, RPC_Ended);
@@ -51,7 +52,8 @@ internal static class RagnarokArena
         {
             string key = asked.ReadString();
             string name = asked.ReadString();
-            if (player.HaveUniqueKey(key) || (kills != null && kills.TryGetValue(name, out float killed) && killed > 0f)) have.Add(key);
+            if (player.HaveUniqueKey(key) || AdvancementProgression.HasPrivateKey(player, key) ||
+                (kills != null && kills.TryGetValue(name, out float killed) && killed > 0f)) have.Add(key);
         }
         ZPackage answer = new();
         answer.Write(have.Count);
@@ -59,27 +61,63 @@ internal static class RagnarokArena
         ZRoutedRpc.instance.InvokeRoutedRPC(Rpcs.RagnarokAnswer, answer);
     }
 
-    // Spawns the boss within the bubble, away from the obliterator, on dry ground.
-    private static void RPC_Spawn(long sender, string prefabName, Vector3 center, int ticket)
+    // Spawns the bosses within the bubble, away from the obliterator, on dry ground.
+    private static void RPC_Spawn(long sender, ZPackage package)
     {
         if (!IncursionArena.FromServer(sender) || !ZNetScene.instance) return;
+        string prefabName = package.ReadString();
+        Vector3 center = package.ReadVector3();
+        int ticket = package.ReadInt();
+        int count = package.ReadInt();
+        float healthBy = package.ReadSingle();
+        float damageBy = package.ReadSingle();
+        int stars = package.ReadInt();
         GameObject? prefab = ZNetScene.instance.GetPrefab(prefabName);
         if (!prefab || !prefab!.GetComponent<Character>())
         {
             Plugin.ModLogger.LogWarning($"Ragnarök Rite: can't spawn \"{prefabName}\": not a creature this game knows.");
             return;
         }
-        Vector3 at = SpawnPoint(center);
+        List<ZDOID> risen = [];
+        Vector3 first = center;
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 at = SpawnPoint(center);
+            if (i == 0) first = at;
+            ZDOID boss = Spawn(prefab, center, at, healthBy, damageBy, stars);
+            if (!boss.IsNone()) risen.Add(boss);
+        }
+        if (risen.Count == 0) return;
+        Plugin.ModLogger.LogInfo($"Ragnarök Rite: {risen.Count}x {prefabName} rise at ({first.x:0}, {first.z:0}), " +
+            $"health x{healthBy:0.##}, damage x{damageBy:0.##}, {stars} stars.");
+        ZPackage spawned = new();
+        spawned.Write(ticket);
+        spawned.Write(first);
+        spawned.Write(risen.Count);
+        foreach (ZDOID boss in risen) spawned.Write(boss);
+        ZRoutedRpc.instance.InvokeRoutedRPC(Rpcs.RagnarokSpawned, spawned);
+    }
+
+    private static ZDOID Spawn(GameObject prefab, Vector3 center, Vector3 at, float healthBy, float damageBy, int stars)
+    {
         Quaternion facing = Quaternion.LookRotation(new Vector3(center.x - at.x, 0f, center.z - at.z).normalized + Vector3.forward * 0.001f);
         GameObject boss = Object.Instantiate(prefab, at, facing);
         ZNetView nview = boss.GetComponent<ZNetView>();
         if (!nview || !nview.IsValid())
         {
-            Plugin.ModLogger.LogWarning($"Ragnarök Rite: \"{prefabName}\" spawned without a network object.");
+            Plugin.ModLogger.LogWarning($"Ragnarök Rite: \"{prefab.name}\" spawned without a network object.");
             Object.Destroy(boss);
-            return;
+            return ZDOID.None;
         }
-        nview.GetZDO().Set(IncursionArena.BossMark, true);
+        ZDO zdo = nview.GetZDO();
+        zdo.Set(IncursionArena.BossMark, true);
+        zdo.Set(IncursionArena.BossHealth, healthBy);
+        zdo.Set(IncursionArena.BossDamage, damageBy);
+        zdo.Set(IncursionArena.BossStars, stars);
+        // Its health was set up as it woke, before it was marked: now with the multiplier (see RagnarokPatches).
+        Character character = boss.GetComponent<Character>();
+        character.SetMaxHealth(character.GetMaxHealthBase() * character.GetLevel());
+        character.SetHealth(character.GetMaxHealth());
         BaseAI ai = boss.GetComponent<BaseAI>();
         if (ai)
         {
@@ -87,8 +125,7 @@ internal static class RagnarokArena
             ai.Alert();
             ai.SetHuntPlayer(true);
         }
-        Plugin.ModLogger.LogInfo($"Ragnarök Rite: {prefabName} rises at ({at.x:0}, {at.z:0}).");
-        ZRoutedRpc.instance.InvokeRoutedRPC(Rpcs.RagnarokSpawned, nview.GetZDO().m_uid, ticket, at);
+        return zdo.m_uid;
     }
 
     private static Vector3 SpawnPoint(Vector3 center)
@@ -125,11 +162,11 @@ internal static class RagnarokArena
 
     // ---- What everyone sees ----
 
-    // How many bosses will rise, not which: each is a surprise.
+    // Not which bosses will rise: each is a surprise. (Nor how many: messages tell no numbers.)
     private static void RPC_Begun(long sender, int count, Vector3 center)
     {
         if (!IncursionArena.FromServer(sender) || !IncursionArena.Here(center, WeatherKind.Ragnarok)) return;
-        PlayerMessages.Warning(string.Format(Messages.RagnarokBegins, count));
+        PlayerMessages.Warning(Messages.RagnarokBegins);
     }
 
     private static void RPC_Boss(long sender, ZPackage package)
@@ -145,7 +182,7 @@ internal static class RagnarokArena
         // Each boss but the last falling strikes the obliterator: the next is coming (the last is struck as it ends).
         if (fell && which < of && Near(center)) BlessingLightning.Strike(center);
         if (!IncursionArena.Here(center, WeatherKind.Ragnarok)) return;
-        PlayerMessages.Warning(string.Format(fell ? Messages.RagnarokFalls : Messages.RagnarokRises, BossName(prefab), which, of));
+        PlayerMessages.Warning(string.Format(fell ? Messages.RagnarokFalls : Messages.RagnarokRises, BossName(prefab)));
     }
 
     // What treasure was won isn't told: it waits in the obliterator.
@@ -157,7 +194,11 @@ internal static class RagnarokArena
         RagnarokRush.Ending how = (RagnarokRush.Ending)ending;
         // The obliterator is struck as the last boss falls and the treasure goes in.
         if (how == RagnarokRush.Ending.Survived && Near(center)) BlessingLightning.Strike(center);
-        if (!IncursionArena.WasInside(center) && !IncursionArena.Here(center, WeatherKind.Ragnarok)) return;
+        if (!IncursionArena.WasInside(center) && !IncursionArena.Here(center, WeatherKind.Ragnarok))
+        {
+            IncursionArena.TellFar(WeatherKind.Ragnarok, how == RagnarokRush.Ending.Survived);
+            return;
+        }
         string message = how switch
         {
             RagnarokRush.Ending.Survived when treasure => Messages.RagnarokSurvived,
@@ -187,8 +228,8 @@ internal static class RagnarokArena
 
     // ---- Treasure ----
 
-    // In the game that owns the obliterator, when the server says the rite was survived.
-    internal static void Reward(Incinerator incinerator, long sender, ZPackage treasure)
+    // In the game that owns the obliterator, when the server says the rite was survived (the Hoard-Bane Rite's too).
+    internal static void Reward(Incinerator incinerator, long sender, ZPackage treasure, string rite)
     {
         if (!incinerator || !incinerator.m_nview || !incinerator.m_nview.IsOwner() || !ObjectDB.instance) return;
         if (ZRoutedRpc.instance == null || (sender != ZRoutedRpc.instance.GetServerPeerID() && sender != ZRoutedRpc.instance.m_id)) return;
@@ -201,11 +242,11 @@ internal static class RagnarokArena
             if (amount <= 0) continue;
             if (!prefab || !prefab!.GetComponent<ItemDrop>())
             {
-                Plugin.ModLogger.LogWarning($"Ragnarök Rite: treasure \"{item}\" is not an item the game knows. Check the Treasure setting.");
+                Plugin.ModLogger.LogWarning($"{rite}: treasure \"{item}\" is not an item the game knows. Check its treasure settings.");
                 continue;
             }
             CrimsonArena.PutIn(incinerator, prefab, amount);
-            Plugin.ModLogger.LogInfo($"Ragnarök Rite: put {amount} {prefab.name} in the obliterator.");
+            Plugin.ModLogger.LogInfo($"{rite}: put {amount} {prefab.name} in the obliterator.");
         }
     }
 }

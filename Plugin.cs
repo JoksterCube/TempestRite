@@ -5,6 +5,8 @@ using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
 using JoksterCube.ChestKit;
+using JoksterCube.ChestKit.Controls;
+using JoksterCube.TempestRite.Common;
 using JoksterCube.TempestRite.Domain;
 using JoksterCube.TempestRite.Domain.Networking;
 using JoksterCube.TempestRite.Settings;
@@ -16,7 +18,7 @@ using static JoksterCube.TempestRite.Settings.Constants.Plugin;
 namespace JoksterCube.TempestRite;
 
 [BepInPlugin(ModGUID, ModName, ModVersion)]
-// Loaded after AzuHoverStats when it's installed, to show Verdant Rite times in its hover text (see AzuHoverStatsPatches).
+// Loaded after AzuHoverStats when it's installed, to show rite times in its hover text (see AzuHoverStatsPatches).
 [BepInDependency("Azumatt.AzuHoverStats", BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin
 {
@@ -50,9 +52,18 @@ public class Plugin : BaseUnityPlugin
     private void Awake()
     {
         PluginConfig.Build(Config, ServerConfigSync);
+        // The Rally-Horn Rite's horn, made on a worker thread now so it is ready long before it is first heard. A
+        // dedicated server (batch mode) hears nothing and skips it.
+        if (!UnityEngine.Application.isBatchMode) Domain.HornSound.Prepare();
 
         // ChestKit's patches go through this Harmony; this mod's own are found by PatchAll.
         ChestKitCore.Initialize(ModLogger, _harmony);
+        // The Rally-Horn Rite's key, also in the game's Settings > Controls.
+        ControlsMenu.Add("TempestRite_RallyCall", () => Messages.RallyAcceptName, () => PluginConfig.RallyCallShortcut);
+        ControlsMenu.Add("TempestRite_RallyRefuse", () => Messages.RallyRefuseName, () => PluginConfig.RallyRefuseShortcut);
+        ControlsMenu.Add("TempestRite_DomainBorder", () => Messages.DomainBorderName, () => PluginConfig.DomainBorderShortcut);
+        // The Morgen-Pouch Rite's key, also in the game's Settings > Controls.
+        ControlsMenu.Add("TempestRite_MorgenPouch", () => Messages.MorgenPouchAbility, () => PluginConfig.MorgenPouchShortcut);
 
         var assembly = Assembly.GetExecutingAssembly();
         _harmony.PatchAll(assembly);
@@ -67,25 +78,50 @@ public class Plugin : BaseUnityPlugin
             _nextConfigCheck = Time.unscaledTime + ConfigCheckInterval;
             ReloadConfigIfChanged();
         }
-        WeatherState.Update();
-        WeatherSync.Update();
-        WeatherStore.Update();
-        Blessings.Update();
-        KinshipRites.Update();
-        DomainAnchors.Update();
-        CrimsonRaids.Update();
-        RagnarokRush.Update();
-        IncursionArena.Update();
-        RiteSpeedup.Update();
-        DomainWork.Update();
-        GearWear.Update();
-        GraveBeacon.Update();
-        BlessingLights.Update();
-        ItemDraw.Update();
-        RiteEffects.Update();
-        DomainVisuals.Update();
-        WeatherStatus.Update();
+        foreach ((string name, Action update) in FrameUpdates)
+        {
+            if (PatchGuard.IsDisabled(name)) continue;
+            try { update(); }
+            catch (Exception exception) { PatchGuard.Fail(name, exception); }
+        }
     }
+
+    // Run every frame, in this order. Each is on its own: one failing is switched off (see PatchGuard) and the rest go on.
+    private static readonly (string name, Action update)[] FrameUpdates =
+    [
+        (nameof(WeatherState), WeatherState.Update),
+        (nameof(WeatherSync), WeatherSync.Update),
+        (nameof(WeatherStore), WeatherStore.Update),
+        (nameof(Blessings), Blessings.Update),
+        (nameof(PetPouch), PetPouch.Update),
+        (nameof(FortuneLuck), FortuneLuck.Update),
+        (nameof(KinshipRites), KinshipRites.Update),
+        (nameof(RallyHorn), RallyHorn.Update),
+        (nameof(RallyPending), RallyPending.Update),
+        (nameof(DomainAnchors), DomainAnchors.Update),
+        (nameof(CrimsonRaids), CrimsonRaids.Update),
+        (nameof(RagnarokRush), RagnarokRush.Update),
+        (nameof(HoardBaneRush), HoardBaneRush.Update),
+        (nameof(IncursionWatch), IncursionWatch.Update),
+        (nameof(IncursionArena), IncursionArena.Update),
+        (nameof(ObliteratorBastion), ObliteratorBastion.Update),
+        (nameof(HoardBaneArena), HoardBaneArena.Update),
+        (nameof(RagnarokLook), RagnarokLook.Update),
+        (nameof(ArenaRescue), ArenaRescue.Update),
+        (nameof(RiteSpeedup), RiteSpeedup.Update),
+        (nameof(DomainWork), DomainWork.Update),
+        (nameof(ElderSprout), ElderSprout.Update),
+        (nameof(GearWear), GearWear.Update),
+        (nameof(GraveBeacon), GraveBeacon.Update),
+        (nameof(BlessingLights), BlessingLights.Update),
+        (nameof(ItemDraw), ItemDraw.Update),
+        (nameof(TendrilReturn), TendrilReturn.Update),
+        (nameof(HushedToil), HushedToil.Update),
+        (nameof(RiteEffects), RiteEffects.Update),
+        (nameof(DomainVisuals), DomainVisuals.Update),
+        (nameof(AetherClearing), AetherClearing.Update),
+        (nameof(WeatherStatus), WeatherStatus.Update),
+    ];
 
     private void OnDestroy()
     {

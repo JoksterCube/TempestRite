@@ -13,13 +13,17 @@ namespace JoksterCube.TempestRite.Domain;
 // Short instructions, shown in the obliterator's panel itself in place of its items (opened from this mod's flap): tabs
 // for the groups of rites (Atmospheric, Celestial, Biome Mastery, Domain, Blessings, Reckoning) where "Take all" is, each
 // a gold emblem (white while selected) with the group's name as its tooltip, a close
-// button at the top right, a line on how rites work, then one row per rite of the tab the player knows: the rite's icon,
-// its name in its color and what it does, and at the right the items to burn. Only the items the player has held show:
-// a rite with several key items shows the others once they are found, those the player holds first; past 4, the
-// last slot is a "+N" button that shows the rest under the row. Rites none of whose items the player has held
-// yet are only counted. Clicking an item puts as many as the rite needs from the player's inventory into the obliterator
-// (that item first, the rite's others for the rest) and the page stays open; it doesn't react when the player doesn't
-// have them. A rite clashing with one already prepared isn't put in: a warning names that rite, whose row flashes.
+// button at the top right, a line on how rites work, then one row per rite of the tab the player knows: the rite's icon
+// (click: its Compendium entry), its name in its color over what it does, told with a little lore (up to two lines, cut
+// short when too long, the full text on hover), and at the right the items to burn, each with the number a click puts in
+// under it, like a recipe. Only the items the player has held show: a rite with several key items shows the others once
+// they are found, those the player can put in first; past 3, there are 2 slots and a "+N" button that moves them all
+// under the row (it turns "-"). Those 2 slots move on to another item the player holds once theirs is in or used up,
+// while the rite still needs more; once it has all it needs they keep what was put in. Rites none of whose items the
+// player has held yet are only counted. Clicking an item puts as many as its number shows from the player's inventory
+// into the obliterator (that item first, the rite's others for the rest; for a rite taking different items, just that
+// one) and the page stays open; it doesn't react when the player doesn't have them. A rite clashing with one already
+// prepared isn't put in: a warning names that rite, whose row flashes.
 // Items the player can't put in are dimmed (red tinted when clashing). The rites pulling the lever performs say so in green. Placed from the panel's own size every frame, so it fits
 // when other mods make the panel bigger.
 internal static class RitesPanel
@@ -27,15 +31,24 @@ internal static class RitesPanel
     private const float TabGap = 8f;
     private const float ContentGap = 10f;
     private const float HintHeight = 44f;
-    private const float RowHeight = 58f;
+    private const float RowHeight = 60f;
     private const float RowGap = 6f;
     private const float IconSize = 52f;
     private const float TextGap = 12f;
     private const float ItemGap = 6f;
     private const float FooterHeight = 44f;
     private const float TabIconInset = 4f;
-    private const int MaxShownItems = 4;
+    private const int MaxShownItems = 3;
+    private const float NameSize = 20f;
+    private const float NameHeight = 25f;
+    private const float DetailSize = 14f;
+    private const float CountSize = 16f;
     private static readonly Color HintColor = new(0.85f, 0.82f, 0.75f, 1f);
+    // The number under an item: white, or red while the player lacks it, like a recipe's.
+    private static readonly Color CountColor = Color.white;
+    private static readonly Color CountLacking = new(1f, 0.42f, 0.38f, 1f);
+    // "Any 3 different", in the gold of the tabs.
+    private const string DifferentColor = "#d6993f";
     private static readonly Color TabIconColor = new(0.84f, 0.6f, 0.26f, 1f);
     private static readonly Color TabIconSelected = new(1f, 0.97f, 0.9f, 1f);
     // Item icons: as they are when they can be put in (or are in), dimmed when the player lacks them, red tinted when
@@ -60,22 +73,40 @@ internal static class RitesPanel
     private static RectTransform? _scrollArea;
     private static readonly PanelOverlay.HiddenVanilla Hidden = new(Settings.Constants.Plugin.ModName);
     private static readonly List<GameObject> Rows = [];
-    // A rite's row on the page: its item buttons (with each one's prefab name), and its text with and without the
-    // "ready" note.
-    private sealed class RiteRow(WeatherKind kind, List<(string item, UiParts.IconButton button)> buttons, TMP_Text text,
-        string plain, string ready, string prepared, Image icon)
+    // One item slot of a row: its button, the number under it, and the item it shows (which the row's first slots
+    // change while the rite still needs more).
+    private sealed class Slot(string item)
+    {
+        internal string Item { get; set; } = item;
+        internal UiParts.IconButton Button { get; set; } = null!;
+        internal TMP_Text Count { get; set; } = null!;
+    }
+
+    // A rite's row on the page: its item slots, all its known items (in the setting's order), its name line with and
+    // without the "ready" note, and the line under it with what the rite does.
+    private sealed class RiteRow(WeatherKind kind, List<Slot> slots, List<string> items, TMP_Text text,
+        string plain, string ready, string prepared, Image icon, TMP_Text? detail, UITooltip? detailTooltip)
     {
         internal WeatherKind Kind { get; } = kind;
         internal string Prepared { get; } = prepared;
         internal Image Icon { get; } = icon;
-        internal List<(string item, UiParts.IconButton button)> Buttons { get; } = buttons;
+        internal List<Slot> Slots { get; } = slots;
+        internal List<string> Items { get; } = items;
         internal TMP_Text Text { get; } = text;
         internal string Plain { get; } = plain;
         internal string Ready { get; } = ready;
+
+        // The line's tooltip tells it in full, only while it is cut short.
+        internal void Fit()
+        {
+            if (!detail || !detailTooltip) return;
+            bool cut = detail!.isTextTruncated;
+            if (detailTooltip!.enabled != cut) detailTooltip.enabled = cut;
+        }
     }
 
     private static readonly List<RiteRow> RiteRows = [];
-    // Rites whose items that don't fit in the row are shown under it; kept between openings.
+    // Rites whose items are shown under their row; all fold back each time the page opens.
     private static readonly HashSet<WeatherKind> Expanded = [];
 
     // The prepared rite that kept a clicked one out, flashing until _flashUntil.
@@ -107,10 +138,12 @@ internal static class RitesPanel
         }
         Layout(gui);
         RefreshItems();
+        foreach (RiteRow row in RiteRows) row.Fit();
     }
 
     // Each row: "ready" while its rite is one of those pulling the lever performs; its buttons only react while the player
-    // has what the obliterator still needs, counting any mix of the rite's items.
+    // has what the obliterator still needs: for most rites any mix of its items, for one taking different items that
+    // item, not yet in.
     private static void RefreshItems()
     {
         if (!_container || !Player.m_localPlayer) return;
@@ -124,11 +157,11 @@ internal static class RitesPanel
         foreach (RiteRow row in RiteRows)
         {
             int missing = RiteItems.Missing(obliterator, row.Kind);
-            int have = RiteItems.Have(inventory, row.Kind);
+            bool distinct = ObliteratorKeys.Distinct(row.Kind);
+            if (missing > 0) Arrange(row, inventory, obliterator, distinct);
             WeatherKind clash = missing > 0 ? ObliteratorKeys.ClashingWith(prepared, row.Kind) : WeatherKind.None;
-            bool clashing = clash != WeatherKind.None;
-            bool lacking = missing > 0 && have < missing;
-            bool canPut = missing > 0 && !lacking;
+            // Most rites: what is missing, in any mix of its items.
+            int have = distinct ? 0 : RiteItems.Have(inventory, row.Kind);
 
             bool flash = flashing && row.Kind == _flash;
             string text = flash ? row.Prepared : on && ObliteratorKeys.Contains(prepared, row.Kind) ? row.Ready : row.Plain;
@@ -137,23 +170,71 @@ internal static class RitesPanel
             Color iconColor = flash ? Color.Lerp(Color.white, FlashColor, Mathf.PingPong(Time.unscaledTime * 4f, 1f)) : Color.white;
             if (row.Icon.color != iconColor) row.Icon.color = iconColor;
 
-            Color itemColor = lacking ? ItemLacking : clashing ? ItemClashing : ItemUsable;
-            foreach ((string item, UiParts.IconButton button) in row.Buttons)
+            foreach (Slot slot in row.Slots)
             {
+                UiParts.IconButton button = slot.Button;
+                // What a click puts in: one of a different item, else what is missing (the full amount once it is in).
+                int need = distinct ? 1 : missing > 0 ? missing : ObliteratorKeys.Amount(row.Kind);
+                bool inside = distinct && RiteItems.Contains(obliterator, slot.Item);
+                // Only items the player holds react; for a mix, the total of all its items must also be enough.
+                bool holds = Holds(inventory, slot.Item);
+                int held = !holds ? 0 : distinct ? 1 : have;
+                bool lacking = missing > 0 && !inside && held < need;
+                bool canPut = missing > 0 && !inside && !lacking;
+                bool clashing = canPut && clash != WeatherKind.None;
+
+                Color itemColor = lacking ? ItemLacking : clashing ? ItemClashing : ItemUsable;
                 if (button.Icon.color != itemColor) button.Icon.color = itemColor;
+                string count = need.ToString();
+                if (slot.Count.text != count) slot.Count.text = count;
+                Color countColor = lacking ? CountLacking : CountColor;
+                if (slot.Count.color != countColor) slot.Count.color = countColor;
                 // No hover or press look when there is nothing to put in; the item still shows as it is. A clashing
                 // one still reacts, to say why it isn't put in.
                 Selectable.Transition transition = canPut ? Selectable.Transition.ColorTint : Selectable.Transition.None;
                 if (button.Button.transition != transition) button.Button.transition = transition;
 
-                string name = ObliteratorKeys.ItemName(item);
-                if (lacking) button.SetTooltip(Messages.PanelItemMissing, $"{name}\n{string.Format(Messages.PanelItemNeeds, missing, have)}");
+                string name = ObliteratorKeys.ItemName(slot.Item);
+                if (lacking) button.SetTooltip(Messages.PanelItemMissing, $"{name}\n{string.Format(Messages.PanelItemNeeds, need, held)}");
                 else if (clashing) button.SetTooltip(Messages.PanelItemClash, $"{name}\n{string.Format(Messages.PanelItemClashDetail, WeatherKinds.Colored(clash))}");
-                else if (canPut) button.SetTooltip("", $"{name}\n{string.Format(Messages.PanelItemPut, missing)}");
+                else if (canPut) button.SetTooltip("", $"{name}\n{string.Format(Messages.PanelItemPut, need)}");
+                else if (distinct && !inside) button.SetTooltip("", $"{name}\n{Messages.PanelItemEnough}");
                 else button.SetTooltip("", $"{name}\n{Messages.PanelItemIn}");
             }
         }
     }
+
+    private static readonly List<string> Arranged = [];
+
+    // While the rite still needs more: the items the player can put in fill the slots from the left, in the setting's
+    // order (cheapest first), so clicking the leftmost slot again and again puts them in from the cheapest up. Slots
+    // left over keep the items they showed, in the order they had: one just put in moves right, behind those still
+    // to put in.
+    private static void Arrange(RiteRow row, Inventory inventory, Inventory obliterator, bool distinct)
+    {
+        int count = row.Slots.Count;
+        Arranged.Clear();
+        foreach (string item in row.Items)
+        {
+            if (Arranged.Count == count) break;
+            if (Usable(item, inventory, obliterator, distinct)) Arranged.Add(item);
+        }
+        foreach (Slot slot in row.Slots)
+        {
+            if (Arranged.Count == count) break;
+            if (!Arranged.Contains(slot.Item)) Arranged.Add(slot.Item);
+        }
+        for (int i = 0; i < count; i++)
+        {
+            Slot slot = row.Slots[i];
+            if (slot.Item == Arranged[i]) continue;
+            slot.Item = Arranged[i];
+            slot.Button.Icon.sprite = ObliteratorKeys.ItemIcon(slot.Item);
+        }
+    }
+
+    private static bool Usable(string item, Inventory inventory, Inventory obliterator, bool distinct) =>
+        Holds(inventory, item) && !(distinct && RiteItems.Contains(obliterator, item));
 
     // Puts the items in (the clicked one first) and keeps the page open, so more rites can be prepared. Not when a rite
     // already prepared clashes with it: then a warning names that rite, whose row flashes.
@@ -163,7 +244,9 @@ internal static class RitesPanel
         Inventory obliterator = _container!.GetInventory();
         Inventory inventory = Player.m_localPlayer.GetInventory();
         int missing = RiteItems.Missing(obliterator, kind);
-        if (missing <= 0 || RiteItems.Have(inventory, kind) < missing) return;
+        bool distinct = ObliteratorKeys.Distinct(kind);
+        if (missing <= 0) return;
+        if (distinct ? !Usable(item, inventory, obliterator, true) : !Holds(inventory, item) || RiteItems.Have(inventory, kind) < missing) return;
         WeatherKind clash = ObliteratorKeys.ClashingWith(ObliteratorKeys.PickAll(obliterator), kind);
         if (clash != WeatherKind.None)
         {
@@ -172,7 +255,8 @@ internal static class RitesPanel
             _flashUntil = Time.unscaledTime + FlashSeconds;
             return;
         }
-        RiteItems.PutIn(inventory, obliterator, kind, item);
+        if (distinct) RiteItems.PutOne(inventory, obliterator, kind, item);
+        else RiteItems.PutIn(inventory, obliterator, kind, item);
     }
 
     private static void Open(InventoryGui gui, Container container)
@@ -182,6 +266,7 @@ internal static class RitesPanel
         if (!_overlay) return;
         _container = container;
         _open = true;
+        Expanded.Clear();
         Hidden.Hide(gui);
         PanelOverlay.BringToFront(_overlay!);
         _overlay!.gameObject.SetActive(true);
@@ -360,56 +445,114 @@ internal static class RitesPanel
         Image image = riteIcon.AddComponent<Image>();
         image.sprite = WeatherIcons.For(kind);
         image.preserveAspect = true;
-        image.raycastTarget = false;
+        // Clicking the icon opens the rite's entry in the Compendium.
+        Button open = riteIcon.AddComponent<Button>();
+        open.transition = Selectable.Transition.None;
+        open.targetGraphic = image;
+        open.onClick.AddListener(() => RiteCompendium.Open(gui, kind));
+        UITooltip? openTooltip = UiParts.AddTooltip(gui, riteIcon, CardTooltip(gui));
+        if (openTooltip)
+        {
+            openTooltip!.m_topic = WeatherKinds.Name(kind);
+            openTooltip.m_text = Messages.PanelOpenCompendium;
+        }
 
-        // The items the player holds first, then the others, each in the setting's order. At most MaxShownItems fit
-        // in the row; with more, the last slot is a "+N" button that shows the rest under the row's text.
-        List<string> items = ShownOrder(ObliteratorKeys.KnownItems(kind));
+        // In the order of ShownOrder (and kept so, see Arrange). Up to MaxShownItems fit in the row; with more, 2 slots
+        // and a "+N" button that moves them all under the row, leaving only a "-" in it, so the row's
+        // text has more room.
+        List<string> known = ObliteratorKeys.KnownItems(kind);
+        List<string> items = ShownOrder(kind, known);
         bool overflow = items.Count > MaxShownItems;
-        int inRow = overflow ? MaxShownItems - 1 : items.Count;
-        int slots = overflow ? MaxShownItems : items.Count;
-        List<(string item, UiParts.IconButton button)> buttons = [];
+        bool expanded = overflow && Expanded.Contains(kind);
+        int inRow = expanded ? 0 : overflow ? MaxShownItems - 1 : items.Count;
+        int slotCount = expanded ? 1 : overflow ? MaxShownItems : items.Count;
+        List<Slot> slots = [];
         for (int i = 0; i < inRow; i++)
         {
-            UiParts.IconButton slot = ItemButton(gui, row.transform, kind, items[i]);
-            Place(slot.Rect, slots - 1 - i);
-            buttons.Add((items[i], slot));
+            Slot slot = ItemSlot(gui, row.transform, kind, items[i]);
+            Place(slot.Button.Rect, slotCount - 1 - i);
+            slots.Add(slot);
         }
-        bool expanded = overflow && Expanded.Contains(kind);
         if (overflow) MoreButton(gui, row.transform, kind, expanded, items.Count - inRow);
-        float itemsWidth = slots > 0 ? slots * IconSize + (slots - 1) * ItemGap + TextGap : 0f;
+        float itemsWidth = slotCount > 0 ? slotCount * IconSize + (slotCount - 1) * ItemGap + TextGap : 0f;
 
-        string itemName = ObliteratorKeys.ItemLabel(kind);
+        // Under the name: "Any 3 different" for a rite taking different items, and with the hints on, what it does.
+        string detail = ObliteratorHints.Explaining ? $"<color={Messages.Faint}>{WeatherKinds.Flavour(kind)}</color>" : "";
+        int amount = ObliteratorKeys.Amount(kind);
+        if (ObliteratorKeys.Distinct(kind) && amount > 1)
+            detail = $"<color={DifferentColor}>{string.Format(Messages.PanelAnyDifferent, amount)}</color>" + (detail.Length > 0 ? "  " + detail : "");
 
-        TextMeshProUGUI text = UiParts.CreateText(gui, row.transform, "Text", 20f, Color.white, TextAlignmentOptions.Left);
+        TextMeshProUGUI text = UiParts.CreateText(gui, row.transform, "Text", NameSize, Color.white,
+            detail.Length > 0 ? TextAlignmentOptions.BottomLeft : TextAlignmentOptions.Left);
         text.textWrappingMode = TextWrappingModes.NoWrap;
         text.overflowMode = TextOverflowModes.Ellipsis;
-        string detail = ObliteratorHints.Explaining
-            ? string.Format(Messages.PanelRowDetail, itemName, WeatherKinds.Plain(kind))
-            : string.Format(Messages.PanelRowItem, itemName);
-        string plain = $"{WeatherKinds.Colored(kind)}\n<size=75%>{detail}</size>";
-        string ready = $"{WeatherKinds.Colored(kind)}  <size=75%>{Messages.PanelReady}</size>\n<size=75%>{detail}</size>";
-        string prepared = $"{WeatherKinds.Colored(kind)}  <size=75%>{Messages.PanelPrepared}</size>\n<size=75%>{detail}</size>";
+        string plain = WeatherKinds.Colored(kind);
+        string ready = $"{plain}  <size=75%>{Messages.PanelReady}</size>";
+        string prepared = $"{plain}  <size=75%>{Messages.PanelPrepared}</size>";
         text.text = plain;
-        RiteRows.Add(new RiteRow(kind, buttons, text, plain, ready, prepared, image));
         RectTransform textRect = text.rectTransform;
-        textRect.anchorMin = new Vector2(0f, 0f);
+        // With nothing under it, the name sits in the middle of the row.
+        textRect.anchorMin = new Vector2(0f, detail.Length > 0 ? 1f : 0f);
         textRect.anchorMax = new Vector2(1f, 1f);
-        textRect.offsetMin = new Vector2(IconSize + TextGap, 0f);
+        textRect.offsetMin = new Vector2(IconSize + TextGap, detail.Length > 0 ? -NameHeight : 0f);
         textRect.offsetMax = new Vector2(-itemsWidth, 0f);
 
-        if (expanded) MoreRow(gui, kind, items, inRow, buttons);
+        TMP_Text? detailText = null;
+        UITooltip? detailTooltip = null;
+        if (detail.Length > 0) detailText = DetailText(gui, row.transform, kind, detail, itemsWidth, out detailTooltip);
+
+        RiteRows.Add(new RiteRow(kind, slots, known, text, plain, ready, prepared, image, detailText, detailTooltip));
+
+        if (expanded) MoreRow(gui, kind, items, inRow, slots);
     }
 
-    // Held items first (keeping the setting's order among them), then the rest in the setting's order.
-    private static List<string> ShownOrder(List<string> items)
+    // Under the rite's name: up to two lines, cut short with "..." when longer (its tooltip then tells it in full).
+    private static TMP_Text DetailText(InventoryGui gui, Transform row, WeatherKind kind, string content, float itemsWidth, out UITooltip? tooltip)
+    {
+        TextMeshProUGUI text = UiParts.CreateText(gui, row, "Detail", DetailSize, Color.white, TextAlignmentOptions.TopLeft);
+        text.textWrappingMode = TextWrappingModes.Normal;
+        text.overflowMode = TextOverflowModes.Ellipsis;
+        text.lineSpacing = -12f;
+        // Hovered for its tooltip.
+        text.raycastTarget = true;
+        text.text = content;
+        RectTransform rect = text.rectTransform;
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.offsetMin = new Vector2(IconSize + TextGap, 0f);
+        rect.offsetMax = new Vector2(-itemsWidth, -NameHeight);
+
+        tooltip = UiParts.AddTooltip(gui, text.gameObject, CardTooltip(gui));
+        if (tooltip)
+        {
+            tooltip!.m_topic = WeatherKinds.Name(kind);
+            tooltip.m_text = content;
+            tooltip.enabled = false;
+        }
+        return text;
+    }
+
+    // The inventory item card's tooltip, on a dark background like the item cards (the craft button's has none, so
+    // over the text it hovers it is hard to read). Null: the craft button's.
+    private static GameObject? CardTooltip(InventoryGui gui) => UiParts.ItemTooltipPrefab(gui, out _);
+
+    // Each in the setting's order: while the rite still needs more, the items the player can put in first, then the
+    // others; once it has all it needs, those already in first, so the slots keep showing what was put in.
+    private static List<string> ShownOrder(WeatherKind kind, List<string> items)
     {
         Inventory? inventory = Player.m_localPlayer ? Player.m_localPlayer.GetInventory() : null;
-        if (inventory == null) return items;
-        List<string> held = [], rest = [];
-        foreach (string item in items) (Holds(inventory, item) ? held : rest).Add(item);
-        held.AddRange(rest);
-        return held;
+        Inventory? obliterator = _container ? _container!.GetInventory() : null;
+        if (inventory == null || obliterator == null) return items;
+        bool distinct = ObliteratorKeys.Distinct(kind);
+        bool satisfied = RiteItems.Missing(obliterator, kind) <= 0;
+        List<string> first = [], rest = [];
+        foreach (string item in items)
+        {
+            bool front = satisfied ? RiteItems.Contains(obliterator, item) : Usable(item, inventory, obliterator, distinct);
+            (front ? first : rest).Add(item);
+        }
+        first.AddRange(rest);
+        return first;
     }
 
     private static bool Holds(Inventory inventory, string item)
@@ -419,11 +562,22 @@ internal static class RitesPanel
         return false;
     }
 
-    private static UiParts.IconButton ItemButton(InventoryGui gui, Transform parent, WeatherKind kind, string item)
+    // An item's button with the number a click puts in at its bottom, like a recipe's; it puts in the item the slot
+    // shows at the time.
+    private static Slot ItemSlot(InventoryGui gui, Transform parent, WeatherKind kind, string item)
     {
-        UiParts.IconButton slot = UiParts.CreateIconButton(gui, parent, $"Item_{item}", IconSize, () => PutIn(kind, item));
-        slot.Icon.sprite = ObliteratorKeys.ItemIcon(item);
-        slot.SetTooltip("", ObliteratorKeys.ItemName(item));
+        Slot slot = new(item);
+        slot.Button = UiParts.CreateIconButton(gui, parent, $"Item_{item}", IconSize, () => PutIn(kind, slot.Item));
+        slot.Button.Icon.sprite = ObliteratorKeys.ItemIcon(item);
+        slot.Button.SetTooltip("", ObliteratorKeys.ItemName(item));
+
+        TextMeshProUGUI count = UiParts.CreateText(gui, slot.Button.Button.transform, "Count", CountSize, CountColor, TextAlignmentOptions.Bottom);
+        count.textWrappingMode = TextWrappingModes.NoWrap;
+        count.fontStyle = FontStyles.Bold;
+        count.outlineWidth = 0.25f;
+        count.outlineColor = new Color32(0, 0, 0, 255);
+        UiParts.Stretch(count.rectTransform, 2f);
+        slot.Count = count;
         return slot;
     }
 
@@ -434,7 +588,7 @@ internal static class RitesPanel
         rect.anchoredPosition = new Vector2(-fromRight * (IconSize + ItemGap), 0f);
     }
 
-    // The rightmost slot: "+N" shows the items that don't fit under the row, "-" hides them again.
+    // The rightmost slot: "+N" moves all the items under the row, "-" puts them back.
     private static void MoreButton(InventoryGui gui, Transform parent, WeatherKind kind, bool expanded, int hidden)
     {
         UiParts.IconButton more = UiParts.CreateIconButton(gui, parent, "More", IconSize, () =>
@@ -452,9 +606,9 @@ internal static class RitesPanel
         UiParts.Stretch(label.rectTransform, 0f);
     }
 
-    // The items that don't fit in the rite's row, under its text, wrapping onto more lines as needed.
+    // The rite's items from the given one on, under its row, wrapping onto more lines as needed.
     private static void MoreRow(InventoryGui gui, WeatherKind kind, List<string> items, int from,
-        List<(string item, UiParts.IconButton button)> buttons)
+        List<Slot> slots)
     {
         GameObject more = new($"Rite_{kind}_More", typeof(RectTransform));
         more.transform.SetParent(_list!, false);
@@ -467,7 +621,7 @@ internal static class RitesPanel
         grid.startAxis = GridLayoutGroup.Axis.Horizontal;
         grid.childAlignment = TextAnchor.UpperLeft;
         for (int i = from; i < items.Count; i++)
-            buttons.Add((items[i], ItemButton(gui, more.transform, kind, items[i])));
+            slots.Add(ItemSlot(gui, more.transform, kind, items[i]));
     }
 
     private static void Footer(InventoryGui gui, string message)

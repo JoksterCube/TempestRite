@@ -14,13 +14,18 @@ namespace JoksterCube.TempestRite.Domain;
 //    a kill of it in their character's stats: the game gives the key only to the player whose game had the boss).
 //    The bosses every one of them has slain can come (with player based raids off, the world's keys count for all).
 //    With none, it ends at once and everyone there is told why.
-// 2. Bosses are picked, different ones while there are enough, weakest first, and rise one after another: one player
-//    inside spawns each within the bubble, and the next rises a little after it falls.
-// 3. When the last falls, it ends and the obliterator receives treasure (see RagnarokLoot), one roll for each boss.
-// It breaks off with no reward when its time runs out, the obliterator is destroyed, everyone inside has fallen or
-// left, or the Sanctuary or Equilibrium Rite ends it (only one Crimson or Ragnarök Rite goes on at a time, and only the
-// Sanctuary Rite can be performed within its bubble, see IncursionArena.RiteRefused). However it ends, its bosses are
-// taken away.
+// 2. Bosses are picked, different ones while there are enough (those slain by only some of them
+//    fill in before any comes again), in a random order. Each below the strongest boss everyone has slain is raised to it, with a
+//    star for each place below it (see RagnarokPower): one player inside spawns it within the bubble, and the next rises a little after it falls. Their
+//    drops but trophies are theirs to keep.
+// 3. When the last falls, it ends and the obliterator receives treasure (see RagnarokLoot): a few rolls of the treasure
+//    table (valuables) for each boss, as rich as the strongest boss slain. There is no time limit.
+// A boss that keeps falling out of the bubble (through the ground) is put back, and if that doesn't hold, slain where the
+// players can reach its drops (see ArenaRescue): it counts as slain.
+// It breaks off with no reward when the obliterator is destroyed, everyone inside has fallen or
+// left, or the Sanctuary Rite ends it (only one Crimson or Ragnarök Rite goes on at a time, and only the
+// Sanctuary Rite can be performed within its bubble, see IncursionArena.RiteRefused). However it ends, the bosses still
+// standing are taken away.
 // Not kept through a server restart: a Ragnarök Rite still going on then simply ends.
 internal static class RagnarokRush
 {
@@ -74,16 +79,22 @@ internal static class RagnarokRush
     // Asking: the players asked (by their game), and what each answered.
     private static readonly HashSet<long> Asked = [];
     private static readonly Dictionary<long, HashSet<string>> Answers = [];
-    // Each boss in the Bosses setting with its key and name ("$enemy_eikthyr"), by its place there.
-    private static readonly List<(string prefab, string key, string name)> Roster = [];
+    // Each boss in the Bosses setting, by its place there.
+    private static List<BossRoster.Boss> Roster = [];
 
-    // The bosses picked (their places in the Bosses setting), and which one is up.
+    // The bosses picked (their places in the Bosses setting), and which one is up. The strongest
+    // boss everyone has slain (its place) sets how strong they all are and the treasure.
     private static readonly List<int> Picked = [];
+    private static int _strongest;
     private static int _current;
-    private static ZDOID _boss = ZDOID.None;
-    // Where it rose.
+    // The boss up now (a set: one taken away is called again while its late death may still arrive).
+    private static readonly HashSet<ZDOID> Bosses = [];
+    // Where they rose.
     private static Vector3 _bossAt;
     private static int _ticket;
+    // How many the last call to rise asked for.
+    private static int _rising;
+    private static bool _told;
     private static int _spawnTries;
     private static float _lostSince = -1f;
 
@@ -98,8 +109,9 @@ internal static class RagnarokRush
     internal static void Register(ZRoutedRpc rpc)
     {
         rpc.Register<ZPackage>(Rpcs.RagnarokAnswer, RPC_Answer);
-        rpc.Register<ZDOID, int, Vector3>(Rpcs.RagnarokSpawned, RPC_Spawned);
+        rpc.Register<ZPackage>(Rpcs.RagnarokSpawned, RPC_Spawned);
         rpc.Register<ZDOID>(Rpcs.RagnarokDown, RPC_Down);
+        rpc.Register<ZDOID>(Rpcs.RagnarokLost, RPC_Lost);
     }
 
     internal static void ClearSession()
@@ -116,8 +128,11 @@ internal static class RagnarokRush
         Answers.Clear();
         Roster.Clear();
         Picked.Clear();
+        _strongest = 0;
         _current = 0;
-        _boss = ZDOID.None;
+        Bosses.Clear();
+        _rising = 0;
+        _told = false;
         _ticket = 0;
         _spawnTries = 0;
         _lostSince = -1f;
@@ -137,9 +152,6 @@ internal static class RagnarokRush
                 break;
             case WeatherKind.Sanctuary:
                 if (_running) Stop(Ending.Ended);
-                break;
-            case WeatherKind.Reset:
-                if (_running && !Active) Stop(Ending.Ended);
                 break;
         }
     }
@@ -192,7 +204,7 @@ internal static class RagnarokRush
         _nextCheck = Time.time + CheckInterval;
         Picked.Clear();
         _current = 0;
-        _boss = ZDOID.None;
+        Bosses.Clear();
         _lostSince = -1f;
         EndRaidHere();
         Ask();
@@ -216,14 +228,8 @@ internal static class RagnarokRush
         _phaseUntil = Time.time + AskWait;
         Asked.Clear();
         Answers.Clear();
-        ReadRoster();
-        ZPackage keys = new();
-        keys.Write(Roster.Count);
-        foreach ((string _, string key, string name) in Roster)
-        {
-            keys.Write(key);
-            keys.Write(name);
-        }
+        Roster = BossRoster.Read(Messages.RagnarokName);
+        ZPackage keys = BossRoster.AskPackage(Roster);
         // All of them first: the host's own player answers at once, before the others are asked.
         Asked.UnionWith(PlayersInside());
         if (Asked.Count == 0)
@@ -238,35 +244,16 @@ internal static class RagnarokRush
         }
     }
 
-    // The bosses of the Bosses setting the game has, with the key each gives as it dies.
-    private static void ReadRoster()
-    {
-        Roster.Clear();
-        foreach (string name in KeyItemLists.Parse(PluginConfig.RagnarokBosses.Value))
-        {
-            GameObject? prefab = ZNetScene.instance ? ZNetScene.instance.GetPrefab(name) : null;
-            Character? boss = prefab ? prefab!.GetComponent<Character>() : null;
-            if (!boss)
-            {
-                Plugin.ModLogger.LogWarning($"Ragnarök Rite: boss \"{name}\" is not a creature the game knows. Check the Bosses setting.");
-                continue;
-            }
-            if (string.IsNullOrEmpty(boss!.m_defeatSetGlobalKey))
-            {
-                Plugin.ModLogger.LogWarning($"Ragnarök Rite: boss \"{name}\" sets no key when it dies, so nobody can be known to have slain it. Check the Bosses setting.");
-                continue;
-            }
-            Roster.Add((name, boss.m_defeatSetGlobalKey, boss.m_name));
-        }
-    }
-
     // From a player inside: the keys of those asked that they have.
+    // The Hoard-Bane Rite asks the same (see HoardBaneRush.Answered).
     private static void RPC_Answer(long sender, ZPackage package)
     {
-        if (!IsServer() || !_running || _phase != Phase.Asking || !Asked.Contains(sender)) return;
+        if (!IsServer()) return;
         HashSet<string> keys = [];
         int count = package.ReadInt();
         for (int i = 0; i < count; i++) keys.Add(package.ReadString());
+        if (HoardBaneRush.Answered(sender, keys)) return;
+        if (!_running || _phase != Phase.Asking || !Asked.Contains(sender)) return;
         Answers[sender] = keys;
         if (Answers.Count >= Asked.Count) Pick();
     }
@@ -274,17 +261,10 @@ internal static class RagnarokRush
     // The bosses every player who answered has slain; players without the mod (who can't answer) are left out.
     private static void Pick()
     {
-        bool byPlayer = ZoneSystem.instance && ZoneSystem.instance.GetGlobalKey(GlobalKeys.PlayerEvents);
         List<int> eligible = [];
-        for (int place = 0; place < Roster.Count; place++)
-        {
-            string key = Roster[place].key;
-            bool world = !byPlayer && ZoneSystem.instance && ZoneSystem.instance.GetGlobalKey(key);
-            bool everyone = Answers.Count > 0;
-            foreach (HashSet<string> keys in Answers.Values)
-                if (!world && !keys.Contains(key)) everyone = false;
-            if (everyone) eligible.Add(place);
-        }
+        // Slain by some but not all: they fill in before any boss comes again.
+        List<int> spare = [];
+        BossRoster.Slain(Roster, Answers.Values, eligible, spare);
         if (Answers.Count < Asked.Count)
             Plugin.ModLogger.LogInfo($"Ragnarök Rite: {Asked.Count - Answers.Count} players inside didn't answer (no mod?); left out of the choice.");
         if (eligible.Count == 0)
@@ -292,11 +272,13 @@ internal static class RagnarokRush
             Stop(Ending.NoBosses);
             return;
         }
+        _strongest = eligible[eligible.Count - 1];
         Picked.Clear();
-        Picked.AddRange(RagnarokLoot.PickBosses(eligible, PluginConfig.RagnarokBossCount.Value, n => UnityEngine.Random.Range(0, n)));
+        Picked.AddRange(RagnarokLoot.PickBosses(eligible, spare, PluginConfig.RagnarokBossCount.Value, n => UnityEngine.Random.Range(0, n)));
         // Only how many: which bosses come is kept for when each rises.
         ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.RagnarokBegun, Picked.Count, _center);
-        Plugin.ModLogger.LogInfo($"Ragnarök Rite: the bosses rise: {string.Join(", ", Picked.ConvertAll(p => Roster[p].prefab))}.");
+        Plugin.ModLogger.LogInfo($"Ragnarök Rite: as strong as {Roster[_strongest].Prefab}, the bosses rise: " +
+            $"{string.Join(", ", Picked.ConvertAll(p => Roster[p].Prefab))}.");
         _current = 0;
         _spawnTries = 0;
         Rest(FirstRiseDelay);
@@ -312,13 +294,13 @@ internal static class RagnarokRush
                 if (Time.time >= _phaseUntil) Pick();
                 break;
             case Phase.Resting:
-                if (Time.time >= _phaseUntil) Rise();
+                if (Time.time >= _phaseUntil) BeginNext();
                 break;
             case Phase.Rising:
                 if (Time.time < _phaseUntil) break;
-                // Nobody said it is up: another player is asked.
+                // Nobody said they are up: another player is asked.
                 if (++_spawnTries >= SpawnTries) Stop(Ending.NoSpawn);
-                else Rise();
+                else Rise(_rising);
                 break;
             case Phase.Fighting:
                 CheckLost();
@@ -332,42 +314,72 @@ internal static class RagnarokRush
         _phaseUntil = Time.time + seconds;
     }
 
-    // One player inside spawns the boss: a different one on each try.
-    private static void Rise()
+    private static void BeginNext()
+    {
+        Bosses.Clear();
+        _told = false;
+        Rise(1);
+    }
+
+    // One player inside spawns the bosses: a different one on each try.
+    private static void Rise(int count)
     {
         List<long> players = PlayersInside();
         if (players.Count == 0) return;
         long spawner = players[_spawnTries % players.Count];
+        int place = Picked[_current];
+        BossRoster.Boss boss = Roster[place];
+        int stars = RagnarokPower.Stars(place, _strongest);
+        BossRoster.Boss raised = Roster[RagnarokPower.RaisedTo(place, _strongest)];
+        float healthBy = RagnarokPower.HealthMultiplier(boss.Health, boss.Taken, raised.Health, raised.Taken) *
+            PluginConfig.RagnarokHealthMultiplier.Value;
+        float damageBy = RagnarokPower.DamageMultiplier(boss.Damage, raised.Damage) * PluginConfig.RagnarokDamageMultiplier.Value;
         _phase = Phase.Rising;
         _phaseUntil = Time.time + SpawnWait;
         _ticket++;
-        _boss = ZDOID.None;
+        _rising = count;
         _lostSince = -1f;
-        ZRoutedRpc.instance.InvokeRoutedRPC(spawner, Rpcs.RagnarokSpawn, Roster[Picked[_current]].prefab, _center, _ticket);
+        ZPackage package = new();
+        package.Write(Roster[place].Prefab);
+        package.Write(_center);
+        package.Write(_ticket);
+        package.Write(count);
+        package.Write(healthBy);
+        package.Write(damageBy);
+        // A star for each place below the strongest: after Bonemass, Eikthyr has two (see RagnarokPower).
+        package.Write(stars);
+        ZRoutedRpc.instance.InvokeRoutedRPC(spawner, Rpcs.RagnarokSpawn, package);
     }
 
-    // From the player who spawned it.
-    private static void RPC_Spawned(long sender, ZDOID boss, int ticket, Vector3 at)
+    // From the player who spawned them.
+    private static void RPC_Spawned(long sender, ZPackage package)
     {
         if (!IsServer()) return;
+        int ticket = package.ReadInt();
+        Vector3 at = package.ReadVector3();
+        int count = package.ReadInt();
+        List<ZDOID> risen = [];
+        for (int i = 0; i < count; i++) risen.Add(package.ReadZDOID());
         if (!_running || ticket != _ticket || _phase != Phase.Rising)
         {
-            // Too late: another was called already, or it ended.
-            TakeAway(boss);
+            // Too late: others were called already, or it ended.
+            foreach (ZDOID boss in risen) TakeAway(boss);
             return;
         }
-        _boss = boss;
+        Bosses.UnionWith(risen);
         _bossAt = at;
         _phase = Phase.Fighting;
         _spawnTries = 0;
+        if (_told) return;
+        _told = true;
         Tell(fell: false);
     }
 
-    // From the game that owned it, as it died.
+    // From the game that owned it, as it died. The next rises after it.
     private static void RPC_Down(long sender, ZDOID boss)
     {
-        if (!IsServer() || !_running || boss.IsNone() || boss != _boss) return;
-        _boss = ZDOID.None;
+        if (!IsServer() || !_running || boss.IsNone() || !Bosses.Remove(boss)) return;
+        if (Bosses.Count > 0 || _phase != Phase.Fighting) return;
         Tell(fell: true);
         _current++;
         if (_current >= Picked.Count)
@@ -378,24 +390,38 @@ internal static class RagnarokRush
         Rest(Mathf.Max(0f, PluginConfig.RagnarokPause.Value));
     }
 
-    // The boss is gone without falling (taken away by something else): it is called again.
+    // From the game that owns it: it kept falling out of the bubble (through the ground) and couldn't even be slain there
+    // (see ArenaRescue). Not the players' fault: it counts as slain, and the next rises.
+    private static void RPC_Lost(long sender, ZDOID boss)
+    {
+        if (!IsServer() || !_running || boss.IsNone() || !Bosses.Contains(boss)) return;
+        Plugin.ModLogger.LogWarning($"Ragnarök Rite: {Roster[Picked[_current]].Prefab} was lost out of the bubble; it counts as slain.");
+        RPC_Down(sender, boss);
+        TakeAway(boss);
+    }
+
+    // Bosses gone without falling (taken away by something else) are called again.
     private static void CheckLost()
     {
-        if (_boss.IsNone() || ZDOMan.instance.GetZDO(_boss) != null)
+        List<ZDOID> lost = [];
+        foreach (ZDOID boss in Bosses)
+            if (ZDOMan.instance.GetZDO(boss) == null) lost.Add(boss);
+        if (lost.Count == 0)
         {
             _lostSince = -1f;
             return;
         }
         if (_lostSince < 0f) _lostSince = Time.time;
         if (Time.time - _lostSince < LostGrace) return;
-        Plugin.ModLogger.LogWarning($"Ragnarök Rite: {Roster[Picked[_current]].prefab} is gone without falling; it rises again.");
-        Rise();
+        Plugin.ModLogger.LogWarning($"Ragnarök Rite: {lost.Count} {Roster[Picked[_current]].Prefab} gone without falling; they rise again.");
+        foreach (ZDOID boss in lost) Bosses.Remove(boss);
+        Rise(lost.Count);
     }
 
     private static void Tell(bool fell)
     {
         ZPackage package = new();
-        package.Write(Roster[Picked[_current]].prefab);
+        package.Write(Roster[Picked[_current]].Prefab);
         package.Write(_current + 1);
         package.Write(Picked.Count);
         package.Write(fell);
@@ -441,7 +467,7 @@ internal static class RagnarokRush
         // Its bosses are taken away wherever they are, and what no player's game has; the rest is cleared in the games
         // that have it.
         IncursionArena.SweepOnServer(_center, Radius, Messages.RagnarokName);
-        _boss = ZDOID.None;
+        Bosses.Clear();
         Picked.Clear();
         _current = 0;
         if (Reward.Count > 0)
@@ -454,15 +480,29 @@ internal static class RagnarokRush
         }
     }
 
-    // One roll of the treasure table for each boss slain, by its strength.
+    // For each boss: a few rolls of the treasure table.
     private static void RollReward()
     {
         List<string> problems = [];
         List<RagnarokLoot.Treasure> table = RagnarokLoot.Parse(PluginConfig.RagnarokTreasure.Value, problems);
         foreach (string problem in problems)
             Plugin.ModLogger.LogWarning($"Ragnarök Rite: couldn't read \"{problem}\" in the Treasure setting: use Item: Min-Max.");
-        List<float> strengths = Picked.ConvertAll(place => RagnarokLoot.Strength(place, Roster.Count));
+        // All as rich as the strongest boss slain: which bosses came doesn't matter.
+        float strength = RagnarokLoot.Strength(_strongest, Roster.Count);
+        List<float> strengths = [];
+        int rolls = Math.Max(0, PluginConfig.RagnarokTreasureRolls.Value) * Picked.Count;
+        for (int i = 0; i < rolls; i++) strengths.Add(strength);
         Reward.AddRange(RagnarokLoot.Roll(table, strengths, () => UnityEngine.Random.value));
+        ScaleForPlayers();
+    }
+
+    // More players, more treasure: each item's amount times the multiplier for the players alive inside as it is won.
+    private static void ScaleForPlayers()
+    {
+        int players = Math.Max(1, PlayersInside().Count);
+        float multiplier = PartyReward.Multiplier(players, PluginConfig.RagnarokRewardPerPlayer.Value);
+        PartyReward.ScaleAll(Reward, multiplier, () => UnityEngine.Random.value);
+        Plugin.ModLogger.LogInfo($"Ragnarök Rite: {players} players inside, treasure x{multiplier:0.##}.");
     }
 
     // The game that owns the obliterator puts the treasure inside (see RagnarokArena.Reward). Tried again for a while

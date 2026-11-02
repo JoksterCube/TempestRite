@@ -44,7 +44,7 @@ public class IconPreview
                     bytes[i * 4 + 2] = Byte(colors[i].b);
                     bytes[i * 4 + 3] = Byte(colors[i].a);
                 }
-                using BinaryWriter writer = new(File.Create(Path.Combine(output, kind + ".rgba")));
+                using BinaryWriter writer = new(File.Create(Path.Combine(output, FileName(kind) + ".rgba")));
                 writer.Write(64);
                 writer.Write(64);
                 writer.Write(bytes);
@@ -63,6 +63,8 @@ public class IconPreview
         foreach (RiteGroup group in WeatherKinds.Groups) Write(Path.Combine(output, $"Tab{group}.rgba"), WeatherIcons.RenderTab(group));
         Write(Path.Combine(output, "Flap.rgba"), WeatherIcons.RenderFlap());
         Write(Path.Combine(output, "RitesBook.rgba"), WeatherIcons.RenderRitesBook());
+        Write(Path.Combine(output, "Hourglass.rgba"), WeatherIcons.RenderHourglass());
+        Write(Path.Combine(output, "Bounds.rgba"), WeatherIcons.RenderBounds());
     }
 
     // The Packward and Carrion icons over creatures, white (the game tints them): only TEMPESTRITE_ICON_OUT is needed.
@@ -91,6 +93,18 @@ public class IconPreview
         writer.Write(width);
         writer.Write(height);
         writer.Write(bytes);
+    }
+
+    // Named after the rite as players know it, so it is easy to find: "Equilibrium Rite" -> Equilibrium, "Fortune's Boon
+    // Rite" -> FortunesBoon, "Ragnarök Rite" -> Ragnarok.
+    internal static string FileName(WeatherKind kind)
+    {
+        string name = WeatherKinds.Name(kind);
+        if (name.EndsWith(" Rite", StringComparison.Ordinal)) name = name[..^5];
+        System.Text.StringBuilder file = new();
+        foreach (char c in name.Normalize(System.Text.NormalizationForm.FormD))
+            if (c < 128 && char.IsLetterOrDigit(c)) file.Append(c);
+        return file.ToString();
     }
 
     private static byte Byte(float value) => (byte)Math.Round(Math.Clamp(value, 0f, 1f) * 255f);

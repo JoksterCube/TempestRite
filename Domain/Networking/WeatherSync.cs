@@ -29,9 +29,16 @@ internal static class WeatherSync
         Incursion = 3
     }
 
+    // Once it has the state, a player's game asks again this often, and as soon as it is no longer paused: its clock
+    // stands still while paused (a player with debug mode can pause while the server goes on), and falls behind on stalls.
+    private const float ResyncInterval = 60f;
+
     private static bool _stateReceived;
     private static float _nextStateRequest;
     private static float _playerSeenAt = -1f;
+    private static bool _wasPaused;
+    private static bool _resyncing;
+    private static float _nextResync;
 
     internal static void Register(ZRoutedRpc rpc)
     {
@@ -46,16 +53,34 @@ internal static class WeatherSync
         _stateReceived = false;
         _nextStateRequest = 0f;
         _playerSeenAt = -1f;
+        _wasPaused = false;
+        _resyncing = false;
+        _nextResync = 0f;
     }
 
-    // Every frame: a player who joined asks what's going on.
+    // Every frame: a player who joined asks what's going on, then again now and then and after a pause.
     internal static void Update()
     {
         if (!ZNet.instance || ZNet.instance.IsServer() || ZRoutedRpc.instance == null || !Player.m_localPlayer) return;
+        if (Game.IsPaused())
+        {
+            _wasPaused = true;
+            return;
+        }
         if (_playerSeenAt < 0f) _playerSeenAt = Time.time;
         if (Time.time - _playerSeenAt < AskDelay || !RpcHandlers.ServerMatches) return;
-        if (_stateReceived || Time.time < _nextStateRequest) return;
-        _nextStateRequest = Time.time + StateRequestRetry;
+        if (!_stateReceived)
+        {
+            if (Time.time < _nextStateRequest) return;
+            _nextStateRequest = Time.time + StateRequestRetry;
+        }
+        else
+        {
+            if (!_wasPaused && Time.time < _nextResync) return;
+            _wasPaused = false;
+            _nextResync = Time.time + ResyncInterval;
+            _resyncing = true;
+        }
         ZRoutedRpc.instance.InvokeRoutedRPC(Rpcs.StateRequest, new ZPackage());
     }
 
@@ -125,22 +150,38 @@ internal static class WeatherSync
         foreach (WeatherKind kind in kinds)
         {
             if (!WeatherKinds.IsKnown(kind) || done.Exists(d => WeatherKinds.Clashes(d, kind))) continue;
-            if (IncursionArena.RiteRefused(kind, position) is { } why)
+            if ((IncursionArena.RiteRefusedHere(kind, position) ?? RallyPending.Refused(kind)) is { } why)
             {
                 Plugin.ModLogger.LogInfo($"Refused the {WeatherKinds.Name(kind)} performed by {callerName}: {why}.");
+                // Its lever was pulled and it burnt: its key items go back into the obliterator.
+                if (WeatherKinds.IsIncursion(kind) && IncursionPending.Is(kind, position))
+                {
+                    IncursionPending.Done(kind, position, refused: true);
+                    why += "\n" + Messages.IncursionKeysKept;
+                }
                 refused ??= why;
                 continue;
             }
+            if (WeatherKinds.IsIncursion(kind)) IncursionPending.Done(kind, position, refused: false);
             done.Add(kind);
             if (WeatherKinds.Personal(kind) || WeatherKinds.ForEveryone(kind))
             {
                 Plugin.ModLogger.LogInfo($"{callerName} performed the {WeatherKinds.Name(kind)} at ({position.x:0}, {position.z:0}).");
                 blessings.Add(kind);
+                if (kind == WeatherKind.SoulTether) SoulTether.PerformedOnServer(position);
+                if (kind == WeatherKind.RallyHorn) RallyPending.Sounded();
                 continue;
             }
             WeatherState.Start(kind, callerName, position);
+            if (WeatherKinds.IsIncursion(kind))
+            {
+                // What stands within the bubble dies first: here what nobody's game has, in each game its own.
+                IncursionArena.SweepOnServer(position, PluginConfig.Radius(kind), WeatherKinds.Name(kind));
+                if (!ZNet.instance.IsDedicated()) IncursionArena.Begun(kind, position);
+            }
             CrimsonRaids.Performed(kind);
             RagnarokRush.Performed(kind);
+            HoardBaneRush.Performed(kind);
             Log(callerName, kind);
             rites.Add(kind);
         }
@@ -176,6 +217,7 @@ internal static class WeatherSync
     {
         if (!IsServer() || !IsValidatedPeer(sender, out ZNetPeer? _)) return;
         ZRoutedRpc.instance.InvokeRoutedRPC(sender, Rpcs.State, StatePackage([], [], Vector3.zero, callerId: 0L, string.Empty));
+        RallyPending.Tell(sender);
     }
 
     private static void Refuse(long target, Refusal refusal, string reason = "")
@@ -188,6 +230,7 @@ internal static class WeatherSync
 
     // The rites going on, and what was just performed, which players are told about (nothing when they only ask what's
     // going on): rites everyone shares, and blessings for the players standing at position (kinship rites for all).
+    // Then when and where the rites that speed things up went on (see RiteHistory).
     private static ZPackage StatePackage(List<WeatherKind> rites, List<WeatherKind> blessings, Vector3 position, long callerId, string callerName)
     {
         ZPackage package = new();
@@ -197,6 +240,7 @@ internal static class WeatherSync
         package.Write(position);
         package.Write(callerId);
         package.Write(callerName);
+        RiteHistory.Write(package);
         return package;
     }
 
@@ -211,19 +255,33 @@ internal static class WeatherSync
         Vector3 position = package.ReadVector3();
         long callerId = package.ReadLong();
         string callerName = package.ReadString();
+        RiteHistory.SetAll(RiteHistory.Read(package));
 
+        // The answer to asking again: only the times are put right.
+        if (_stateReceived && _resyncing && rites.Count == 0 && blessings.Count == 0 && callerId == 0L)
+        {
+            _resyncing = false;
+            WeatherState.Resync(entries);
+            return;
+        }
+        if (!_stateReceived) _nextResync = Time.time + ResyncInterval;
         _stateReceived = true;
         WeatherState.SetAll(entries);
+        foreach (WeatherKind kind in rites) IncursionArena.Begun(kind, position);
         Announce(rites, blessings, position, byLocalPlayer: callerId == ZRoutedRpc.instance.m_id, callerName);
     }
 
-    // Tells the local player what one burn performed, all in one message.
+    // Tells the local player what one burn performed, in one message (see RiteNews).
     private static void Announce(List<WeatherKind> rites, List<WeatherKind> blessings, Vector3 position, bool byLocalPlayer, string callerName)
     {
-        using PlayerMessages.Gathering _ = PlayerMessages.Together();
-        foreach (WeatherKind kind in rites) WeatherState.Announce(kind, byLocalPlayer, callerName);
-        Blessings.Performed(blessings.FindAll(WeatherKinds.Personal), position, byLocalPlayer, callerName);
-        KinshipRites.Performed(blessings.FindAll(WeatherKinds.ForEveryone), byLocalPlayer, callerName);
+        RiteNews.Begin();
+        try
+        {
+            foreach (WeatherKind kind in rites) WeatherState.Announce(kind, position, byLocalPlayer, callerName);
+            Blessings.Performed(blessings.FindAll(WeatherKinds.Personal), position, byLocalPlayer, callerName);
+            KinshipRites.Performed(blessings.FindAll(WeatherKinds.ForEveryone), position, byLocalPlayer, callerName);
+        }
+        finally { RiteNews.Tell(byLocalPlayer, callerName); }
     }
 
     private static void RPC_Refused(long sender, ZPackage package)
@@ -241,7 +299,7 @@ internal static class WeatherSync
 
     // ---- Shared helpers ----
 
-    private static void Log(string who, WeatherKind kind) => Plugin.ModLogger.LogInfo(WeatherKinds.Lasts(kind)
+    private static void Log(string who, WeatherKind kind) => Plugin.ModLogger.LogInfo(WeatherKinds.Lasts(kind) && !WeatherKinds.Untimed(kind)
         ? $"{who} performed the {WeatherKinds.Name(kind)} for {TimeText.Duration(WeatherState.Remaining(kind))}{Where(kind)}."
         : $"{who} performed the {WeatherKinds.Name(kind)}.");
 

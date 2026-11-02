@@ -36,6 +36,28 @@ internal static class RiteCompendium
 
     internal static string Topic => CompendiumTexts.Topic;
 
+    // The rite whose entry the page scrolls to once its text is laid out, and for how many more frames (the page's
+    // size settles over the first few).
+    private static WeatherKind _scrollTo = WeatherKind.None;
+    private static int _scrollFrames;
+    private const int ScrollFrames = 10;
+
+    // Opens the Compendium on this page, scrolled to the rite's entry.
+    internal static void Open(InventoryGui gui, WeatherKind kind)
+    {
+        if (!gui.m_textsDialog || !Player.m_localPlayer) return;
+        gui.OnOpenTexts();
+        TextsDialog dialog = gui.m_textsDialog;
+        for (int index = 0; index < dialog.m_texts.Count; index++)
+        {
+            if (dialog.m_texts[index].m_topic != Topic) continue;
+            dialog.ShowText(index);
+            _scrollTo = kind;
+            _scrollFrames = ScrollFrames;
+            return;
+        }
+    }
+
     internal static string BuildText()
     {
         Targets.Clear();
@@ -77,7 +99,9 @@ internal static class RiteCompendium
         if (!area || !topic) return;
         Icons.RemoveAll(icon => !icon);
         int placed = 0;
-        if (topic!.text == Topic && area!.textInfo is { } info)
+        bool ours = topic!.text == Topic;
+        if (!ours) _scrollTo = WeatherKind.None;
+        if (ours && area!.textInfo is { } info)
         {
             for (int link = 0; link < info.linkCount; link++)
             {
@@ -91,10 +115,28 @@ internal static class RiteCompendium
                 if (!sprite) continue;
                 while (Icons.Count <= placed) Icons.Add(CreateIcon(area));
                 Place(Icons[placed++], sprite!, min, max);
+                if (Targets[index] == _scrollTo) ScrollTo(area, min, max);
             }
         }
         for (int index = placed; index < Icons.Count; index++)
             if (Icons[index].gameObject.activeSelf) Icons[index].gameObject.SetActive(false);
+    }
+
+    // Scrolls the page so the rite's entry (its icon's top, a little above the name) is at the top, as far as it goes.
+    private static void ScrollTo(TMP_Text area, Vector2 min, Vector2 max)
+    {
+        if (--_scrollFrames <= 0) _scrollTo = WeatherKind.None;
+        ScrollRect? scroll = area.GetComponentInParent<ScrollRect>();
+        if (!scroll || !scroll!.content) return;
+        RectTransform content = scroll.content;
+        RectTransform viewport = scroll.viewport ? scroll.viewport : (RectTransform)scroll.transform;
+        float hidden = content.rect.height - viewport.rect.height;
+        if (hidden <= 0f) return;
+        float line = max.y - min.y;
+        Vector3 top = content.InverseTransformPoint(area.transform.TransformPoint(new Vector3(min.x, max.y + line * 0.5f, 0f)));
+        float fromTop = content.rect.yMax - top.y;
+        float position = 1f - Mathf.Clamp01(fromTop / hidden);
+        if (!Mathf.Approximately(scroll.verticalNormalizedPosition, position)) scroll.verticalNormalizedPosition = position;
     }
 
     // Square, left of the name, its top level with the name's.
@@ -161,8 +203,8 @@ internal static class RiteCompendium
         string when = kind switch
         {
             WeatherKind.Skal => string.Format(CompendiumTexts.SkalTimes, time, Duration(PluginConfig.SkalCooldown.Value * 60f)),
-            WeatherKind.SkyCall or WeatherKind.AnvilSpark => string.Format(CompendiumTexts.KinshipWait, time),
-            WeatherKind.Ragnarok => string.Format(CompendiumTexts.RagnarokTime, time),
+            WeatherKind.SkyCall or WeatherKind.AnvilSpark or WeatherKind.Eldhrimnir or WeatherKind.RallyHorn => string.Format(CompendiumTexts.KinshipWait, time),
+            WeatherKind.Ragnarok or WeatherKind.HoardBane => string.Format(CompendiumTexts.RagnarokTime, time),
             _ when WeatherKinds.Lasts(kind) => string.Format(CompendiumTexts.Lasts, time),
             _ => CompendiumTexts.AtOnce
         };
@@ -188,9 +230,26 @@ internal static class RiteCompendium
         WeatherKind.Verdant => string.Format(CompendiumTexts.Verdant, Num(PluginConfig.VerdantGrowthMultiplier.Value)),
         WeatherKind.VatBoil => string.Format(CompendiumTexts.VatBoil, Num(PluginConfig.VatBoilSpeedMultiplier.Value)),
         WeatherKind.PitchBellows => string.Format(CompendiumTexts.PitchBellows, Num(PluginConfig.PitchBellowsSpeedMultiplier.Value)),
+        WeatherKind.Kindred => string.Format(CompendiumTexts.Kindred, Num(PluginConfig.KindredGrowthMultiplier.Value),
+            Num(PluginConfig.KindredCrowdMultiplier.Value)),
+        WeatherKind.HarrowSpur => string.Format(CompendiumTexts.HarrowSpur, Num(PluginConfig.HarrowSpurSpeedMultiplier.Value),
+            Num(PluginConfig.HarrowSpurCapMultiplier.Value)),
         WeatherKind.AmberMend => CompendiumTexts.AmberMend,
         WeatherKind.SovereignWard => CompendiumTexts.SovereignWard +
             (PluginConfig.SovereignSanctuary.IsOn() ? CompendiumTexts.SovereignSanctuary : string.Empty),
+        WeatherKind.HearthHaul => string.Format(PluginConfig.HearthHaulFreeStamina.IsOn() ? CompendiumTexts.HearthHaul : CompendiumTexts.HearthHaulCarry,
+            Num(HaulEase.Bonus)),
+        WeatherKind.AetherClear => CompendiumTexts.AetherClear,
+        WeatherKind.ElderSprout => CompendiumTexts.ElderSprout,
+        WeatherKind.SentrySight => string.Format(CompendiumTexts.SentrySight,
+            PluginConfig.SentrySpareAnimals.IsOn() ? CompendiumTexts.SentrySparesAnimals : string.Empty),
+        WeatherKind.TaprootSurge => string.Format(CompendiumTexts.TaprootSurge, Num(PluginConfig.TaprootSpeedMultiplier.Value),
+            Num(PluginConfig.TaprootRootMultiplier.Value)),
+        WeatherKind.MantleAnchor => CompendiumTexts.MantleAnchor,
+        WeatherKind.PrimalHearth => string.Format(CompendiumTexts.PrimalHearth, Num(PluginConfig.PrimalHearthSpawnMultiplier.Value),
+            Num(PluginConfig.PrimalHearthCapacityMultiplier.Value)),
+        WeatherKind.HearthKindle => string.Format(CompendiumTexts.HearthKindle, Num(PluginConfig.KindleRestingMultiplier.Value),
+            Num(PluginConfig.KindleRestedMultiplier.Value)),
         WeatherKind.Grounding => CompendiumTexts.Grounding,
         WeatherKind.CryptDelver => string.Format(CompendiumTexts.CryptDelver, Num(PluginConfig.LootMultiplier.Value),
             Percent(PluginConfig.OneExtraChance.Value), Percent(PluginConfig.TwoExtraChance.Value)),
@@ -198,7 +257,7 @@ internal static class RiteCompendium
         WeatherKind.VeinShatter => PluginConfig.VeinShatterAt.Value > 0f
             ? string.Format(CompendiumTexts.VeinShatter, Percent(PluginConfig.VeinSpread.Value), Percent(PluginConfig.VeinShatterAt.Value))
             : string.Format(CompendiumTexts.VeinShatterNoBreak, Percent(PluginConfig.VeinSpread.Value)),
-        WeatherKind.CarapaceTemper => string.Format(CompendiumTexts.CarapaceTemper, Percent(1f - PluginConfig.WearMultiplier.Value)),
+        WeatherKind.CarapaceTemper => string.Format(CompendiumTexts.CarapaceTemper, Percent(GearWear.Multiplier - 1f)),
         WeatherKind.GraveBind => CompendiumTexts.GraveBind + (PluginConfig.GraveBeacon.IsOn() ? CompendiumTexts.GraveBindBeam : string.Empty) +
             (PluginConfig.GraveReequip.IsOn() ? CompendiumTexts.GraveBindReequip : string.Empty),
         WeatherKind.FortunesBoon => string.Format(CompendiumTexts.FortunesBoon, Num(PluginConfig.LuckMultiplier.Value),
@@ -208,16 +267,44 @@ internal static class RiteCompendium
         WeatherKind.Luminary => string.Format(CompendiumTexts.Luminary, Num(PluginConfig.LuminaryRange.Value)) +
             (PluginConfig.LuminaryShadows.IsOn() ? CompendiumTexts.LuminaryShadows : string.Empty),
         WeatherKind.AbyssalDraw => string.Format(CompendiumTexts.AbyssalDraw, Num(PluginConfig.DrawRange.Value)),
-        WeatherKind.Tailwind => CompendiumTexts.Tailwind,
+        WeatherKind.FairWind => CompendiumTexts.FairWind,
+        WeatherKind.HushFelling => string.Format(CompendiumTexts.HushFelling, Num(PluginConfig.HushNoticeMultiplier.Value)),
+        WeatherKind.DraughtFlush => string.Format(CompendiumTexts.DraughtFlush, Num(PluginConfig.DraughtRecoveryMultiplier.Value),
+            Num(PluginConfig.DraughtBuffMultiplier.Value)),
+        WeatherKind.SoulTether => string.Format(CompendiumTexts.SoulTether, Num(PluginConfig.TetherLeaveWithin.Value)),
+        WeatherKind.TundraShroud => string.Format(CompendiumTexts.TundraShroud, Num(PluginConfig.ShroudDryingMultiplier.Value)),
+        WeatherKind.ScaldDrift => string.Format(CompendiumTexts.ScaldDrift, Num(PluginConfig.ScaldDamageMultiplier.Value),
+            Num(PluginConfig.ScaldTickSlowdown.Value), Num(PluginConfig.ScaldLavaDamageMultiplier.Value),
+            Num(PluginConfig.ScaldLavaTickSlowdown.Value)),
+        WeatherKind.TetherLock => string.Format(CompendiumTexts.TetherLock, Num(PluginConfig.TetherStrengthMultiplier.Value),
+            Num(PluginConfig.TetherStaminaMultiplier.Value), Num(PluginConfig.TetherReelMultiplier.Value)),
+        WeatherKind.StriderGirth => string.Format(CompendiumTexts.StriderGirth, Num(PluginConfig.StriderRegenMultiplier.Value),
+            Num(PluginConfig.StriderAttackStamina.Value), Num(PluginConfig.StriderSecondaryStamina.Value)),
+        WeatherKind.SecondKindle => string.Format(CompendiumTexts.SecondKindle, Percent(PluginConfig.KindleHealthShare.Value),
+            Num(PluginConfig.KindleKnockbackRadius.Value)),
+        WeatherKind.PlumeWard => string.Format(CompendiumTexts.PlumeWard, Num(PluginConfig.PlumeWardFallDamage.Value)),
+        WeatherKind.MorgenPouch => string.Format(CompendiumTexts.MorgenPouch, PluginConfig.MorgenPouchCount.Value,
+            Num(PluginConfig.MorgenPouchRange.Value),
+            Num(PluginConfig.MorgenPouchReleaseCooldown.Value), Num(PluginConfig.MorgenPouchCaptureCooldown.Value)),
+        WeatherKind.TendrilDraw => string.Format(CompendiumTexts.TendrilDraw, Percent(PluginConfig.TendrilAmmoChance.Value),
+            Num(PluginConfig.TendrilReturnSpeed.Value)),
         WeatherKind.Skal => CompendiumTexts.Skal,
         WeatherKind.SkyCall => CompendiumTexts.SkyCall,
         WeatherKind.AnvilSpark => CompendiumTexts.AnvilSpark,
+        WeatherKind.Eldhrimnir => string.Format(CompendiumTexts.Eldhrimnir, Percent(PluginConfig.EldhrimnirFreeUse.Value)),
+        WeatherKind.RallyHorn => string.Format(CompendiumTexts.RallyHorn, Duration(PluginConfig.RallyCallSeconds.Value),
+            JoksterCube.ChestKit.Common.KeyboardShortcutExtensions.DisplayName(PluginConfig.RallyCallShortcut.Value),
+            JoksterCube.ChestKit.Common.KeyboardShortcutExtensions.DisplayName(PluginConfig.RallyRefuseShortcut.Value)),
         WeatherKind.Crimson => string.Format(CompendiumTexts.Crimson, Duration(PluginConfig.CrimsonPause.Value),
             Num(PluginConfig.Radius(kind))) + CrimsonReward() + CompendiumTexts.CrimsonEnd,
         WeatherKind.Ragnarok => string.Format(CompendiumTexts.Ragnarok, PluginConfig.RagnarokBossCount.Value,
             Duration(PluginConfig.RagnarokPause.Value), Num(PluginConfig.Radius(kind))),
+        WeatherKind.HoardBane => string.Format(CompendiumTexts.HoardBane, Num(PluginConfig.Radius(kind)),
+            Num(PluginConfig.HoardBaneEliteRadius.Value)),
         WeatherKind.Sanctuary => CompendiumTexts.Sanctuary,
         WeatherKind.Reset => CompendiumTexts.Reset,
+        WeatherKind.SunFall => CompendiumTexts.SunFall,
+        WeatherKind.NaturesRebound => CompendiumTexts.NaturesRebound,
         WeatherKind.Unmaking => string.Format(CompendiumTexts.Unmaking, Percent(PluginConfig.UnmakingReturn.Value)) +
             (PluginConfig.UnmakingUpgradeMaterials.IsOn() ? CompendiumTexts.UnmakingUpgradeMaterials : string.Empty),
         _ => WeatherKinds.Plain(kind)

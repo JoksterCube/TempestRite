@@ -1,0 +1,57 @@
+// Aether-Clear icon v1 (0.1.152), kept for reference. Drop back into WeatherIcons.cs to restore.
+    // Aether-Clear: the Wisplight in a great bubble of its light, the Mistlands mist billowing up around it and held off,
+    // little wisps drifting inside.
+    private static void AetherClearPicture(Canvas canvas)
+    {
+        Color wisp = new(0.6f, 0.92f, 1f);
+        Color mistTop = new(0.76f, 0.7f, 0.9f), mistUnder = new(0.42f, 0.36f, 0.58f);
+        Pixels? smoke = GameArt.Get("Smoked");
+        const float cx = 32f, cy = 30f, radius = 21f;
+        // The mist: billows packed around the bubble's lower half and sides, cut off where it holds them back.
+        Vector3[] puffs = [new(5f, 30f, 6f), new(4f, 42f, 8f), new(11f, 54f, 9f), new(24f, 59f, 8f), new(40f, 59f, 8f), new(53f, 54f, 9f),
+            new(60f, 42f, 8f), new(59f, 30f, 6f)];
+        canvas.Paint((x, y) =>
+        {
+            float d = float.MaxValue;
+            foreach (Vector3 p in puffs) d = Mathf.Min(d, Circle(x, y, p.x, p.y, p.z));
+            float bubble = Circle(x, y, cx, cy, radius);
+            float alpha = Mathf.Clamp01(0.5f - d / 3f) * Mathf.SmoothStep(0f, 1f, (bubble - 0.5f) / 2.5f) * 0.95f;
+            if (alpha <= 0f) return Color.clear;
+            float k = SmokeShade(smoke, x / 64f, y / 64f);
+            Color c = Color.Lerp(mistTop, mistUnder, Mathf.Clamp01((y - 28f) / 34f));
+            // Lit by the bubble along its edge.
+            c = Color.Lerp(c, wisp, Mathf.Clamp01(1f - (bubble - 0.5f) / 5f) * 0.5f);
+            return new Color(Mathf.Clamp01(c.r * k), Mathf.Clamp01(c.g * k), Mathf.Clamp01(c.b * k), alpha);
+        });
+        // The bubble: a faint glow inside, a soft rim brighter on its upper left, and a gleam there.
+        canvas.Paint((x, y) =>
+        {
+            float d = Circle(x, y, cx, cy, radius);
+            float lit = 0.55f + 0.45f * Mathf.Clamp01(((cx - x) + (cy - y)) / (radius * 1.4f) + 0.5f);
+            float rim = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Abs(d) / 1.8f), 2f) * 0.85f * lit;
+            float fill = Mathf.Clamp01(-d / 4f) * 0.22f;
+            float gx = x - (cx - 9f), gy = y - (cy - 11f);
+            float gleam = Mathf.Clamp01(1f - Mathf.Sqrt(gx * gx * 0.6f + gy * gy * 1.6f) / 3.5f) * 0.6f;
+            return new Color(Mathf.Lerp(wisp.r, 1f, gleam), Mathf.Lerp(wisp.g, 1f, gleam), 1f, Mathf.Clamp01(Mathf.Max(Mathf.Max(rim, fill), gleam)));
+        });
+        // The Wisplight itself, glowing at the heart of it; a bright wisp if its picture can't be found.
+        Glow(canvas, cx, cy + 1f, 17f, wisp, 0.8f);
+        if (GameArt.ItemIconPixels("Demister") is { } light) canvas.Draw(light, cx - 14f, cy - 13f, 28f, 28f, new Color(1.1f, 1.15f, 1.2f));
+        else
+            canvas.Paint((x, y) =>
+            {
+                float orb = Circle(x, y, cx, cy, 8f);
+                float core = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Max(Circle(x, y, cx - 1f, cy - 1f, 2.5f), 0f) / 5f), 2f);
+                Color c = Color.Lerp(wisp, Color.white, core);
+                return new Color(c.r, c.g, c.b, Mathf.Clamp01(Mathf.Clamp01(0.5f - orb / 1.5f) * 0.9f + core));
+            });
+        // Little wisps drifting about inside the bubble.
+        foreach ((float wx, float wy, float r) in new[] { (17f, 36f, 1.4f), (46f, 22f, 1.3f), (43f, 42f, 1.2f) })
+        {
+            Glow(canvas, wx, wy, r * 3.5f, wisp, 0.6f);
+            canvas.Paint((x, y) => new Color(0.92f, 1f, 1f, Mathf.Clamp01(0.5f - Circle(x, y, wx, wy, r))));
+        }
+        Sparkle(canvas, 56f, 8f, 2.6f, wisp);
+        Sparkle(canvas, 8f, 10f, 2f, wisp);
+    }
+

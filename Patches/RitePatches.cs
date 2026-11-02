@@ -7,33 +7,132 @@ using UnityEngine;
 
 namespace JoksterCube.TempestRite.Patches;
 
-// The Tailwind Rite, a blessing: the game asks the ship whether someone aboard controls the wind (Moder's power); while
-// a player aboard carries the blessing, the answer is yes, so the wind blows from behind for the whole ship. Its
-// strength stays the weather's.
-[HarmonyPatch(typeof(Ship), nameof(Ship.IsWindControllActive))]
-internal static class TailwindPatch
+// The Fair-Wind Rite, a blessing: while a player aboard the local player's ship carries it, the wind never blows
+// against the ship. A wind coming from within Arc of the bow turns to come from Arc off the bow instead, on the side it
+// was on; the game's sail stops pulling only from about 41 degrees in, so the sail still catches it. Any other wind, and
+// its strength, stay the weather's. Each game works out its own wind, so this runs where the ship is sailed.
+// The game eases into a new wind over 5 seconds and takes no other until then, so steering the wind through it lags and
+// lurches. Instead, the weather's wind is left as it is, and the wind the game just worked out is turned right after,
+// every update. It eases toward where it should be, mostly there within about 1.5 seconds, so it gives way as the bow
+// turns into it instead of sticking to it, and eases back when no longer needed. Swinging from one side of the bow to the
+// other, it goes round behind the ship, and while easing it never comes closer than Floor to the bow, so the sail keeps
+// pulling.
+[HarmonyPatch(typeof(EnvMan), nameof(EnvMan.UpdateWindTransition))]
+internal static class FairWindPatch
 {
-    private const string Feature = "Tailwind Rite";
+    private const string Feature = "Fair-Wind Rite";
+    private const float Arc = 45f;
+    // Seconds for the wind to ease about two thirds of the way to where it should be.
+    private const float Ease = 0.5f;
+    // Closest to the bow the eased wind comes: just outside where the game's sail stops pulling.
+    private const float Floor = 42f;
+    // Wind from nearly straight ahead keeps the side it was turned to last, so it doesn't flip across the bow.
+    private const float KeepSide = 15f;
+    private static float side = 1f;
+    // The wind the rite shows the game, while it differs from the weather's; null when they are the same.
+    private static Vector3? shown;
 
-    private static void Postfix(Ship __instance, ref bool __result)
+    internal static void ClearSession() => shown = null;
+
+    private static void Postfix(EnvMan __instance, float dt)
     {
-        if (__result || PatchGuard.IsDisabled(Feature)) return;
+        if (PatchGuard.IsDisabled(Feature)) return;
         try
         {
-            foreach (Player player in __instance.m_players)
-                if (Blessings.Has(player, WeatherKind.Tailwind))
-                {
-                    __result = true;
-                    return;
-                }
+            Vector3 weather = new(__instance.m_wind.x, 0f, __instance.m_wind.z);
+            if (weather.sqrMagnitude < 0.0001f) return;
+            weather.Normalize();
+            Vector3 wanted = Wanted(__instance, weather, out Vector3 forward);
+            if (shown == null)
+            {
+                if (wanted == weather) return;
+                shown = weather;
+            }
+            float share = 1f - Mathf.Exp(-dt / Ease);
+            Vector3 now = forward == Vector3.zero
+                ? Vector3.RotateTowards(shown.Value, wanted, Vector3.Angle(shown.Value, wanted) * share * Mathf.Deg2Rad, 0f)
+                : AroundBow(shown.Value, wanted, forward, share);
+            // Back with the weather's wind: the game has it again.
+            if (wanted == weather && Vector3.Angle(now, weather) < 0.5f)
+            {
+                shown = null;
+                return;
+            }
+            shown = now;
+            __instance.m_wind = new Vector4(now.x, 0f, now.z, __instance.m_wind.w);
+            // Sails, cloth and flags follow it too.
+            PointCloth(__instance, now);
+            Shader.SetGlobalVector(EnvMan.s_globalWindForce, __instance.GetWindForce());
         }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+    }
+
+    // The cloth's wind zone (its type is in an assembly the mod doesn't reference), found once.
+    // Called every update while the wind is turned, so it is bound once as a delegate rather than invoked by reflection.
+    private static readonly System.Reflection.FieldInfo? ClothZone = AccessTools.Field(typeof(EnvMan), "m_clothWindZone");
+    private static object? clothZone;
+    private static Action<Vector3>? setClothWind;
+
+    private static void PointCloth(EnvMan env, Vector3 dir)
+    {
+        object? zone = ClothZone?.GetValue(env);
+        if (zone == null) return;
+        if (!ReferenceEquals(zone, clothZone))
+        {
+            clothZone = zone;
+            System.Reflection.MethodInfo? method = AccessTools.Method(zone.GetType(), "SetWindDirection", [typeof(Vector3)]);
+            setClothWind = method == null ? null : (Action<Vector3>)Delegate.CreateDelegate(typeof(Action<Vector3>), zone, method, false);
+        }
+        setClothWind?.Invoke(dir);
+    }
+
+    // Eases the wind toward wanted, measured from the bow: never across it (round behind the ship instead), and never
+    // closer to it than Floor.
+    private static Vector3 AroundBow(Vector3 shown, Vector3 wanted, Vector3 forward, float share)
+    {
+        float from = Vector3.SignedAngle(forward, -shown, Vector3.up);
+        float to = Vector3.SignedAngle(forward, -wanted, Vector3.up);
+        float turn = Mathf.DeltaAngle(from, to);
+        float end = from + turn;
+        if (from != 0f && Mathf.Sign(from) != Mathf.Sign(end) && Mathf.Abs(end) <= 180f) turn -= 360f * Mathf.Sign(turn);
+        float angle = Mathf.DeltaAngle(0f, from + turn * share);
+        if (Mathf.Abs(angle) < Floor) angle = (angle == 0f ? side : Mathf.Sign(angle)) * Floor;
+        return -(Quaternion.AngleAxis(angle, Vector3.up) * forward);
+    }
+
+    // The wind the ship should feel: the weather's, unless it comes from within Arc of the bow. forward: the ship's bow
+    // when the rite steers the wind, else zero.
+    private static Vector3 Wanted(EnvMan env, Vector3 weather, out Vector3 forward)
+    {
+        forward = Vector3.zero;
+        if (env.m_debugWind || !Player.m_localPlayer || Player.m_localPlayer.InInterior()) return weather;
+        // At the edge of the world the game blows outward; that stays.
+        if (Utils.LengthXZ(Player.m_localPlayer.transform.position) > 10500f - env.m_edgeOfWorldWidth) return weather;
+        Ship ship = Ship.GetLocalShip();
+        // Moder's power already blows from behind.
+        if (!ship || ship.IsWindControllActive() || !Blessed(ship)) return weather;
+
+        Vector3 bow = ship.transform.forward;
+        bow.y = 0f;
+        if (bow.sqrMagnitude < 0.0001f) return weather;
+        forward = bow.normalized;
+        float angle = Vector3.SignedAngle(forward, -weather, Vector3.up);
+        if (Mathf.Abs(angle) >= Arc) return weather;
+        if (Mathf.Abs(angle) > KeepSide) side = Mathf.Sign(angle);
+        return -(Quaternion.AngleAxis(side * Arc, Vector3.up) * forward);
+    }
+
+    private static bool Blessed(Ship ship)
+    {
+        foreach (Player player in ship.m_players)
+            if (Blessings.Has(player, WeatherKind.FairWind)) return true;
+        return false;
     }
 }
 
 // The Gale-Breath Rite: the wind blows at full strength. Each game works out its own wind from the weather (and turns it
-// behind a ship with Moder's power or the Tailwind Rite); only the strength it aims for is raised, so the direction
-// still changes as usual and the game eases into the new strength the way it eases into any other.
+// behind a ship with Moder's power, or off the bow with the Fair-Wind Rite); only the strength it aims for is raised,
+// so the direction still changes as usual and the game eases into the new strength the way it eases into any other.
 [HarmonyPatch(typeof(EnvMan), nameof(EnvMan.SetTargetWind))]
 internal static class GaleBreathPatch
 {
@@ -54,22 +153,42 @@ internal static class GaleBreathPatch
 // The Packward and Carrion Rites steer creatures (not bosses, not tamed, not on the rite's exclusion list), in the game
 // that runs their AI (their owner). The game's own AI keeps running; the rites step in only where they must.
 // - Packward: a creature inside the area finds its way out, and goes a little beyond before it turns around. One whose
-//   target is inside waits at the edge instead of following. Wandering never picks a point inside. One hurt not long
-//   ago fights as usual, inside or out.
+//   target is inside waits at the edge instead of following, for a few seconds, then gives up and runs. Wandering never picks a point inside. None goes after the
+//   structures in or near the area, from the moment the rite starts. One hurt not long ago (or whose pack was) fights
+//   as usual while it senses a foe; once it hasn't for a few seconds, it runs out like the rest.
+//   A creature that first appeared inside a location (ruins, dvergr towers, fuling villages...) or from a spawner
+//   (a spawn point, nest or bone pile) lives there: at home the rite leaves it alone, even inside the area, but it
+//   doesn't chase a foe out into the area; strayed into the area, it shuns it like the rest but goes back home.
 // - Carrion: a creature within reach that would wander about walks to the obliterator instead and mills about there.
 //   Its senses are dulled while it has no target and isn't alerted, so it notices a player only from closer; once it
 //   does, it reacts as usual with its full senses, and walks on once it calms down.
 internal static class CreaturePatches
 {
     private const string Feature = "Packward and Carrion Rites";
+    // Packward: a creature in a fight that hasn't sensed a foe (or been hurt) for this long runs.
+    private const float LostSight = 5f;
+    // Packward: a creature waits at the edge for its target inside this long, then gives up on it and runs.
+    private const float EdgeWait = 5f;
+    // When a creature held back since, and when it last did (an older hold is forgotten).
+    private static readonly System.Collections.Generic.Dictionary<int, (float Since, float Seen)> Holding = [];
     // A drawn creature that has no path to the obliterator wanders as usual for this long before it tries again.
     private const float NoPathWait = 10f;
     private static readonly System.Collections.Generic.Dictionary<int, float> NoPathUntil = [];
+    // Packward: a location creature counts as home within this much beyond its location's edge.
+    private const float HomeMargin = 8f;
+    // Packward: how long "no home here" is trusted before looking again (the location may still be loading).
+    private const float HomeRecheck = 5f;
+    // Each creature's home location (center and radius with the margin), or none until Recheck.
+    private static readonly System.Collections.Generic.Dictionary<int, (bool Has, Vector3 Center, float Radius, float Recheck)> Homes = [];
 
     internal static void ClearSession()
     {
+        Homes.Clear();
+        Nests.Clear();
+        GoneNests.Clear();
         NoPathUntil.Clear();
         Provokes.Clear();
+        Holding.Clear();
     }
 
     // The game's own BaseAI.UpdateAI (timers, regeneration, take-off and landing), for when a rite takes over the rest.
@@ -111,6 +230,7 @@ internal static class CreaturePatches
             if (PatchGuard.IsDisabled(Feature)) return true;
             try
             {
+                if (__instance.m_targetStatic && Spares(__instance, __instance.m_targetStatic)) __instance.m_targetStatic = null;
                 Steer steer = __instance.IsSleeping() ? Steer.None : Shun(__instance, dt, __instance.m_targetCreature, __instance.m_targetStatic);
                 if (steer == Steer.Took)
                 {
@@ -185,13 +305,62 @@ internal static class CreaturePatches
         }
     }
 
+    // Under the Packward Rite, structures in or near the area are never picked as targets.
+    [HarmonyPatch(typeof(BaseAI), nameof(BaseAI.FindClosestStaticPriorityTarget))]
+    private static class PriorityStructure
+    {
+        private static void Postfix(BaseAI __instance, ref StaticTarget? __result) => Refuse(__instance, ref __result);
+    }
+
+    [HarmonyPatch(typeof(BaseAI), nameof(BaseAI.FindRandomStaticTarget))]
+    private static class RandomStructure
+    {
+        private static void Postfix(BaseAI __instance, ref StaticTarget? __result) => Refuse(__instance, ref __result);
+    }
+
+    private static void Refuse(BaseAI ai, ref StaticTarget? target)
+    {
+        if (!target || PatchGuard.IsDisabled(Feature)) return;
+        try
+        {
+            if (Spares(ai, target!)) target = null;
+        }
+        catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+    }
+
+    // Packward: whether a creature leaves a structure alone: the structure, or the creature, is in or near the area.
+    // Not within a Crimson or Ragnarök Rite's bubble, or while a raid reaches the area.
+    private static bool Spares(BaseAI ai, StaticTarget target)
+    {
+        if (!WeatherState.IsActive(WeatherKind.Packward) || !Owned(ai)) return false;
+        Character character = ai.m_character;
+        if (!character || !CreatureRites.Steered(character, WeatherKind.Packward)) return false;
+        Vector3 position = character.transform.position;
+        if (WeatherState.Suspended(WeatherKind.Packward, position)) return false;
+        // At home: only structures out in the area are spared, not those in its home.
+        if (HomeOf(ai, out Vector3 home, out float homeRadius) && Utils.DistanceXZ(position, home) <= homeRadius)
+            return WeatherState.Reaches(WeatherKind.Packward, target.GetCenter(), CreatureRites.Buffer)
+                && Utils.DistanceXZ(target.GetCenter(), home) > homeRadius;
+        return WeatherState.Reaches(WeatherKind.Packward, position, CreatureRites.Buffer)
+            || WeatherState.Reaches(WeatherKind.Packward, target.GetCenter(), CreatureRites.Buffer);
+    }
+
+    // Packward: whether a creature in a fight still has a foe: one it sensed (or was hurt) within LostSight. Animals
+    // run from their foe on their own: theirs counts as long as they have one.
+    private static bool SensesFoe(BaseAI ai)
+    {
+        if (ai is not MonsterAI monster) return ai.HaveTarget();
+        if (!monster.m_targetCreature) return false;
+        return monster.m_timeSinceSensedTargetCreature < LostSight || ai.m_timeSinceHurt < LostSight;
+    }
+
     private static void FleeIfNoTarget(BaseAI ai, Senses state)
     {
         if (!state.FleeAfter || PatchGuard.IsDisabled(Feature)) return;
         try
         {
-            if (!ai || ai.HaveTarget() || !WeatherState.IsActive(WeatherKind.Packward)) return;
-            GoOut(ai, state.Dt, WeatherState.Position(WeatherKind.Packward), PluginConfig.Radius(WeatherKind.Packward) + CreatureRites.Buffer);
+            if (!ai || SensesFoe(ai) || !WeatherState.IsActive(WeatherKind.Packward)) return;
+            GoOut(ai, state.Dt, WeatherState.Position(WeatherKind.Packward), PluginConfig.Radius(WeatherKind.Packward) + CreatureRites.Buffer, HasHome(ai));
         }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
     }
@@ -213,7 +382,8 @@ internal static class CreaturePatches
         }
     }
 
-    // Under the Packward Rite, no wandering into the area.
+    // Under the Packward Rite, no wandering into the area. Creatures with a home wander about it as usual, even where
+    // it is inside the area, but not out of it into the area.
     [HarmonyPatch(typeof(BaseAI), nameof(BaseAI.IsValidRandomMovePoint))]
     private static class WanderPoint
     {
@@ -223,7 +393,8 @@ internal static class CreaturePatches
             try
             {
                 if (WeatherState.Reaches(WeatherKind.Packward, point, CreatureRites.Buffer / 2f)
-                    && CreatureRites.Steered(__instance.m_character, WeatherKind.Packward))
+                    && CreatureRites.Steered(__instance.m_character, WeatherKind.Packward)
+                    && !AtHome(__instance, point))
                     __result = false;
             }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
@@ -231,6 +402,89 @@ internal static class CreaturePatches
     }
 
     private static bool Owned(BaseAI ai) => ai.m_nview && ai.m_nview.IsValid() && ai.m_nview.IsOwner();
+
+    // Packward: the creature's home, if it has one: the location its spawn point is in, or else the spawner it came
+    // from (a single spawn point, or a nest or bone pile it appeared around). Looked up again now and then, so a
+    // destroyed spawner stops being home.
+    private static bool HomeOf(BaseAI ai, out Vector3 center, out float radius)
+    {
+        int id = ai.GetInstanceID();
+        float now = Time.time;
+        if (!Homes.TryGetValue(id, out var home) || now >= home.Recheck)
+        {
+            home = FindHome(ai, out Vector3 at, out float size)
+                ? (true, at, size, now + HomeKept)
+                : (false, Vector3.zero, 0f, now + HomeRecheck);
+            if (Homes.Count > 1000) Homes.Clear();
+            Homes[id] = home;
+        }
+        center = home.Center;
+        radius = home.Radius;
+        return home.Has;
+    }
+
+    // Packward: how long a home found is trusted before looking again.
+    private const float HomeKept = 30f;
+    // A single spawn point puts its creature on its own spot (dropped to the floor): within this of it.
+    private const float SpawnerSpot = 1.5f;
+    // Loaded nests and bone piles (the game keeps no list of them).
+    private static readonly System.Collections.Generic.HashSet<SpawnArea> Nests = [];
+    private static readonly System.Collections.Generic.List<SpawnArea> GoneNests = [];
+
+    [HarmonyPatch(typeof(SpawnArea), "Awake")]
+    private static class NestLoaded
+    {
+        private static void Postfix(SpawnArea __instance)
+        {
+            if (__instance) Nests.Add(__instance);
+        }
+    }
+
+    private static bool FindHome(BaseAI ai, out Vector3 center, out float radius)
+    {
+        Vector3 spawn = ai.m_spawnPoint;
+        Location location = Location.GetLocation(spawn);
+        if (location)
+        {
+            center = location.transform.position;
+            radius = location.GetMaxRadius() + HomeMargin;
+            return true;
+        }
+        // Around a spawner: as far as it wanders about its spawn point, and the margin.
+        radius = Mathf.Max(ai.m_randomMoveRange, 2f) + HomeMargin;
+        foreach (CreatureSpawner spawner in CreatureSpawner.m_creatureSpawners)
+        {
+            if (!spawner || Utils.DistanceXZ(spawner.transform.position, spawn) > SpawnerSpot) continue;
+            center = spawner.transform.position;
+            return true;
+        }
+        foreach (SpawnArea nest in Nests)
+        {
+            if (!nest)
+            {
+                GoneNests.Add(nest!);
+                continue;
+            }
+            if (Utils.DistanceXZ(nest.transform.position, spawn) > nest.m_spawnRadius + 0.5f) continue;
+            center = nest.transform.position;
+            radius += nest.m_spawnRadius;
+            return true;
+        }
+        foreach (SpawnArea gone in GoneNests) Nests.Remove(gone);
+        GoneNests.Clear();
+        center = Vector3.zero;
+        return false;
+    }
+
+    private static bool HasHome(BaseAI ai) => HomeOf(ai, out _, out _);
+
+    // Packward: a creature going home is back: at its spawn point, or well inside its home (past the margin).
+    private static bool Arrived(BaseAI ai, Vector3 position, Vector3 home, float homeRadius) =>
+        Utils.DistanceXZ(position, ai.m_spawnPoint) <= 3f || Utils.DistanceXZ(position, home) <= homeRadius - HomeMargin;
+
+    // Packward: a location creature at its home, which the rite leaves alone.
+    private static bool AtHome(BaseAI ai, Vector3 position) =>
+        HomeOf(ai, out Vector3 center, out float radius) && Utils.DistanceXZ(position, center) <= radius;
 
     // Packward: whether the rite moves the creature this update (instead of its own AI, or after it).
     private static Steer Shun(BaseAI ai, float dt, Character? target, StaticTarget? targetStatic)
@@ -253,18 +507,26 @@ internal static class CreaturePatches
             CreatureRites.SetMood(zdo, CreatureRites.Mood.None);
             return Steer.None;
         }
-        float distance = Utils.DistanceXZ(position, center);
+        if (HomeOf(ai, out Vector3 home, out float homeRadius)) return ShunFromHome(ai, dt, target, targetStatic, home, homeRadius);
         CreatureRites.Mood was = CreatureRites.MoodOf(zdo);
+        float distance = Utils.DistanceXZ(position, center);
         CreatureRites.Mood mood = CreatureRites.Mood.None;
-        // Hurt not long ago: it fights. One of its pack hurt nearby: it fights whoever it notices, else it runs.
+        // Hurt not long ago, or one of its pack nearby: it fights whoever it senses; with no one in sight for a few
+        // seconds, it runs.
         bool hurt = ai.m_timeSinceHurt < PluginConfig.PackwardFightSeconds.Value;
         bool provoked = !hurt && distance <= radius + CreatureRites.Buffer && Provoked(ai);
-        if (!hurt && !(provoked && ai.HaveTarget()))
+        bool roused = hurt || provoked;
+        if (!(roused && SensesFoe(ai)))
         {
             if (distance <= radius || (was == CreatureRites.Mood.Fleeing && distance <= radius + CreatureRites.Buffer))
                 mood = CreatureRites.Mood.Fleeing;
             else if (distance <= radius + CreatureRites.Buffer && TargetInside(target, targetStatic, center, radius, out _))
                 mood = CreatureRites.Mood.HoldingBack;
+        }
+        if (mood == CreatureRites.Mood.HoldingBack && HeldTooLong(ai))
+        {
+            mood = CreatureRites.Mood.Fleeing;
+            GiveUp(ai);
         }
         if (mood != was)
         {
@@ -272,17 +534,122 @@ internal static class CreaturePatches
             if (mood != CreatureRites.Mood.None) Plugin.ModLogger.LogDebug($"Packward Rite: {character.m_name} {(mood == CreatureRites.Mood.Fleeing ? "leaves the area" : "holds back")}.");
         }
         if (mood == CreatureRites.Mood.None) return Steer.None;
-        // Provoked: its own AI looks around first.
-        if (provoked) return mood == CreatureRites.Mood.Fleeing ? Steer.FleeAfter : Steer.None;
+        // Roused: its own AI looks around first, so it can notice a foe.
+        if (roused && mood == CreatureRites.Mood.Fleeing) return Steer.FleeAfter;
 
         if (!BaseUpdate.Run(ai, dt)) return Steer.None;
-        if (mood == CreatureRites.Mood.Fleeing) GoOut(ai, dt, center, radius + CreatureRites.Buffer);
+        if (mood == CreatureRites.Mood.Fleeing) GoOut(ai, dt, center, radius + CreatureRites.Buffer, false);
         else
         {
             ai.StopMoving();
             if (TargetInside(target, targetStatic, center, radius, out Vector3 at)) ai.LookAt(at);
         }
         return Steer.Took;
+    }
+
+    // Packward, for a creature with a home (a location or spawner).
+    // - At home it is left alone, but doesn't go after a foe out in the area: it holds back at home, watching, and
+    //   gives up after EdgeWait. Whoever comes into its home it fights as usual.
+    // - Out in the area it acts like any other creature there, but goes home instead of out: it fights only when
+    //   roused (hurt, or its pack was) while it senses a foe, and goes all the way back to where it spawned.
+    // So it doesn't flip between chasing and going home at its home's edge.
+    private static Steer ShunFromHome(BaseAI ai, float dt, Character? target, StaticTarget? targetStatic, Vector3 home, float homeRadius)
+    {
+        ZDO zdo = ai.m_nview.GetZDO();
+        Vector3 center = WeatherState.Position(WeatherKind.Packward);
+        float reach = PluginConfig.Radius(WeatherKind.Packward) + CreatureRites.Buffer;
+        Vector3 position = ai.m_character.transform.position;
+        float distance = Utils.DistanceXZ(position, center);
+        bool atHome = Utils.DistanceXZ(position, home) <= homeRadius;
+        CreatureRites.Mood was = CreatureRites.MoodOf(zdo);
+        bool returning = was == CreatureRites.Mood.Fleeing;
+        bool hurt = ai.m_timeSinceHurt < PluginConfig.PackwardFightSeconds.Value;
+        bool roused = hurt || (distance <= reach && Provoked(ai));
+
+        CreatureRites.Mood mood = CreatureRites.Mood.None;
+        if (!(roused && SensesFoe(ai)))
+        {
+            if (atHome)
+            {
+                if (returning && !Arrived(ai, position, home, homeRadius)) mood = CreatureRites.Mood.Fleeing;
+                else
+                {
+                    if (returning) Forget(ai);
+                    if (TargetOut(target, targetStatic, center, reach, home, homeRadius, out _)) mood = CreatureRites.Mood.HoldingBack;
+                }
+            }
+            // Once going home, it keeps on a little farther out than it would start to.
+            else if (distance <= reach + (returning ? CreatureRites.Buffer : 0f)) mood = CreatureRites.Mood.Fleeing;
+        }
+        if (mood == CreatureRites.Mood.HoldingBack && HeldTooLong(ai))
+        {
+            mood = CreatureRites.Mood.None;
+            GiveUp(ai);
+        }
+        if (mood != was)
+        {
+            CreatureRites.SetMood(zdo, mood);
+            if (mood != CreatureRites.Mood.None) Plugin.ModLogger.LogDebug($"Packward Rite: {ai.m_character.m_name} {(mood == CreatureRites.Mood.Fleeing ? "goes back home" : "holds back at home")}.");
+        }
+        if (mood == CreatureRites.Mood.None) return Steer.None;
+        if (roused && mood == CreatureRites.Mood.Fleeing) return Steer.FleeAfter;
+
+        if (!BaseUpdate.Run(ai, dt)) return Steer.None;
+        if (mood == CreatureRites.Mood.Fleeing) GoOut(ai, dt, center, reach, true);
+        else
+        {
+            ai.StopMoving();
+            if (TargetOut(target, targetStatic, center, reach, home, homeRadius, out Vector3 at)) ai.LookAt(at);
+        }
+        return Steer.Took;
+    }
+
+    // Packward: whether a home creature's target is out in the area (in reach, and not in its home).
+    private static bool TargetOut(Character? target, StaticTarget? targetStatic, Vector3 center, float reach, Vector3 home, float homeRadius, out Vector3 at)
+    {
+        at = target ? target!.transform.position : targetStatic ? targetStatic!.GetCenter() : Vector3.zero;
+        return (target || targetStatic) && Utils.DistanceXZ(at, center) <= reach && Utils.DistanceXZ(at, home) > homeRadius;
+    }
+
+    // Packward: whether a creature holding back at the edge has waited EdgeWait already.
+    private static bool HeldTooLong(BaseAI ai)
+    {
+        int id = ai.GetInstanceID();
+        float now = Time.time;
+        if (!Holding.TryGetValue(id, out var held) || now - held.Seen > 1f) held = (now, now);
+        if (now - held.Since >= EdgeWait)
+        {
+            Holding.Remove(id);
+            return true;
+        }
+        Holding[id] = (held.Since, now);
+        if (Holding.Count > 500) Holding.Clear();
+        return false;
+    }
+
+    // Back home, it forgets the foe it lost and calms down, but looks around again at once: whoever it sees or hears,
+    // or who comes into its home, it goes after as usual.
+    private static void Forget(BaseAI ai)
+    {
+        if (ai is MonsterAI monster)
+        {
+            monster.m_targetCreature = null;
+            monster.m_targetStatic = null;
+            monster.m_updateTargetTimer = 0f;
+        }
+        ai.SetAlerted(false);
+    }
+
+    // It forgets its target and calms down, and looks for a new one only after a while, so it gets out first.
+    private static void GiveUp(BaseAI ai)
+    {
+        if (ai is MonsterAI monster)
+        {
+            monster.m_targetCreature = null;
+            monster.m_targetStatic = null;
+            monster.m_updateTargetTimer = EdgeWait * 2f;
+        }
+        ai.SetAlerted(false);
     }
 
     // How often a creature looks whether one of its pack nearby was hurt.
@@ -324,8 +691,8 @@ internal static class CreaturePatches
     }
 
     // Runs outward, to beyond exitRadius: a new point every flee interval, the first with a path, like the game's own
-    // fleeing.
-    private static void GoOut(BaseAI ai, float dt, Vector3 center, float exitRadius)
+    // fleeing. One with a home runs back to where it spawned instead, while there is a path there.
+    private static void GoOut(BaseAI ai, float dt, Vector3 center, float exitRadius, bool home)
     {
         Vector3 position = ai.transform.position;
         float now = Time.time;
@@ -333,6 +700,12 @@ internal static class CreaturePatches
         {
             ai.m_fleeTargetUpdateTime = now;
             ai.m_lastFlee = now;
+            if (home && ai.HavePath(ai.m_spawnPoint))
+            {
+                ai.m_fleeTarget = ai.m_spawnPoint;
+                ai.MoveTo(dt, ai.m_fleeTarget, 1f, true);
+                return;
+            }
             Vector3 away = position - center;
             away.y = 0f;
             if (away.sqrMagnitude < 0.01f) away = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f) * Vector3.forward;
@@ -383,9 +756,10 @@ internal static class CreaturePatches
 
         if (WeatherState.IsActive(WeatherKind.Packward))
         {
-            // Its home is inside: it wanders where it is instead (points inside are refused, see WanderPoint).
+            // Its home is inside: it wanders where it is instead (points inside are refused, see WanderPoint). Location
+            // creatures wander about their home as usual.
             if (!WeatherState.Reaches(WeatherKind.Packward, ai.m_spawnPoint, CreatureRites.Buffer)) return false;
-            if (!CreatureRites.Steered(character, WeatherKind.Packward)) return false;
+            if (!CreatureRites.Steered(character, WeatherKind.Packward) || HasHome(ai)) return false;
             ai.RandomMovement(dt, position, true);
             return true;
         }
@@ -456,12 +830,18 @@ internal static class CreatureIconPatch
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
     }
 
+    // Whether any icon was made since the rites last went quiet: until then, huds aren't searched for icons every frame.
+    private static bool _anyIcons;
+
     private static void Postfix(EnemyHud __instance)
     {
         if (PatchGuard.IsDisabled(Feature)) return;
         try
         {
             bool on = On();
+            if (!on && !_anyIcons) return;
+            // One more pass with the rites off hides the icons still showing; after that, nothing to do.
+            _anyIcons = on;
             foreach (EnemyHud.HudData hud in __instance.m_huds.Values)
             {
                 if (!hud.m_gui || !hud.m_character || !hud.m_aware) continue;
@@ -542,114 +922,6 @@ internal static class VerdantBushHoverPatch
                 __result += ready < 60.0 ? Constants.Messages.VerdantReadySoon : string.Format(Constants.Messages.VerdantReadyIn, Math.Ceiling(ready / 60.0));
         }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
-    }
-}
-
-// AzuHoverStats (when installed) shows how long plants, picked bushes, fermenters and cooking food take, at the usual
-// speed, and when food burns. Under the Verdant and Vat-Boil Rites, its times count the rite instead (at the rite's
-// speed while it lasts, the usual speed after), and food under the Vat-Boil Rite won't burn.
-internal static class AzuHoverStatsPatches
-{
-    private const string Feature = "AzuHoverStats rite times";
-    private const string Utilities = "AzuHoverStats.Utilities";
-
-    internal static bool Installed => BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("Azumatt.AzuHoverStats");
-
-    [HarmonyPatch]
-    private static class PlantTime
-    {
-        private static bool Prepare() => Installed && AccessTools.Method(Utilities + ":GetPlantString") != null;
-        private static System.Reflection.MethodBase TargetMethod() => AccessTools.Method(Utilities + ":GetPlantString");
-
-        private static void Postfix(Plant plantComp, ref string __result)
-        {
-            if (PatchGuard.IsDisabled(Feature) || string.IsNullOrEmpty(__result)) return;
-            try
-            {
-                if (plantComp && VerdantGrowth.Speeds(plantComp)) Replace(VerdantGrowth.ReadyIn(plantComp), ref __result);
-            }
-            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
-        }
-    }
-
-    [HarmonyPatch]
-    private static class BushTime
-    {
-        private static bool Prepare() => Installed && AccessTools.Method(Utilities + ":GetPickableString") != null;
-        private static System.Reflection.MethodBase TargetMethod() => AccessTools.Method(Utilities + ":GetPickableString");
-
-        private static void Postfix(Pickable pickableComp, ref string __result)
-        {
-            if (PatchGuard.IsDisabled(Feature) || string.IsNullOrEmpty(__result)) return;
-            try
-            {
-                if (pickableComp) Replace(VerdantGrowth.RegrowsIn(pickableComp), ref __result);
-            }
-            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
-        }
-    }
-
-    [HarmonyPatch]
-    private static class FermenterTime
-    {
-        private static bool Prepare() => Installed && AccessTools.Method(Utilities + ":GetFermenterString") != null;
-        private static System.Reflection.MethodBase TargetMethod() => AccessTools.Method(Utilities + ":GetFermenterString");
-
-        private static void Postfix(Fermenter fermenter, ref string __result)
-        {
-            if (PatchGuard.IsDisabled(Feature) || string.IsNullOrEmpty(__result)) return;
-            try
-            {
-                if (fermenter && RiteSpeedup.Speeds(WeatherKind.VatBoil, fermenter))
-                    Replace(StationWork.FermentedIn(fermenter), ref __result);
-            }
-            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
-        }
-    }
-
-    // Under the Vat-Boil Rite each slot says when it is done at the rite's speed, and that it won't burn.
-    [HarmonyPatch]
-    private static class CookingTimes
-    {
-        private static bool Prepare() => Installed && AccessTools.Method(Utilities + ":GetCookingStationString") != null;
-        private static System.Reflection.MethodBase TargetMethod() => AccessTools.Method(Utilities + ":GetCookingStationString");
-
-        private static void Postfix(CookingStation cookingStationComp, ref string __result)
-        {
-            if (PatchGuard.IsDisabled(Feature) || string.IsNullOrEmpty(__result)) return;
-            try
-            {
-                CookingStation station = cookingStationComp;
-                if (!station || !RiteSpeedup.Speeds(WeatherKind.VatBoil, station)) return;
-                System.Text.StringBuilder text = new();
-                for (int i = 0; i < station.m_slots.Length; i++)
-                {
-                    station.GetSlot(i, out string item, out float cooked, out _, out _);
-                    if (string.IsNullOrEmpty(item) || station.GetItemConversion(item) is not { } conversion || !conversion.m_to) continue;
-                    text.Append(Localization.instance.Localize(conversion.m_to.GetHoverName()));
-                    if (cooked < conversion.m_cookTime)
-                        text.Append(" (" + Format(RiteSpeedup.ReadyIn(WeatherKind.VatBoil, PluginConfig.VatBoilSpeedMultiplier.Value,
-                            conversion.m_cookTime - cooked)) + ")");
-                    text.Append("  " + Constants.Messages.WontBurn + "\n");
-                }
-                __result = text.ToString();
-            }
-            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
-        }
-    }
-
-    private static void Replace(double seconds, ref string result)
-    {
-        if (seconds >= 0.0) result = "(" + Format(seconds) + ")";
-    }
-
-    // In AzuHoverStats' own format: "01h 02m 03s", "02m 03s" or "03s".
-    private static string Format(double seconds)
-    {
-        TimeSpan left = TimeSpan.FromSeconds(Math.Ceiling(Math.Max(0.0, seconds)));
-        return left.TotalHours >= 1.0 ? $"{(int)left.TotalHours:D2}h {left.Minutes:D2}m {left.Seconds:D2}s"
-            : left.Minutes > 0 ? $"{left.Minutes:D2}m {left.Seconds:D2}s"
-            : $"{left.Seconds:D2}s";
     }
 }
 

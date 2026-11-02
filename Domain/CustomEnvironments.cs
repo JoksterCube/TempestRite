@@ -10,6 +10,8 @@ namespace JoksterCube.TempestRite.Domain;
 // - TempestRite_Bloodmoon: a game environment (Eikthyr's by default) tinted blood red (the Crimson Rite).
 // - TempestRite_Ragnarok: a game environment (the thunderstorm by default) darkened and tinted ember and gold, a sky
 //   on fire (the Ragnarök Rite).
+// - TempestRite_HoardBane: a game environment (the mist by default) dimmed and tinted violet, the gloom of a cursed
+//   hoard (the Hoard-Bane Rite).
 internal static class CustomEnvironments
 {
     private const string AuroraBase = "Clear";
@@ -17,19 +19,23 @@ internal static class CustomEnvironments
     private static EnvMan? _madeFor;
     private static string _bloodmoonBase = string.Empty;
     private static string _ragnarokBase = string.Empty;
+    private static string _hoardBaneBase = string.Empty;
 
     // Makes them once per environment manager (one per world), and the blood moon again if its base changes.
     internal static void Ensure(EnvMan envMan)
     {
         string bloodmoonBase = PluginConfig.BloodmoonBase.Value;
         string ragnarokBase = PluginConfig.RagnarokSkyBase.Value;
-        if (_madeFor == envMan && bloodmoonBase == _bloodmoonBase && ragnarokBase == _ragnarokBase) return;
+        string hoardBaneBase = PluginConfig.HoardBaneSkyBase.Value;
+        if (_madeFor == envMan && bloodmoonBase == _bloodmoonBase && ragnarokBase == _ragnarokBase && hoardBaneBase == _hoardBaneBase) return;
         _madeFor = envMan;
         _bloodmoonBase = bloodmoonBase;
         _ragnarokBase = ragnarokBase;
+        _hoardBaneBase = hoardBaneBase;
         Replace(envMan, MakeAurora(envMan));
         Replace(envMan, MakeBloodmoon(envMan, bloodmoonBase));
         Replace(envMan, MakeRagnarok(envMan, ragnarokBase));
+        Replace(envMan, MakeHoardBane(envMan, hoardBaneBase));
     }
 
     private static void Replace(EnvMan envMan, EnvSetup? env)
@@ -121,6 +127,53 @@ internal static class CustomEnvironments
         sky.m_sunColorDay = Ember(sky.m_sunColorDay);
         sky.m_sunColorEvening = Ember(sky.m_sunColorEvening);
         return sky;
+    }
+
+    private static EnvSetup? MakeHoardBane(EnvMan envMan, string baseName)
+    {
+        EnvSetup? source = envMan.GetEnv(baseName);
+        if (source == null || IsOurs(source))
+        {
+            Plugin.ModLogger.LogWarning($"Hoard-Bane Rite: cursed sky base environment \"{baseName}\" is not one the game knows.");
+            return null;
+        }
+        EnvSetup sky = source.Clone();
+        sky.m_name = CustomEnvironmentNames.HoardBane;
+        sky.m_ambColorNight = Curse(sky.m_ambColorNight);
+        sky.m_ambColorDay = Curse(sky.m_ambColorDay);
+        sky.m_fogColorNight = Curse(sky.m_fogColorNight);
+        sky.m_fogColorMorning = Curse(sky.m_fogColorMorning);
+        sky.m_fogColorDay = Curse(sky.m_fogColorDay);
+        sky.m_fogColorEvening = Curse(sky.m_fogColorEvening);
+        sky.m_fogColorSunNight = Curse(sky.m_fogColorSunNight);
+        sky.m_fogColorSunMorning = Curse(sky.m_fogColorSunMorning);
+        sky.m_fogColorSunDay = Curse(sky.m_fogColorSunDay);
+        sky.m_fogColorSunEvening = Curse(sky.m_fogColorSunEvening);
+        // The sun a sickly gold through the gloom.
+        sky.m_sunColorNight = Gilt(sky.m_sunColorNight);
+        sky.m_sunColorMorning = Gilt(sky.m_sunColorMorning);
+        sky.m_sunColorDay = Gilt(sky.m_sunColorDay);
+        sky.m_sunColorEvening = Gilt(sky.m_sunColorEvening);
+        sky.m_lightIntensityDay *= 0.75f;
+        sky.m_fogDensityNight *= 1.3f;
+        sky.m_fogDensityMorning *= 1.3f;
+        sky.m_fogDensityDay *= 1.3f;
+        sky.m_fogDensityEvening *= 1.3f;
+        return sky;
+    }
+
+    // Keeps how bright a color is, turned deep violet, and a little darker.
+    private static Color Curse(Color color)
+    {
+        float light = (color.r + color.g + color.b) / 3f;
+        return new Color(Mathf.Clamp01(light * 0.85f + 0.06f), Mathf.Clamp01(light * 0.4f + 0.02f), Mathf.Clamp01(light * 1.25f + 0.1f), color.a);
+    }
+
+    // Keeps how bright a color is, turned pale gold.
+    private static Color Gilt(Color color)
+    {
+        float light = (color.r + color.g + color.b) / 3f;
+        return new Color(Mathf.Clamp01(light * 1.2f), Mathf.Clamp01(light * 0.95f), Mathf.Clamp01(light * 0.45f), color.a);
     }
 
     // Keeps how bright a color is, turned to the orange and gold of a burning sky: brighter than the blood moon's red,

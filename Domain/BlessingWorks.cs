@@ -13,7 +13,7 @@ namespace JoksterCube.TempestRite.Domain;
 //   gets the fill on the side they look from.
 // With Light Shadows on, floors, ceilings and walls block the main light, so it doesn't shine through to the floor below
 // or the next room. Nothing within GlowShadowNear of it casts a shadow, so the player's own body and cape don't throw
-// big shadows around them. The floor they stand on is farther, so it still blocks; a ceiling closer than that doesn't,
+// shadows around them. The floor they stand on is just farther, so it still blocks; a ceiling closer than that doesn't,
 // but its far side faces away from the light, so the floor above isn't lit. The fill has no shadows (the body would
 // throw one away from the camera) and reaches only a little past the body, so it doesn't reach other floors either.
 internal static class BlessingLights
@@ -23,10 +23,11 @@ internal static class BlessingLights
     private static readonly Color Warm = new(1f, 0.85f, 0.6f);
 
     // The main light: how high above the feet it sits, how bright it is at a Light Strength of 100%, and how close to it
-    // things are left out of its shadow (all of the body but the shins and feet).
+    // things are left out of its shadow: the whole body, legs and a swinging cape too, but not the floor underfoot
+    // (GlowHeight away), so that floor still blocks the light.
     private const float GlowHeight = 1.6f;
     private const float GlowIntensity = 2f;
-    private const float GlowShadowNear = 1.2f;
+    private const float GlowShadowNear = 1.5f;
     // The fill: how far toward the camera and above the feet it floats, how far it reaches, how bright it is at a Body
     // Light of 100%.
     private const float FillDistance = 1.4f;

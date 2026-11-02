@@ -57,6 +57,9 @@ internal static class VerdantGrowth
     {
         internal override float Speed => PluginConfig.VerdantGrowthMultiplier.Value;
         internal override bool ShowMotes => PluginConfig.ShowVerdantSparkles.IsOn();
+        // Plants are many and spread out: a couple at a time, more often than stations.
+        internal override int MotesEach => 2;
+        internal override float MotesEvery => 2f;
 
         internal override float? Takes(GameObject prefab) =>
             prefab.GetComponent<Plant>() ? PlantMotes
@@ -68,6 +71,10 @@ internal static class VerdantGrowth
             IsPlant(zdo)
                 ? zdo.GetLong(ZDOVars.s_plantTime, 0L) >= 1L && view.GetComponent<Plant>() is { } plant && plant && plant.m_status == Plant.Status.Healthy
                 : zdo.GetBool(ZDOVars.s_picked) && zdo.GetLong(ZDOVars.s_pickedTime, 0L) >= 2L;
+
+        // When it was planted, or picked.
+        internal override double? Since(ZDO zdo) =>
+            RiteSpeedup.FromTicks(zdo.GetLong(IsPlant(zdo) ? ZDOVars.s_plantTime : ZDOVars.s_pickedTime, 0L));
 
         internal override void Hurry(ZDO zdo, ZNetView view, double seconds)
         {

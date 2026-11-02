@@ -3,6 +3,7 @@ using HarmonyLib;
 using JoksterCube.TempestRite.Common;
 using JoksterCube.TempestRite.Domain;
 using JoksterCube.TempestRite.Settings;
+using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Patches;
 
@@ -14,15 +15,14 @@ internal static class ObliteratorPatches
     {
         private const string Feature = "Obliterator lever";
 
-        // A Crimson or Ragnarök Rite going on forbids the rites in it: the lever doesn't move and nothing burns.
-        private static bool Prefix(Incinerator __instance, ref bool __result)
+        // Within a Crimson, Ragnarök or Hoard-Bane Rite's bubble, any obliterator but the rite's own does nothing.
+        private static bool Prefix(Incinerator __instance, Humanoid user, ref bool __result)
         {
-            if (PatchGuard.IsDisabled(Feature) || !__instance.m_container) return true;
+            if (PatchGuard.IsDisabled(Feature)) return true;
             try
             {
-                string? why = ObliteratorPull.Refused(__instance);
-                if (why == null) return true;
-                if (Player.m_localPlayer) Player.m_localPlayer.Message(MessageHud.MessageType.Center, why);
+                if (IncursionArena.OtherObliterator(__instance.transform.position) is not { } why) return true;
+                if (user == Player.m_localPlayer) user.Message(MessageHud.MessageType.Center, why);
                 __result = false;
                 return false;
             }
@@ -81,6 +81,22 @@ internal static class ObliteratorPatches
                 if (piece.GetComponentInChildren<Incinerator>(true)) RiteDiscovery.FoundObliterator();
             }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        }
+    }
+
+    // Right as it burns, the obliterator's owner tells the player who pulled the lever what is burning (see ObliteratorPull).
+    [HarmonyPatch(typeof(Incinerator), nameof(Incinerator.Awake))]
+    private static class BurntReport
+    {
+        private static void Postfix(Incinerator __instance)
+        {
+            ZNetView nview = __instance.m_nview;
+            if (!nview || nview.GetZDO() == null) return;
+            nview.Register<ZPackage>(Rpcs.ObliteratorBurnt, (sender, package) =>
+            {
+                try { ObliteratorPull.Burning(__instance, sender, package); }
+                catch (Exception exception) { Plugin.ModLogger.LogError($"Obliterator burn report failed: {exception}"); }
+            });
         }
     }
 

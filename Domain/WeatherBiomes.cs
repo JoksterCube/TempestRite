@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using JoksterCube.ChestKit.Data;
 
 namespace JoksterCube.TempestRite.Domain;
 
@@ -41,11 +42,13 @@ internal static class WeatherBiomesExtensions
         return string.Join(", ", names);
     }
 
-    private static string Name(WeatherBiomes biome) => biome switch
-    {
-        WeatherBiomes.BlackForest => "Black Forest",
-        WeatherBiomes.AshLands => "Ashlands",
-        WeatherBiomes.DeepNorth => "Deep North",
-        _ => biome.ToString()
-    };
+    // In the player's language, as the game names it on the map ("$biome_blackforest"); English outside the game.
+    private static string Name(WeatherBiomes biome) =>
+        Translations.Game("$biome_" + biome.ToString().ToLowerInvariant(), biome switch
+        {
+            WeatherBiomes.BlackForest => "Black Forest",
+            WeatherBiomes.AshLands => "Ashlands",
+            WeatherBiomes.DeepNorth => "Deep North",
+            _ => biome.ToString()
+        });
 }

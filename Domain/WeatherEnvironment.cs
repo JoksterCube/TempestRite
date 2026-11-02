@@ -65,7 +65,12 @@ internal static class WeatherEnvironment
         Camera? camera = Utils.GetMainCamera();
         if (!camera || !WeatherState.Reaches(kind, camera!.transform.position)) return null;
         CustomEnvironments.Ensure(envMan);
-        string name = kind == WeatherKind.Ragnarok ? PluginConfig.RagnarokEnvironment.Value : PluginConfig.CrimsonEnvironment.Value;
+        string name = kind switch
+        {
+            WeatherKind.Ragnarok => PluginConfig.RagnarokEnvironment.Value,
+            WeatherKind.HoardBane => PluginConfig.HoardBaneEnvironment.Value,
+            _ => PluginConfig.CrimsonEnvironment.Value
+        };
         return Exists(envMan, name) ? name : null;
     }
 

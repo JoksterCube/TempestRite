@@ -20,7 +20,7 @@ internal static class ObliteratorKeys
     private static readonly Dictionary<string, WeatherKind> Owners = [];
     private static readonly List<KeyItemLists.Conflict> Conflicts = [];
     private static readonly Dictionary<WeatherKind, (string text, bool enabled)> ReadSettings = [];
-    private static readonly List<(WeatherKind kind, string text, string section)> Ordered = [];
+    private static readonly List<(WeatherKind kind, string text)> Ordered = [];
     private static readonly List<string> NoItems = [];
 
     internal static void ClearSession()
@@ -54,16 +54,15 @@ internal static class ObliteratorKeys
         }
         if (!changed) return;
 
-        // In the order of the settings' sections, so of two rites listing an item the one listed first there keeps it.
+        // In the order of the rites page, so of two rites listing an item the one listed first there keeps it.
         // Rites that are turned off claim nothing.
         Ordered.Clear();
         foreach (WeatherKind kind in WeatherKinds.All)
         {
             WeatherConfig? config = PluginConfig.For(kind);
-            if (config != null && config.Enabled.IsOn()) Ordered.Add((kind, config.KeyItem.Value, config.KeyItem.Definition.Section));
+            if (config != null && config.Enabled.IsOn()) Ordered.Add((kind, config.KeyItem.Value));
         }
-        Ordered.Sort((a, b) => string.CompareOrdinal(a.section, b.section));
-        _lists = KeyItemLists.Resolve(Ordered.Select(r => (r.kind, r.text)), Owners, Conflicts);
+        _lists = KeyItemLists.Resolve(Ordered, Owners, Conflicts);
         foreach (KeyItemLists.Conflict conflict in Conflicts)
             Plugin.ModLogger.LogWarning($"Key item \"{conflict.Item}\" is listed by both {WeatherKinds.Name(conflict.Kept)} and " +
                 $"{WeatherKinds.Name(conflict.Dropped)}. An item performs one rite only, so only {WeatherKinds.Name(conflict.Kept)} " +
@@ -146,13 +145,19 @@ internal static class ObliteratorKeys
     // How many of each rite's items are in, from the last Pick or Count.
     private static readonly Dictionary<WeatherKind, int> Counts = [];
 
+    // The different items counted so far, for rites that count each different one once (the Ragnarök Rite).
+    private static readonly HashSet<(WeatherKind kind, string item)> Seen = [];
+
     private static void CountAll(Inventory inventory)
     {
         Counts.Clear();
+        Seen.Clear();
         foreach (ItemDrop.ItemData item in inventory.GetAllItems())
         {
             WeatherKind kind = KindOf(item);
-            if (kind != WeatherKind.None) Counts[kind] = Counted(kind) + item.m_stack;
+            if (kind == WeatherKind.None) continue;
+            if (PluginConfig.For(kind)?.DistinctKeys != true) Counts[kind] = Counted(kind) + item.m_stack;
+            else if (Seen.Add((kind, item.m_dropPrefab ? item.m_dropPrefab.name : item.m_shared.m_name))) Counts[kind] = Counted(kind) + 1;
         }
     }
 
@@ -165,6 +170,9 @@ internal static class ObliteratorKeys
         return Counted(kind);
     }
 
+    // Whether the rite counts each different item once, so it takes one of each (the Ragnarök Rite).
+    internal static bool Distinct(WeatherKind kind) => PluginConfig.For(kind)?.DistinctKeys == true;
+
     // How many of its items a rite needs (Key Item Amount).
     internal static int Amount(WeatherKind kind) => System.Math.Max(1, PluginConfig.For(kind)?.KeyAmount.Value ?? 1);
 
@@ -173,6 +181,7 @@ internal static class ObliteratorKeys
     {
         int amount = Amount(kind);
         string name = ItemName(kind);
+        if (amount > 1 && PluginConfig.For(kind)?.DistinctKeys == true) return string.Format(Settings.Constants.Messages.ItemsDifferent, amount, name);
         return amount > 1 ? string.Format(Settings.Constants.Messages.ItemAmount, amount, name) : name;
     }
 

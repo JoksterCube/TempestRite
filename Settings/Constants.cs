@@ -1,4 +1,6 @@
 using BepInEx.Configuration;
+using UnityEngine;
+using JoksterCube.ChestKit.Data;
 using JoksterCube.TempestRite.Common;
 using JoksterCube.TempestRite.Domain;
 
@@ -6,20 +8,25 @@ namespace JoksterCube.TempestRite.Settings;
 
 internal static class Constants
 {
+    // Every text shown in game, in the selected language. English is Translations/English.json (embedded in the DLL);
+    // other languages are files next to it, see ChestKit's Translations. Config descriptions stay in English.
+    private static readonly Translations Text = new(typeof(Constants).Assembly, "TempestRite.English.json");
+
+    // Colors are kept out of the translated texts, so translators only see words.
+    private static string Colored(string color, string text) => $"<color={color}>{text}</color>";
+
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "0.1.57";
+        internal const string ModVersion = "1.0.0";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
-        internal const string Description = "Perform rites at the obliterator: burn an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
+        internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
         internal const string Copyright = "Copyright ©  2026";
         internal const string Guid = "1e7b1458-bfca-49ce-aca8-9eef270f87e6";
 
         internal const string ConfigFileName = $"{ModGUID}.cfg";
         internal const string VersionCheckRpc = $"{ModName}_VersionCheck";
-        // This mod's place among ChestKit mods' flaps under the container panel (lower further left).
-        internal const int FlapPriority = 10;
     }
 
     internal static class Rpcs
@@ -36,6 +43,12 @@ internal static class Constants
         internal const string VeinWear = $"{Plugin.ModName}_VeinWear";
         // Player -> everyone: show a kinship rite's effect (sparks and fire, or lightning) on me.
         internal const string KinshipShown = $"{Plugin.ModName}_KinshipShown";
+        // Player -> everyone: I answered the Rally-Horn Rite's call and arrived here (lightning where I stand).
+        internal const string RallyArrived = $"{Plugin.ModName}_RallyArrived";
+        // Server -> client: whether a Rally-Horn call waits for answers (only one at a time).
+        internal const string RallyPending = $"{Plugin.ModName}_RallyPending";
+        // Client -> server: my player is done with the Rally-Horn call (passed by, answered, refused or let it fade).
+        internal const string RallyDone = $"{Plugin.ModName}_RallyDone";
         // Creature owner -> server: a creature died within the Crimson Rite's bubble.
         internal const string CrimsonKill = $"{Plugin.ModName}_CrimsonKill";
         // Server -> everyone: the Crimson Rite's kill count is now this.
@@ -46,6 +59,8 @@ internal static class Constants
         internal const string CrimsonEnded = $"{Plugin.ModName}_CrimsonEnded";
         // Server -> everyone: the Crimson Rite's next raid comes (center).
         internal const string CrimsonWave = $"{Plugin.ModName}_CrimsonWave";
+        // Server -> everyone: the Crimson Rite's raid (name) is caught up this many steps (center).
+        internal const string CrimsonCatchUp = $"{Plugin.ModName}_CrimsonCatchUp";
         // Server -> the obliterator's owner (a ZNetView RPC): put the Crimson Rite's reward inside.
         internal const string CrimsonReward = $"{Plugin.ModName}_CrimsonReward";
         // Server -> each player within the Ragnarök Rite's bubble: which of these boss keys do you have?
@@ -66,456 +81,848 @@ internal static class Constants
         internal const string RagnarokEnded = $"{Plugin.ModName}_RagnarokEnded";
         // Server -> the obliterator's owner (a ZNetView RPC): put the Ragnarök Rite's treasure inside.
         internal const string RagnarokReward = $"{Plugin.ModName}_RagnarokReward";
+        // Boss owner -> server: a Ragnarök Rite boss fell out of the bubble (through the ground) and couldn't be put back.
+        internal const string RagnarokLost = $"{Plugin.ModName}_RagnarokLost";
+        // Player -> server, right before asking for the rite: the chest burnt for the Hoard-Bane Rite (prefab, where).
+        internal const string HoardBaneChest = $"{Plugin.ModName}_HoardBaneChest";
+        // Server -> one player inside: spawn the Hoard-Bane Rite's fight, or part of it (see HoardBaneArena).
+        internal const string HoardBaneSpawn = $"{Plugin.ModName}_HoardBaneSpawn";
+        // That player -> server: they are up (the ticket, their ZDOs).
+        internal const string HoardBaneSpawned = $"{Plugin.ModName}_HoardBaneSpawned";
+        // Server -> one player inside: spawn one more of the Hoard-Bane Rite's followers (ticket, encounter, center, where).
+        internal const string HoardBaneReinforce = $"{Plugin.ModName}_HoardBaneReinforce";
+        // That player -> server: it is up (the ticket, its ZDO).
+        internal const string HoardBaneReinforced = $"{Plugin.ModName}_HoardBaneReinforced";
+        // Creature owner -> server: one of the Hoard-Bane Rite's elites or minibosses died.
+        internal const string HoardBaneDown = $"{Plugin.ModName}_HoardBaneDown";
+        // Creature owner -> server: an elite or miniboss fell out of the bubble and couldn't be put back.
+        internal const string HoardBaneLost = $"{Plugin.ModName}_HoardBaneLost";
+        // Server -> everyone: the Hoard-Bane Rite's fight begins (the minibosses, how many elites, center).
+        internal const string HoardBaneBegun = $"{Plugin.ModName}_HoardBaneBegun";
+        // Server -> everyone: an elite or miniboss fell, the shield broke, a miniboss came back (see HoardBaneArena).
+        internal const string HoardBaneNews = $"{Plugin.ModName}_HoardBaneNews";
+        // Server -> everyone, again and again once every elite fell: the minibosses' shield is down (center).
+        internal const string HoardBaneUnshield = $"{Plugin.ModName}_HoardBaneUnshield";
+        // Server -> everyone: the Hoard-Bane Rite ended (how, whether treasure was won, center).
+        internal const string HoardBaneEnded = $"{Plugin.ModName}_HoardBaneEnded";
+        // Server -> the obliterator's owner (a ZNetView RPC): put the Hoard-Bane Rite's treasure inside.
+        internal const string HoardBaneReward = $"{Plugin.ModName}_HoardBaneReward";
+        // Server -> the player who burnt the chest: the Hoard-Bane Rite failed with no obliterator left to hold the
+        // chest; it goes back to them (the chest's prefab).
+        internal const string HoardBaneChestBack = $"{Plugin.ModName}_HoardBaneChestBack";
+        // Server -> everyone, every few seconds: whether a boss fight goes on, and who was inside the Crimson, Ragnarök or
+        // Hoard-Bane Rite going on as it began (see IncursionWatch).
+        internal const string IncursionWatch = $"{Plugin.ModName}_IncursionWatch";
+        // Player -> server, as the lever is pulled for a Crimson, Ragnarök or Hoard-Bane Rite: seal its bubble (kind,
+        // where, its key items).
+        internal const string IncursionPull = $"{Plugin.ModName}_IncursionPull";
+        // Server -> everyone: that rite's bubble is sealed until it is performed (kind, where, seconds; None: no more).
+        internal const string IncursionPending = $"{Plugin.ModName}_IncursionPending";
+        // Server -> the obliterator's owner (a ZNetView RPC): a rite refused after its lever was pulled; put its key items back.
+        internal const string ObliteratorRefund = $"{Plugin.ModName}_ObliteratorRefund";
+        // Obliterator owner -> the player who pulled its lever (a ZNetView RPC), right as it burns: the rites whose key
+        // items are burning now (only these are performed), the Hoard-Bane Rite's chest and the incursion key items burnt.
+        internal const string ObliteratorBurnt = $"{Plugin.ModName}_ObliteratorBurnt";
+        // Piece owner -> everyone: a warded piece was hit, glow it ward-blue with the ward's sound (the piece, where the hit was).
+        internal const string WardFlash = $"{Plugin.ModName}_WardFlash";
+        // Blessed player -> server: pull my tombstones to this obliterator, onto these free spots (the Soul-Tether Rite).
+        internal const string SoulTether = $"{Plugin.ModName}_SoulTether";
+        // Server -> that player: how many tombstones were pulled, how many already lay there, and where the pulled ones lay
+        // (to cross out their death pins on the map).
+        internal const string SoulTetherDone = $"{Plugin.ModName}_SoulTetherDone";
+        // Server -> everyone: a stump the Elder-Sprout Rite takes away (where, its prefab, the sapling's prefab), for its puff.
+        internal const string ElderSproutPuff = $"{Plugin.ModName}_ElderSproutPuff";
+        // Player -> everyone: the Plume-Ward Rite softened my landing here, for its puff of down.
+        internal const string PlumeLanding = $"{Plugin.ModName}_PlumeLanding";
+        // Player -> everyone: the Second-Kindle Rite saved me from a killing blow, for its burst of fire.
+        internal const string SecondKindleBurst = $"{Plugin.ModName}_SecondKindleBurst";
+        // Player -> everyone: creatures went into or came out of my Morgen-Pouch here, for its puff.
+        internal const string MorgenPouchPuff = $"{Plugin.ModName}_MorgenPouchPuff";
+        internal const string MorgenPouchFlight = $"{Plugin.ModName}_MorgenPouchFlight";
     }
 
     internal static class Messages
     {
-        internal const string ClearName = "Clear Sky Rite";
-        internal const string ThunderstormName = "Tempest Rite";
-        internal const string RainName = "Downpour Rite";
-        internal const string MistName = "Shrouding Rite";
-        internal const string AuroraName = "Aurora Rite";
-        internal const string PolarDayName = "Sun Zenith Rite";
-        internal const string PolarNightName = "Midnight Rite";
-        internal const string TailwindName = "Tailwind Rite";
-        internal const string GaleBreathName = "Gale-Breath Rite";
-        internal const string NoMistName = "True Sight Rite";
-        internal const string SootfallName = "Sootfall Rite";
-        internal const string CryptDelverName = "Crypt Delver Rite";
-        internal const string PackwardName = "Packward Rite";
-        internal const string CarrionName = "Carrion Rite";
-        internal const string VerdantName = "Verdant Rite";
-        internal const string CrimsonName = "Crimson Rite";
-        internal const string SanctuaryName = "Sanctuary Rite";
-        internal const string RagnarokName = "Ragnarök Rite";
-        internal const string ResetName = "Equilibrium Rite";
-        internal const string GroundingName = "Grounding Rite";
-        internal const string VatBoilName = "Vat-Boil Rite";
-        internal const string PitchBellowsName = "Pitch-Bellows Rite";
-        internal const string AmberMendName = "Amber-Mend Rite";
-        internal const string AbyssalSurgeName = "Abyssal Surge Rite";
-        internal const string GlacialSatietyName = "Glacial Satiety Rite";
-        internal const string VeinShatterName = "Vein-Shatter Rite";
-        internal const string CarapaceTemperName = "Carapace Temper Rite";
-        internal const string GraveBindName = "Grave-Bind Rite";
-        internal const string FortunesBoonName = "Fortune's Boon Rite";
-        internal const string LuminaryName = "Luminary Rite";
-        internal const string SovereignWardName = "Sovereign Ward Rite";
-        internal const string AbyssalDrawName = "Abyssal Draw Rite";
-        internal const string UnmakingName = "Unmaking Rite";
-        internal const string SkalName = "Skål Rite";
-        internal const string SkyCallName = "Sky-Call Rite";
-        internal const string AnvilSparkName = "Anvil-Spark Rite";
+        internal static string ClearName => Text.Get("clear_name");
+        internal static string ThunderstormName => Text.Get("thunderstorm_name");
+        internal static string RainName => Text.Get("rain_name");
+        internal static string MistName => Text.Get("mist_name");
+        internal static string AuroraName => Text.Get("aurora_name");
+        internal static string PolarDayName => Text.Get("polar_day_name");
+        internal static string PolarNightName => Text.Get("polar_night_name");
+        internal static string FairWindName => Text.Get("fair_wind_name");
+        internal static string HushFellingName => Text.Get("hush_felling_name");
+        internal static string DraughtFlushName => Text.Get("draught_flush_name");
+        internal static string SoulTetherName => Text.Get("soul_tether_name");
+        internal static string TundraShroudName => Text.Get("tundra_shroud_name");
+        internal static string GaleBreathName => Text.Get("gale_breath_name");
+        internal static string NoMistName => Text.Get("no_mist_name");
+        internal static string SootfallName => Text.Get("sootfall_name");
+        internal static string CryptDelverName => Text.Get("crypt_delver_name");
+        internal static string PackwardName => Text.Get("packward_name");
+        internal static string CarrionName => Text.Get("carrion_name");
+        internal static string VerdantName => Text.Get("verdant_name");
+        internal static string CrimsonName => Text.Get("crimson_name");
+        internal static string SanctuaryName => Text.Get("sanctuary_name");
+        internal static string RagnarokName => Text.Get("ragnarok_name");
+        internal static string HoardBaneName => Text.Get("hoard_bane_name");
+        internal static string ResetName => Text.Get("reset_name");
+        internal static string SunFallName => Text.Get("sun_fall_name");
+        internal static string NaturesReboundName => Text.Get("natures_rebound_name");
+        internal static string GroundingName => Text.Get("grounding_name");
+        internal static string VatBoilName => Text.Get("vat_boil_name");
+        internal static string PitchBellowsName => Text.Get("pitch_bellows_name");
+        internal static string KindredName => Text.Get("kindred_name");
+        internal static string HarrowSpurName => Text.Get("harrow_spur_name");
+        internal static string AmberMendName => Text.Get("amber_mend_name");
+        internal static string AbyssalSurgeName => Text.Get("abyssal_surge_name");
+        internal static string GlacialSatietyName => Text.Get("glacial_satiety_name");
+        internal static string VeinShatterName => Text.Get("vein_shatter_name");
+        internal static string CarapaceTemperName => Text.Get("carapace_temper_name");
+        internal static string GraveBindName => Text.Get("grave_bind_name");
+        internal static string FortunesBoonName => Text.Get("fortunes_boon_name");
+        internal static string LuminaryName => Text.Get("luminary_name");
+        internal static string SovereignWardName => Text.Get("sovereign_ward_name");
+        internal static string HearthHaulName => Text.Get("hearth_haul_name");
+        internal static string AetherClearName => Text.Get("aether_clear_name");
+        internal static string AbyssalDrawName => Text.Get("abyssal_draw_name");
+        internal static string UnmakingName => Text.Get("unmaking_name");
+        internal static string ElderSproutName => Text.Get("elder_sprout_name");
+        internal static string PlumeWardName => Text.Get("plume_ward_name");
+        internal static string SentrySightName => Text.Get("sentry_sight_name");
+        internal static string TaprootSurgeName => Text.Get("taproot_surge_name");
+        internal static string MantleAnchorName => Text.Get("mantle_anchor_name");
+        internal static string PrimalHearthName => Text.Get("primal_hearth_name");
+        internal static string HearthKindleName => Text.Get("hearth_kindle_name");
+        internal static string ScaldDriftName => Text.Get("scald_drift_name");
+        internal static string TetherLockName => Text.Get("tether_lock_name");
+        internal static string StriderGirthName => Text.Get("strider_girth_name");
+        internal static string SecondKindleName => Text.Get("second_kindle_name");
+        internal static string MorgenPouchName => Text.Get("morgen_pouch_name");
+        internal static string TendrilDrawName => Text.Get("tendril_draw_name");
+        internal static string SkalName => Text.Get("skal_name");
+        internal static string SkyCallName => Text.Get("sky_call_name");
+        internal static string AnvilSparkName => Text.Get("anvil_spark_name");
+        internal static string EldhrimnirName => Text.Get("eldhrimnir_name");
+        internal static string RallyHornName => Text.Get("rally_horn_name");
 
-        internal const string GroupAtmospheric = "Atmospheric";
-        internal const string GroupCelestial = "Celestial";
-        internal const string GroupBiomeMastery = "Biome Mastery";
-        internal const string GroupDomain = "Domain";
-        internal const string GroupReckoning = "Reckoning";
-        internal const string GroupBlessings = "Blessings";
-        internal const string GroupKinship = "Kinship";
+        // What each rite does, in a few words: "clear skies".
+        internal static string ClearPlain => Text.Get("clear_plain");
+        internal static string ThunderstormPlain => Text.Get("thunderstorm_plain");
+        internal static string RainPlain => Text.Get("rain_plain");
+        internal static string MistPlain => Text.Get("mist_plain");
+        internal static string AuroraPlain => Text.Get("aurora_plain");
+        internal static string PolarDayPlain => Text.Get("polar_day_plain");
+        internal static string PolarNightPlain => Text.Get("polar_night_plain");
+        internal static string GaleBreathPlain => Text.Get("gale_breath_plain");
+        internal static string NoMistPlain => Text.Get("no_mist_plain");
+        internal static string SootfallPlain => Text.Get("sootfall_plain");
+        internal static string AbyssalSurgePlain => Text.Get("abyssal_surge_plain");
+        internal static string PackwardPlain => Text.Get("packward_plain");
+        internal static string CarrionPlain => Text.Get("carrion_plain");
+        internal static string VerdantPlain => Text.Get("verdant_plain");
+        internal static string VatBoilPlain => Text.Get("vat_boil_plain");
+        internal static string PitchBellowsPlain => Text.Get("pitch_bellows_plain");
+        internal static string KindredPlain => Text.Get("kindred_plain");
+        internal static string HarrowSpurPlain => Text.Get("harrow_spur_plain");
+        internal static string AmberMendPlain => Text.Get("amber_mend_plain");
+        internal static string SovereignWardPlain => Text.Get("sovereign_ward_plain");
+        internal static string HearthHaulPlain => Text.Get("hearth_haul_plain");
+        internal static string AetherClearPlain => Text.Get("aether_clear_plain");
+        internal static string GroundingPlain => Text.Get("grounding_plain");
+        internal static string CryptDelverPlain => Text.Get("crypt_delver_plain");
+        internal static string GlacialSatietyPlain => Text.Get("glacial_satiety_plain");
+        internal static string VeinShatterPlain => Text.Get("vein_shatter_plain");
+        internal static string CarapaceTemperPlain => Text.Get("carapace_temper_plain");
+        internal static string GraveBindPlain => Text.Get("grave_bind_plain");
+        internal static string FortunesBoonPlain => Text.Get("fortunes_boon_plain");
+        internal static string LuminaryPlain => Text.Get("luminary_plain");
+        internal static string AbyssalDrawPlain => Text.Get("abyssal_draw_plain");
+        internal static string FairWindPlain => Text.Get("fair_wind_plain");
+        internal static string HushFellingPlain => Text.Get("hush_felling_plain");
+        internal static string DraughtFlushPlain => Text.Get("draught_flush_plain");
+        internal static string SoulTetherPlain => Text.Get("soul_tether_plain");
+        internal static string TundraShroudPlain => Text.Get("tundra_shroud_plain");
+        internal static string SkalPlain => Text.Get("skal_plain");
+        internal static string SkyCallPlain => Text.Get("sky_call_plain");
+        internal static string AnvilSparkPlain => Text.Get("anvil_spark_plain");
+        internal static string EldhrimnirPlain => Text.Get("eldhrimnir_plain");
+        internal static string RallyHornPlain => Text.Get("rally_horn_plain");
+        internal static string CrimsonPlain => Text.Get("crimson_plain");
+        internal static string RagnarokPlain => Text.Get("ragnarok_plain");
+        internal static string HoardBanePlain => Text.Get("hoard_bane_plain");
+        internal static string SanctuaryPlain => Text.Get("sanctuary_plain");
+        internal static string ResetPlain => Text.Get("reset_plain");
+        internal static string SunFallPlain => Text.Get("sun_fall_plain");
+        internal static string NaturesReboundPlain => Text.Get("natures_rebound_plain");
+        internal static string UnmakingPlain => Text.Get("unmaking_plain");
+        internal static string ElderSproutPlain => Text.Get("elder_sprout_plain");
+        internal static string PlumeWardPlain => Text.Get("plume_ward_plain");
+        internal static string SentrySightPlain => Text.Get("sentry_sight_plain");
+        internal static string TaprootSurgePlain => Text.Get("taproot_surge_plain");
+        internal static string MantleAnchorPlain => Text.Get("mantle_anchor_plain");
+        internal static string PrimalHearthPlain => Text.Get("primal_hearth_plain");
+        internal static string HearthKindlePlain => Text.Get("hearth_kindle_plain");
+        internal static string ScaldDriftPlain => Text.Get("scald_drift_plain");
+        internal static string TetherLockPlain => Text.Get("tether_lock_plain");
+        internal static string StriderGirthPlain => Text.Get("strider_girth_plain");
+        internal static string SecondKindlePlain => Text.Get("second_kindle_plain");
+        internal static string MorgenPouchPlain => Text.Get("morgen_pouch_plain");
+        internal static string TendrilDrawPlain => Text.Get("tendril_draw_plain");
 
-        // {0}: the rite's name, colored.
-        internal const string StartedByYou = "You performed the {0}";
-        internal const string StartedBy = "{0} performed the {1}";
-        internal const string EndedWeather = "The weather returns to its own ways";
-        internal const string EndedDaylight = "The sun returns to its own ways";
-        internal const string EndedGaleBreath = "The wind returns to its own strength";
-        internal const string EndedMistlands = "The mist returns to the Mistlands";
-        internal const string EndedAshlands = "The smoke returns to the Ashlands";
-        internal const string EndedVatBoil = "The fermenters and cooking fires slow down again";
-        internal const string EndedPitchBellows = "The furnaces cool to their usual pace";
-        internal const string EndedAmberMend = "The mending stops";
-        internal const string EndedAbyssalSurge = "The sea calms down";
-        internal const string EndedSovereignWard = "The ward over your buildings fades";
+        // What each rite does, told with a little lore, on the rites page.
+        internal static string ClearFlavour => Text.Get("clear_flavour");
+        internal static string ThunderstormFlavour => Text.Get("thunderstorm_flavour");
+        internal static string RainFlavour => Text.Get("rain_flavour");
+        internal static string MistFlavour => Text.Get("mist_flavour");
+        internal static string AuroraFlavour => Text.Get("aurora_flavour");
+        internal static string PolarDayFlavour => Text.Get("polar_day_flavour");
+        internal static string PolarNightFlavour => Text.Get("polar_night_flavour");
+        internal static string GaleBreathFlavour => Text.Get("gale_breath_flavour");
+        internal static string NoMistFlavour => Text.Get("no_mist_flavour");
+        internal static string SootfallFlavour => Text.Get("sootfall_flavour");
+        internal static string AbyssalSurgeFlavour => Text.Get("abyssal_surge_flavour");
+        internal static string PackwardFlavour => Text.Get("packward_flavour");
+        internal static string CarrionFlavour => Text.Get("carrion_flavour");
+        internal static string VerdantFlavour => Text.Get("verdant_flavour");
+        internal static string VatBoilFlavour => Text.Get("vat_boil_flavour");
+        internal static string PitchBellowsFlavour => Text.Get("pitch_bellows_flavour");
+        internal static string KindredFlavour => Text.Get("kindred_flavour");
+        internal static string HarrowSpurFlavour => Text.Get("harrow_spur_flavour");
+        internal static string AmberMendFlavour => Text.Get("amber_mend_flavour");
+        internal static string SovereignWardFlavour => Text.Get("sovereign_ward_flavour");
+        internal static string HearthHaulFlavour => Text.Get("hearth_haul_flavour");
+        internal static string AetherClearFlavour => Text.Get("aether_clear_flavour");
+        internal static string GroundingFlavour => Text.Get("grounding_flavour");
+        internal static string CryptDelverFlavour => Text.Get("crypt_delver_flavour");
+        internal static string GlacialSatietyFlavour => Text.Get("glacial_satiety_flavour");
+        internal static string VeinShatterFlavour => Text.Get("vein_shatter_flavour");
+        internal static string CarapaceTemperFlavour => Text.Get("carapace_temper_flavour");
+        internal static string GraveBindFlavour => Text.Get("grave_bind_flavour");
+        internal static string FortunesBoonFlavour => Text.Get("fortunes_boon_flavour");
+        internal static string LuminaryFlavour => Text.Get("luminary_flavour");
+        internal static string AbyssalDrawFlavour => Text.Get("abyssal_draw_flavour");
+        internal static string FairWindFlavour => Text.Get("fair_wind_flavour");
+        internal static string HushFellingFlavour => Text.Get("hush_felling_flavour");
+        internal static string DraughtFlushFlavour => Text.Get("draught_flush_flavour");
+        internal static string SoulTetherFlavour => Text.Get("soul_tether_flavour");
+        internal static string TundraShroudFlavour => Text.Get("tundra_shroud_flavour");
+        internal static string SkalFlavour => Text.Get("skal_flavour");
+        internal static string SkyCallFlavour => Text.Get("sky_call_flavour");
+        internal static string AnvilSparkFlavour => Text.Get("anvil_spark_flavour");
+        internal static string EldhrimnirFlavour => Text.Get("eldhrimnir_flavour");
+        internal static string RallyHornFlavour => Text.Get("rally_horn_flavour");
+        internal static string CrimsonFlavour => Text.Get("crimson_flavour");
+        internal static string RagnarokFlavour => Text.Get("ragnarok_flavour");
+        internal static string HoardBaneFlavour => Text.Get("hoard_bane_flavour");
+        internal static string SanctuaryFlavour => Text.Get("sanctuary_flavour");
+        internal static string ResetFlavour => Text.Get("reset_flavour");
+        internal static string SunFallFlavour => Text.Get("sun_fall_flavour");
+        internal static string NaturesReboundFlavour => Text.Get("natures_rebound_flavour");
+        internal static string UnmakingFlavour => Text.Get("unmaking_flavour");
+        internal static string ElderSproutFlavour => Text.Get("elder_sprout_flavour");
+        internal static string PlumeWardFlavour => Text.Get("plume_ward_flavour");
+        internal static string SentrySightFlavour => Text.Get("sentry_sight_flavour");
+        internal static string TaprootSurgeFlavour => Text.Get("taproot_surge_flavour");
+        internal static string MantleAnchorFlavour => Text.Get("mantle_anchor_flavour");
+        internal static string PrimalHearthFlavour => Text.Get("primal_hearth_flavour");
+        internal static string HearthKindleFlavour => Text.Get("hearth_kindle_flavour");
+        internal static string ScaldDriftFlavour => Text.Get("scald_drift_flavour");
+        internal static string TetherLockFlavour => Text.Get("tether_lock_flavour");
+        internal static string StriderGirthFlavour => Text.Get("strider_girth_flavour");
+        internal static string SecondKindleFlavour => Text.Get("second_kindle_flavour");
+        internal static string MorgenPouchFlavour => Text.Get("morgen_pouch_flavour");
+        internal static string TendrilDrawFlavour => Text.Get("tendril_draw_flavour");
+
+        internal static string GroupAtmospheric => Text.Get("group_atmospheric");
+        internal static string GroupCelestial => Text.Get("group_celestial");
+        internal static string GroupBiomeMastery => Text.Get("group_biome_mastery");
+        internal static string GroupDomain => Text.Get("group_domain");
+        internal static string GroupReckoning => Text.Get("group_reckoning");
+        internal static string GroupBlessings => Text.Get("group_blessings");
+        internal static string GroupKinship => Text.Get("group_kinship");
+
+        // A rite performed, as each player hears of it (see RiteNews): one message per burn.
+        // {0}: the rite's name, colored; {1}: what happens (one of the ...Performed below, or a kinship rite's line).
+        internal static string RiteByYou => Text.Get("rite_by_you");
+        // {0}: who performed it, {1}: the rite's name, colored; {2}: what happens.
+        internal static string RiteBy => Text.Get("rite_by");
+        // Several rites in one burn.
+        internal static string RitesByYou => Text.Get("rites_by_you");
+        // {0}: who performed them.
+        internal static string RitesBy => Text.Get("rites_by");
+        // What happens, said after the rite's name.
+        internal static string ClearPerformed => Text.Get("clear_performed");
+        internal static string ThunderstormPerformed => Text.Get("thunderstorm_performed");
+        internal static string RainPerformed => Text.Get("rain_performed");
+        internal static string MistPerformed => Text.Get("mist_performed");
+        internal static string AuroraPerformed => Text.Get("aurora_performed");
+        internal static string ResetPerformed => Text.Get("reset_performed");
+        internal static string PolarDayPerformed => Text.Get("polar_day_performed");
+        internal static string PolarNightPerformed => Text.Get("polar_night_performed");
+        internal static string GaleBreathPerformed => Text.Get("gale_breath_performed");
+        internal static string SunFallPerformed => Text.Get("sun_fall_performed");
+        internal static string NoMistPerformed => Text.Get("no_mist_performed");
+        internal static string SootfallPerformed => Text.Get("sootfall_performed");
+        internal static string AbyssalSurgePerformed => Text.Get("abyssal_surge_performed");
+        internal static string NaturesReboundPerformed => Text.Get("natures_rebound_performed");
+        internal static string PackwardPerformed => Text.Get("packward_performed");
+        internal static string CarrionPerformed => Text.Get("carrion_performed");
+        internal static string VerdantPerformed => Text.Get("verdant_performed");
+        internal static string VatBoilPerformed => Text.Get("vat_boil_performed");
+        internal static string PitchBellowsPerformed => Text.Get("pitch_bellows_performed");
+        internal static string KindredPerformed => Text.Get("kindred_performed");
+        internal static string HarrowSpurPerformed => Text.Get("harrow_spur_performed");
+        internal static string AmberMendPerformed => Text.Get("amber_mend_performed");
+        internal static string SovereignWardPerformed => Text.Get("sovereign_ward_performed");
+        internal static string HearthHaulPerformed => Text.Get("hearth_haul_performed");
+        internal static string AetherClearPerformed => Text.Get("aether_clear_performed");
+        internal static string ElderSproutPerformed => Text.Get("elder_sprout_performed");
+        internal static string PlumeWardPerformed => Text.Get("plume_ward_performed");
+        internal static string SentrySightPerformed => Text.Get("sentry_sight_performed");
+        internal static string TaprootSurgePerformed => Text.Get("taproot_surge_performed");
+        internal static string MantleAnchorPerformed => Text.Get("mantle_anchor_performed");
+        internal static string PrimalHearthPerformed => Text.Get("primal_hearth_performed");
+        internal static string HearthKindlePerformed => Text.Get("hearth_kindle_performed");
+        // In place of the game's "Rested (Comfort 3)" when rested by a fire under the rite. {0}: the game's comfort text.
+        internal static string HearthKindleRested => Text.Get("hearth_kindle_rested");
+        internal static string ScaldDriftPerformed => Text.Get("scald_drift_performed");
+        internal static string TetherLockPerformed => Text.Get("tether_lock_performed");
+        internal static string StriderGirthPerformed => Text.Get("strider_girth_performed");
+        internal static string SecondKindlePerformed => Text.Get("second_kindle_performed");
+        internal static string MorgenPouchPerformed => Text.Get("morgen_pouch_performed");
+        internal static string TendrilDrawPerformed => Text.Get("tendril_draw_performed");
+        internal static string GroundingPerformed => Text.Get("grounding_performed");
+        internal static string CryptDelverPerformed => Text.Get("crypt_delver_performed");
+        internal static string GlacialSatietyPerformed => Text.Get("glacial_satiety_performed");
+        internal static string VeinShatterPerformed => Text.Get("vein_shatter_performed");
+        internal static string CarapaceTemperPerformed => Text.Get("carapace_temper_performed");
+        internal static string GraveBindPerformed => Text.Get("grave_bind_performed");
+        internal static string FortunesBoonPerformed => Text.Get("fortunes_boon_performed");
+        internal static string LuminaryPerformed => Text.Get("luminary_performed");
+        internal static string AbyssalDrawPerformed => Text.Get("abyssal_draw_performed");
+        internal static string FairWindPerformed => Text.Get("fair_wind_performed");
+        internal static string HushFellingPerformed => Text.Get("hush_felling_performed");
+        internal static string DraughtFlushPerformed => Text.Get("draught_flush_performed");
+        internal static string SoulTetherPerformed => Text.Get("soul_tether_performed");
+        internal static string TundraShroudPerformed => Text.Get("tundra_shroud_performed");
+        // Told to the players within the bubble (the rest hear IncursionBegunFar).
+        internal static string CrimsonPerformed => Text.Get("crimson_performed");
+        internal static string RagnarokPerformed => Text.Get("ragnarok_performed");
+        internal static string HoardBanePerformed => Text.Get("hoard_bane_performed");
+        internal static string SanctuaryPerformed => Text.Get("sanctuary_performed");
+        internal static string UnmakingPerformed => Text.Get("unmaking_performed");
+        internal static string EndedWeather => Text.Get("ended_weather");
+        internal static string EndedDaylight => Text.Get("ended_daylight");
+        internal static string EndedGaleBreath => Text.Get("ended_gale_breath");
+        internal static string EndedMistlands => Text.Get("ended_mistlands");
+        internal static string EndedAshlands => Text.Get("ended_ashlands");
+        internal static string EndedVatBoil => Text.Get("ended_vat_boil");
+        internal static string EndedPitchBellows => Text.Get("ended_pitch_bellows");
+        internal static string EndedKindred => Text.Get("ended_kindred");
+        internal static string EndedHarrowSpur => Text.Get("ended_harrow_spur");
+        internal static string EndedAmberMend => Text.Get("ended_amber_mend");
+        internal static string EndedAbyssalSurge => Text.Get("ended_abyssal_surge");
+        internal static string EndedSovereignWard => Text.Get("ended_sovereign_ward");
+        internal static string EndedHearthHaul => Text.Get("ended_hearth_haul");
+        internal static string EndedAetherClear => Text.Get("ended_aether_clear");
+        internal static string EndedElderSprout => Text.Get("ended_elder_sprout");
+        internal static string EndedSentrySight => Text.Get("ended_sentry_sight");
+        internal static string EndedTaprootSurge => Text.Get("ended_taproot_surge");
+        internal static string EndedMantleAnchor => Text.Get("ended_mantle_anchor");
+        internal static string EndedPrimalHearth => Text.Get("ended_primal_hearth");
+        internal static string EndedHearthKindle => Text.Get("ended_hearth_kindle");
         // {0}: the blessing's name, colored.
-        internal const string BlessingEnded = "The {0} fades";
-        internal const string BlessingsLostToDeath = "Your blessings fade with your death";
-        internal const string BlessedByYou = "You performed the {0}: the lightning blesses you";
-        internal const string BlessedBy = "{0} performed the {1}: the lightning blesses you";
-        // {1}: the blessing range in meters.
-        internal const string BlessingMissed = "You performed the {0}, but no one stood within {1} m of the obliterator";
-        internal const string GraveBindKept = "The Grave-Bind Rite keeps your skills";
-        internal const string GraveBindReequipped = "The Grave-Bind Rite puts your gear back on";
-        // Kinship rites. {0}: who performed it ("You" for the local player), {1}: the rite's name, colored.
-        internal const string YouName = "You";
-        internal const string SkalReceived = "{0} performed the {1}: Skål! Drink and rest";
-        internal const string SkyCallRenewed = "{0} performed the {1}: the sky renews your forsaken power";
-        internal const string SkyCallReady = "{0} performed the {1}, but your forsaken power is ready already";
-        internal const string SkyCallNoPower = "{0} performed the {1}, but you have no forsaken power to renew";
-        // {2}: how long until the sky can renew it again.
-        internal const string SkyCallWaiting = "{0} performed the {1}, but the sky renewed your power not long ago ({2} left)";
-        internal const string SkyCallEnded = "The sky can renew your forsaken power again";
-        internal const string SkalRestedAlready = "{0} performed the {1}, but you are rested longer already";
-        // {2}: how long until it can rest the player again.
-        internal const string SkalWaiting = "{0} performed the {1}, but you toasted not long ago ({2} left)";
-        internal const string SkalEnded = "A Skål Rite can rest you again";
-        // {2}: how many items.
-        internal const string AnvilSparkRepaired = "{0} performed the {1}: the anvil rings, {2} of your items repaired";
-        internal const string AnvilSparkNothing = "{0} performed the {1}, but none of your items needs repair";
-        // {2}: how long until it can repair the player's gear again.
-        internal const string AnvilSparkWaiting = "{0} performed the {1}, but your gear was repaired not long ago ({2} left)";
-        internal const string AnvilSparkEnded = "The anvil can repair your gear again";
-        // {0}: how many.
-        internal const string CryptDelverFound = "The Crypt Delver Rite finds {0} more in the chest";
-        internal const string EndedIncursion = "The raids stop coming";
+        internal static string BlessingEnded => Text.Get("blessing_ended");
+        internal static string BlessingsLostToDeath => Text.Get("blessings_lost_to_death");
+        // Said after the blessing's name. {0}: the blessing range in meters.
+        internal static string BlessingMissed => Text.Get("blessing_missed");
+        internal static string GraveBindKept => Text.Get("grave_bind_kept");
+        internal static string GraveBindReequipped => Text.Get("grave_bind_reequipped");
+        // Under the tombstone's name.
+        internal static string GraveBindHover => Text.Get("grave_bind_hover");
+        // {0}: the rite's name, colored.
+        internal static string SoulTetherPulled => Text.Get("soul_tether_pulled");
+        // {0}: the rite's name, colored.
+        internal static string SoulTetherAllThere => Text.Get("soul_tether_all_there");
+        internal static string SoulTetherNone => Text.Get("soul_tether_none");
+        // Kinship rites: what the rite did to the player, said after its name.
+        internal static string SkalReceived => Text.Get("skal_received");
+        internal static string SkyCallRenewed => Text.Get("sky_call_renewed");
+        internal static string SkyCallReady => Text.Get("sky_call_ready");
+        internal static string SkyCallNoPower => Text.Get("sky_call_no_power");
+        internal static string SkyCallWaiting => Text.Get("sky_call_waiting");
+        internal static string SkyCallEnded => Text.Get("sky_call_ended");
+        internal static string SkalRestedAlready => Text.Get("skal_rested_already");
+        internal static string SkalWaiting => Text.Get("skal_waiting");
+        internal static string SkalEnded => Text.Get("skal_ended");
+        internal static string AnvilSparkRepaired => Text.Get("anvil_spark_repaired");
+        internal static string AnvilSparkNothing => Text.Get("anvil_spark_nothing");
+        internal static string AnvilSparkWaiting => Text.Get("anvil_spark_waiting");
+        internal static string AnvilSparkEnded => Text.Get("anvil_spark_ended");
+        internal static string EldhrimnirReceived => Text.Get("eldhrimnir_received");
+        internal static string EldhrimnirFresh => Text.Get("eldhrimnir_fresh");
+        internal static string EldhrimnirNoFood => Text.Get("eldhrimnir_no_food");
+        internal static string EldhrimnirWaiting => Text.Get("eldhrimnir_waiting");
+        internal static string EldhrimnirEnded => Text.Get("eldhrimnir_ended");
+        internal static string RallyHornCalled => Text.Get("rally_horn_called");
+        internal static string RallyHornByYou => Text.Get("rally_horn_by_you");
+        internal static string RallyHornHere => Text.Get("rally_horn_here");
+        internal static string RallyHornWaiting => Text.Get("rally_horn_waiting");
+        internal static string RallyHornEnded => Text.Get("rally_horn_ended");
+        // The Rally-Horn Rite's call: the ability's name (slot, status, Controls row), and what it says.
+        internal static string RallyCallName => Text.Get("rally_call_name");
+        internal static string RallyAcceptName => Text.Get("rally_accept_name");
+        internal static string RallyRefuseName => Text.Get("rally_refuse_name");
+        // The Bounds switch beside the Guardian Power: its name (slot, Controls row), and On or Off under it.
+        internal static string DomainBorderName => Text.Get("domain_border_name");
+        internal static string AbilityOn => Text.Get("ability_on");
+        internal static string AbilityOff => Text.Get("ability_off");
+        internal static string RallyCallRefused => Text.Get("rally_call_refused");
+        internal static string RallyPendingRefused => Text.Get("rally_pending_refused");
+        // {0}: the rite's name, colored.
+        internal static string RallyCallAnswered => Text.Get("rally_call_answered");
+        internal static string RallyCallFaded => Text.Get("rally_call_faded");
+        internal static string RallyCallInCombat => Text.Get("rally_call_in_combat");
+        internal static string RallyCallCannot => Text.Get("rally_call_cannot");
+        internal static string CryptDelverFound => Text.Get("crypt_delver_found");
         // {0}: how many creatures died within the bubble so far.
-        internal const string CrimsonKillCount = "Kills: {0}";
-        // {0}: kills.
-        internal const string CrimsonSurvived = "You survived the Crimson Rite with {0} kills! Your reward waits in the obliterator";
-        internal const string CrimsonSurvivedNoReward = "You survived the Crimson Rite, but nothing was slain";
-        internal const string CrimsonFailedObliterator = "The obliterator is destroyed: the Crimson Rite is broken";
-        internal const string CrimsonFailedFallen = "Everyone within the bubble has fallen or left: the Crimson Rite is broken";
-        internal const string CrimsonFailedEnded = "The Crimson Rite was ended";
+        internal static string CrimsonKillCount => Text.Get("crimson_kill_count");
+        internal static string CrimsonSurvived => Text.Get("crimson_survived");
+        internal static string CrimsonSurvivedNoReward => Text.Get("crimson_survived_no_reward");
+        internal static string CrimsonFailedObliterator => Text.Get("crimson_failed_obliterator");
+        internal static string CrimsonFailedFallen => Text.Get("crimson_failed_fallen");
+        internal static string CrimsonFailedEnded => Text.Get("crimson_failed_ended");
         // The bubble of the Crimson or Ragnarök Rite. {0}: the rite's name.
-        internal const string IncursionNoPortal = "The {0}'s bubble holds you: no portals until it ends";
-        internal const string IncursionNoPortalIn = "The {0}'s bubble seals the portal's far end until it ends";
-        internal const string IncursionHeld = "The bubble holds you until the {0} ends";
-        internal const string IncursionKeptOut = "The bubble keeps you out until the {0} ends";
+        internal static string IncursionNoPortal => Text.Get("incursion_no_portal");
+        internal static string IncursionNoPortalIn => Text.Get("incursion_no_portal_in");
+        internal static string IncursionHeld => Text.Get("incursion_held");
+        internal static string IncursionKeptOut => Text.Get("incursion_kept_out");
         // {0}: the Domain rite, {1}: the Crimson or Ragnarök Rite.
-        internal const string DomainCancelled = "The {0} is cancelled: its obliterator is within the {1}'s bubble";
+        internal static string DomainCancelled => Text.Get("domain_cancelled");
         // {0}: the Domain rite.
-        internal const string DomainBroken = "The obliterator is destroyed: the {0} has ended";
-        internal const string IncursionNoBuild = "Nothing can be built, repaired or torn down within the {0}'s bubble";
-        internal const string IncursionOnlySanctuary = "Within the {0}'s bubble, only the Sanctuary Rite can be performed";
-        internal const string IncursionBusy = "The {0} is going on already: only one Crimson or Ragnarök Rite at a time";
+        internal static string DomainBroken => Text.Get("domain_broken");
+        internal static string IncursionNoBuild => Text.Get("incursion_no_build");
+        internal static string IncursionOnlySanctuary => Text.Get("incursion_only_sanctuary");
+        // {0}: the rite's name.
+        internal static string IncursionOtherObliterator => Text.Get("incursion_other_obliterator");
+        // {0}: the rite's name.
+        internal static string SanctuaryOnlyInside => Text.Get("sanctuary_only_inside");
+        internal static string IncursionBusy => Text.Get("incursion_busy");
+        // {0}: the rite's name.
+        internal static string IncursionNoTeleport => Text.Get("incursion_no_teleport");
+        internal static string IncursionNoTeleportIn => Text.Get("incursion_no_teleport_in");
+        internal static string IncursionNoDungeon => Text.Get("incursion_no_dungeon");
+        internal static string IncursionNoSummon => Text.Get("incursion_no_summon");
+        internal static string IncursionWonFar => Text.Get("incursion_won_far");
+        internal static string IncursionLostFar => Text.Get("incursion_lost_far");
+        // Told to the players outside the bubble, after the rite's name.
+        internal static string IncursionBegunFar => Text.Get("incursion_begun_far");
+        // {0}: the rite's name, {1}: what is in the way (one of the IncursionSite... below).
+        internal static string IncursionSiteRefused => Text.Get("incursion_site_refused");
+        internal static string IncursionSiteSpawn => Text.Get("incursion_site_spawn");
+        internal static string IncursionSiteTrader => Text.Get("incursion_site_trader");
+        internal static string IncursionSiteAltar => Text.Get("incursion_site_altar");
+        internal static string IncursionSiteShield => Text.Get("incursion_site_shield");
+        internal static string IncursionSiteRaid => Text.Get("incursion_site_raid");
+        internal static string IncursionSiteBoss => Text.Get("incursion_site_boss");
+        internal static string IncursionSiteDungeon => Text.Get("incursion_site_dungeon");
+        internal static string IncursionSiteBed => Text.Get("incursion_site_bed");
+        internal static string IncursionSitePlayerWard => Text.Get("incursion_site_player_ward");
+        // {0}: the rite's name.
+        internal static string IncursionRefusedRaid => Text.Get("incursion_refused_raid");
+        internal static string IncursionRefusedBossFight => Text.Get("incursion_refused_boss_fight");
+        // {0}: the rite's name.
+        internal static string IncursionRefusedHostile => Text.Get("incursion_refused_hostile");
+        internal static string IncursionMovedOut => Text.Get("incursion_moved_out");
+        internal static string IncursionNoBed => Text.Get("incursion_no_bed");
+        internal static string IncursionKeysKept => Text.Get("incursion_keys_kept");
+        // {0}: the Sovereign Ward Rite's name.
+        internal static string IncursionSiteWard => Text.Get("incursion_site_ward");
         // On the map: the rite's name, ominous.
-        internal const string CrimsonPin = "<color=#ff4a3a>Crimson Rite</color>";
-        internal const string RagnarokPin = "<color=#ff9a2e>Ragnarök</color>";
-        // {0}: how many bosses will rise.
-        internal const string RagnarokBegins = "Ragnarök! {0} bosses will rise, one after another";
-        internal const string RagnarokNoBosses = "The Ragnarök Rite calls no boss: none has fallen to everyone within the circle";
-        internal const string RagnarokNoOne = "The Ragnarök Rite calls no boss: nobody stands within the circle";
-        // {0}: the boss, {1}: which one, {2}: of how many.
-        internal const string RagnarokRises = "{0} rises ({1} of {2})";
-        internal const string RagnarokFalls = "{0} falls ({1} of {2})";
-        internal const string RagnarokSurvived = "You survived Ragnarök! Treasure waits in the obliterator";
-        internal const string RagnarokSurvivedNoReward = "You survived Ragnarök!";
-        internal const string RagnarokFailedObliterator = "The obliterator is destroyed: Ragnarök is broken";
-        internal const string RagnarokFailedFallen = "Everyone within the bubble has fallen or left: Ragnarök is lost";
-        internal const string RagnarokFailedEnded = "The Ragnarök Rite was ended";
-        internal const string RagnarokFailedTime = "Time ran out: the bosses withdraw and Ragnarök is lost";
-        internal const string RagnarokFailedSpawn = "No boss could rise: the Ragnarök Rite is broken";
-        internal const string EndedVerdant = "The growth slows again";
-        internal const string EndedPackward = "The creatures are no longer afraid";
-        internal const string EndedCarrion = "The creatures go back to the wild";
-        internal const string RefusedAdminsOnly = "Only admins can perform rites";
-        internal const string RefusedDisabled = "This rite is turned off on this server";
+        internal static string CrimsonPin => Colored("#ff4a3a", Text.Get("crimson_pin"));
+        internal static string RallyHornPin => Colored("#ffd060", Text.Get("rally_horn_pin"));
+        internal static string RagnarokPin => Colored("#ff9a2e", Text.Get("ragnarok_pin"));
+        internal static string RagnarokBegins => Text.Get("ragnarok_begins");
+        internal static string RagnarokNoBosses => Text.Get("ragnarok_no_bosses");
+        internal static string RagnarokNoOne => Text.Get("ragnarok_no_one");
+        // {0}: the boss.
+        internal static string RagnarokRises => Text.Get("ragnarok_rises");
+        internal static string RagnarokFalls => Text.Get("ragnarok_falls");
+        internal static string RagnarokSurvived => Text.Get("ragnarok_survived");
+        internal static string RagnarokSurvivedNoReward => Text.Get("ragnarok_survived_no_reward");
+        internal static string RagnarokFailedObliterator => Text.Get("ragnarok_failed_obliterator");
+        internal static string RagnarokFailedFallen => Text.Get("ragnarok_failed_fallen");
+        internal static string RagnarokFailedEnded => Text.Get("ragnarok_failed_ended");
+        internal static string RagnarokFailedTime => Text.Get("ragnarok_failed_time");
+        internal static string RagnarokFailedSpawn => Text.Get("ragnarok_failed_spawn");
+        internal static string HoardBanePin => Colored("#ffc24a", Text.Get("hoard_bane_pin"));
+        // {0}: the miniboss (or both brothers).
+        internal static string HoardBaneBegins => Text.Get("hoard_bane_begins");
+        internal static string HoardBaneNoOne => Text.Get("hoard_bane_no_one");
+        // {0}: the elite.
+        internal static string HoardBaneEliteFalls => Text.Get("hoard_bane_elite_falls");
+        // {0}: the miniboss (or both brothers).
+        internal static string HoardBaneShieldBreaks => Text.Get("hoard_bane_shield_breaks");
+        // {0}: the miniboss.
+        internal static string HoardBaneBossFalls => Text.Get("hoard_bane_boss_falls");
+        internal static string HoardBaneBossReturns => Text.Get("hoard_bane_boss_returns");
+        internal static string HoardBaneEliteWakes => Text.Get("hoard_bane_elite_wakes");
+        internal static string HoardBaneSurvived => Text.Get("hoard_bane_survived");
+        internal static string HoardBaneSurvivedNoReward => Text.Get("hoard_bane_survived_no_reward");
+        internal static string HoardBaneFailedObliterator => Text.Get("hoard_bane_failed_obliterator");
+        internal static string HoardBaneFailedFallen => Text.Get("hoard_bane_failed_fallen");
+        internal static string HoardBaneFailedEnded => Text.Get("hoard_bane_failed_ended");
+        internal static string HoardBaneFailedTime => Text.Get("hoard_bane_failed_time");
+        internal static string HoardBaneFailedSpawn => Text.Get("hoard_bane_failed_spawn");
+        internal static string HoardBaneChestReturned => Text.Get("hoard_bane_chest_returned");
+        internal static string HoardBaneChestBack => Text.Get("hoard_bane_chest_back");
+        // Between the brothers' names: "Zil & Thungr".
+        internal static string HoardBaneAnd => Text.Get("hoard_bane_and");
+        internal static string EndedVerdant => Text.Get("ended_verdant");
+        internal static string EndedPackward => Text.Get("ended_packward");
+        internal static string EndedCarrion => Text.Get("ended_carrion");
+        internal static string RefusedAdminsOnly => Text.Get("refused_admins_only");
+        internal static string RefusedDisabled => Text.Get("refused_disabled");
         // The connection error shown on joining. {0}: mod name and version.
-        internal const string ServerLacksMod = "The server doesn't have {0}. Remove it to join, or ask the server to install it.";
+        internal static string ServerLacksMod => Text.Get("server_lacks_mod");
 
         // First line: what it does, capitalized.
-        internal const string StatusTooltip = "{0}. Performed by {1}.\nEveryone with the mod has this weather until it ends, except where the world forces its own (dungeons, raids, {2}).";
-        internal const string StatusTooltipNoBiomes = "{0}. Performed by {1}.\nEveryone with the mod has this weather until it ends, except where the world forces its own (dungeons, raids).";
-        internal const string StatusTooltipPolarDay = "Day all the time. Performed by {0}.\nThe sun stays up and creatures spawn as by day, for everyone with the mod until it ends. Time goes on as usual.";
-        internal const string StatusTooltipPolarNight = "Night all the time. Performed by {0}.\nThe sun stays down and night creatures spawn, for everyone with the mod until it ends. Time goes on as usual.";
-        internal const string StatusTooltipTailwind = "Wind behind your ship. Performed by {0}.\nWhile you sail, the wind blows from behind, like Moder's power, until it ends or you die. Only its direction: its strength stays the weather's.";
-        internal const string StatusTooltipGaleBreath = "The strongest wind. Performed by {0}.\nThe wind blows as hard as it can, for everyone with the mod until it ends. Only its strength: it still turns with the weather.";
-        internal const string StatusTooltipSootfall = "No Ashlands smoke or heat haze. Performed by {0}.\nThe Ashlands ground smoke and the heat shimmer near lava are gone for everyone with the mod until it ends. The heat still burns.";
-        internal const string StatusTooltipNoMist = "No Mistlands mist. Performed by {0}.\nThe Mistlands mist is gone for everyone with the mod until it ends.";
-        internal const string StatusTooltipCryptDelver = "Never wet. Performed by {0}.\nRain and crypt water don't touch you until it ends or you die.";
+        internal static string StatusTooltip => Text.Get("status_tooltip");
+        internal static string StatusTooltipNoBiomes => Text.Get("status_tooltip_no_biomes");
+        internal static string StatusTooltipPolarDay => Text.Get("status_tooltip_polar_day");
+        internal static string StatusTooltipPolarNight => Text.Get("status_tooltip_polar_night");
+        internal static string StatusTooltipFairWind => Text.Get("status_tooltip_fair_wind");
+        // {1}: how many times as far off wild creatures have to be to see you while you gather.
+        internal static string StatusTooltipHushFelling => Text.Get("status_tooltip_hush_felling");
+        // {1}: how many times as long a recovery mead's wait is, {2}: how many times as long other meads last.
+        internal static string StatusTooltipDraughtFlush => Text.Get("status_tooltip_draught_flush");
+        // {1}: how many times as fast Wet wears off.
+        internal static string StatusTooltipTundraShroud => Text.Get("status_tooltip_tundra_shroud");
+        internal static string StatusTooltipGaleBreath => Text.Get("status_tooltip_gale_breath");
+        internal static string StatusTooltipSootfall => Text.Get("status_tooltip_sootfall");
+        internal static string StatusTooltipNoMist => Text.Get("status_tooltip_no_mist");
+        internal static string StatusTooltipCryptDelver => Text.Get("status_tooltip_crypt_delver");
         // {1}: the food floor in percent.
-        internal const string StatusTooltipGlacialSatiety = "Food fades slower. Performed by {0}.\nEaten food never gives less than {1}% of its health, stamina and eitr, until it ends or you die.";
+        internal static string StatusTooltipGlacialSatiety => Text.Get("status_tooltip_glacial_satiety");
         // {1}: how much of a hit spreads, {2}: at how much health left the vein shatters, both in percent.
-        internal const string StatusTooltipVeinShatter = "Rocks and ore shatter. Performed by {0}.\nHitting anything mined in pieces (rocks, ore, mud piles, ice...) deals {1}% of the hit to the pieces next to it, and once it is down to {2}% the rest breaks at once. Each hit wears your pickaxe as usual; the shatter wears it once more for each piece it breaks. Until it ends or you die.";
+        internal static string StatusTooltipVeinShatter => Text.Get("status_tooltip_vein_shatter");
         // {1}: how much less wear, in percent (from the Wear Multiplier).
-        internal const string StatusTooltipCarapaceTemper = "Gear wears slower. Performed by {0}.\nYour equipped weapons, tools and armor lose {1}% less durability until it ends or you die.";
-        internal const string StatusTooltipGraveBind = "No skill loss on death. Performed by {0}.\nIf you die, you keep all your skills, and your tombstone shines a beam into the sky; looting it puts your gear back on. Ends with that death.";
+        internal static string StatusTooltipCarapaceTemper => Text.Get("status_tooltip_carapace_temper");
+        internal static string TemperedDurability => Text.Get("tempered_durability");
+        internal static string StatusTooltipGraveBind => Text.Get("status_tooltip_grave_bind");
         // {1}: the luck multiplier. {2}: what happens instead to an item the forge would destroy.
-        internal const string StatusTooltipFortunesBoon = "More luck. Performed by {0}.\nLucky crafts, cooking and harvests come {1}x as often. At the Forge of Potential, an upgrade that would destroy your item {2} instead, once: that ends the blessing early, as does death.";
-        internal const string FortuneForgeLoses = "costs it {0} level(s)";
-        internal const string FortuneForgeKeeps = "leaves its level be";
-        // {0}: the item's name. {1}: its level now.
-        internal const string FortuneSavedItem = "Fortune's Boon saves your {0} from breaking: it is level {1}";
+        internal static string StatusTooltipFortunesBoon => Text.Get("status_tooltip_fortunes_boon");
+        internal static string FortuneForgeLoses => Text.Get("fortune_forge_loses");
+        internal static string FortuneForgeKeeps => Text.Get("fortune_forge_keeps");
+        // {0}: the item's name.
+        internal static string FortuneSavedItem => Text.Get("fortune_saved_item");
         // {1}: radius in meters, {2}: how much less time, in percent (from the Time Multiplier).
-        internal const string StatusTooltipVatBoil = "Fermenting and cooking go faster. Performed by {0}.\nFermenters and cooking stations within {1} m of the obliterator work {2}x as fast until it ends.";
-        internal const string StatusTooltipPitchBellows = "Smelters and kilns work faster. Performed by {0}.\nSmelters, blast furnaces, charcoal kilns and eitr refineries within {1} m of the obliterator work {2}x as fast until it ends.";
-        internal const string StatusTooltipSovereignWard = "Buildings can't be harmed. Performed by {0}.\nBuilt pieces within {1} m of the obliterator take no damage and hostile projectiles crumble at its edge until it ends.";
-        internal const string StatusTooltipSovereignSanctuary = "Buildings can't be harmed. Performed by {0}.\nBuilt pieces within {1} m of the obliterator take no damage, hostile projectiles crumble at its edge, and no player there can be hurt, until it ends.";
+        internal static string StatusTooltipVatBoil => Text.Get("status_tooltip_vat_boil");
+        internal static string StatusTooltipPitchBellows => Text.Get("status_tooltip_pitch_bellows");
+        // {1}: radius in meters, {2}: breeding multiplier, {3}: crowd multiplier.
+        internal static string StatusTooltipKindred => Text.Get("status_tooltip_kindred");
+        // {1}: radius in meters, {2}: spawn speed multiplier, {3}: creature cap multiplier.
+        internal static string StatusTooltipHarrowSpur => Text.Get("status_tooltip_harrow_spur");
+        internal static string StatusTooltipSovereignWard => Text.Get("status_tooltip_sovereign_ward");
+        internal static string StatusTooltipHearthHaul => Text.Get("status_tooltip_hearth_haul");
+        internal static string StatusTooltipHearthHaulCarry => Text.Get("status_tooltip_hearth_haul_carry");
+        internal static string StatusTooltipAetherClear => Text.Get("status_tooltip_aether_clear");
+        internal static string StatusTooltipElderSprout => Text.Get("status_tooltip_elder_sprout");
+        internal static string StatusTooltipPlumeWard => Text.Get("status_tooltip_plume_ward");
+        internal static string StatusTooltipSentrySight => Text.Get("status_tooltip_sentry_sight");
+        internal static string StatusTooltipTaprootSurge => Text.Get("status_tooltip_taproot_surge");
+        internal static string StatusTooltipMantleAnchor => Text.Get("status_tooltip_mantle_anchor");
+        internal static string StatusTooltipPrimalHearth => Text.Get("status_tooltip_primal_hearth");
+        internal static string StatusTooltipHearthKindle => Text.Get("status_tooltip_hearth_kindle");
+        internal static string StatusTooltipScaldDrift => Text.Get("status_tooltip_scald_drift");
+        internal static string StatusTooltipTetherLock => Text.Get("status_tooltip_tether_lock");
+        internal static string StatusTooltipStriderGirth => Text.Get("status_tooltip_strider_girth");
+        internal static string StatusTooltipSecondKindle => Text.Get("status_tooltip_second_kindle");
+        internal static string SecondKindleSaved => Text.Get("second_kindle_saved");
+        internal static string PlumeWardSaved => Text.Get("plume_ward_saved");
+        internal static string StatusTooltipMorgenPouch => Text.Get("status_tooltip_morgen_pouch");
+        internal static string StatusTooltipTendrilDraw => Text.Get("status_tooltip_tendril_draw");
+        // The Morgen-Pouch ability: its names (slot, Controls row) and what it says.
+        internal static string MorgenPouchAbility => Text.Get("morgen_pouch_ability");
+        internal static string MorgenPouchTake => Text.Get("morgen_pouch_take");
+        internal static string MorgenPouchRelease => Text.Get("morgen_pouch_release");
+        internal static string MorgenPouchTaken => Text.Get("morgen_pouch_taken");
+        internal static string MorgenPouchNothing => Text.Get("morgen_pouch_nothing");
+        internal static string MorgenPouchNothingRiding => Text.Get("morgen_pouch_nothing_riding");
+        internal static string MorgenPouchReleased => Text.Get("morgen_pouch_released");
+        internal static string MorgenPouchEjected => Text.Get("morgen_pouch_ejected");
+        internal static string MorgenPouchOtherWorld => Text.Get("morgen_pouch_other_world");
+        internal static string MorgenPouchSummonLost => Text.Get("morgen_pouch_summon_lost");
+        internal static string MorgenPouchCarrying => Text.Get("morgen_pouch_carrying");
+        internal static string MorgenPouchHover => Text.Get("morgen_pouch_hover");
+        internal static string MorgenPouchWait => Text.Get("morgen_pouch_wait");
+        internal static string StatusTooltipSovereignSanctuary => Text.Get("status_tooltip_sovereign_sanctuary");
         // {1}: the light's range in meters.
-        internal const string StatusTooltipLuminary = "You shine. Performed by {0}.\nYou shine with a warm light, lighting the ground and walls {1} m around you, for everyone to see, until it ends or you die.";
+        internal static string StatusTooltipLuminary => Text.Get("status_tooltip_luminary");
         // {1}: the pickup range in meters.
-        internal const string StatusTooltipAbyssalDraw = "Items fly to you. Performed by {0}.\nItems within {1} m fly to you, unless a closer player with room can take them, until it ends or you die.";
-        internal const string StatusTooltipAmberMend = "Buildings mend. Performed by {0}.\nDamaged building pieces within {1} m of the obliterator are repaired, one after another, until it ends.";
+        internal static string StatusTooltipAbyssalDraw => Text.Get("status_tooltip_abyssal_draw");
+        internal static string StatusTooltipAmberMend => Text.Get("status_tooltip_amber_mend");
         // {1}: serpent multiplier, {2}: fish multiplier.
-        internal const string StatusTooltipAbyssalSurge = "More serpents and fish. Performed by {0}.\nSerpents come {1}x as often at night and in storms, fish swim in schools {2}x as big and more of them are big ones, for everyone with the mod until it ends.";
+        internal static string StatusTooltipAbyssalSurge => Text.Get("status_tooltip_abyssal_surge");
         // {1}: the radius in meters.
-        internal const string StatusTooltipPackward = "Creatures shun the area. Performed by {0}.\nCreatures (not bosses or tamed) keep out of {1} m around the obliterator until it ends. One that gets hurt fights back, and its pack nearby turns on whoever it notices. A raid reaching the area pauses it.";
-        internal const string StatusTooltipCarrion = "Creatures come. Performed by {0}.\nCreatures (not bosses or tamed) within {1} m walk to the obliterator until it ends, their senses dulled. A raid reaching the area pauses it.";
+        internal static string StatusTooltipPackward => Text.Get("status_tooltip_packward");
+        internal static string StatusTooltipCarrion => Text.Get("status_tooltip_carrion");
         // {2}: how much faster, in percent.
-        internal const string StatusTooltipVerdant = "Plants grow faster. Performed by {0}.\nPlants and bushes within {1} m of the obliterator grow {2}x as fast until it ends.";
-        internal const string StatusTooltipSkal = "Toasted not long ago. Performed by {0}.\nThe Skål Rite rested you. No other Skål Rite can rest you until this ends; death doesn't end it.";
-        internal const string StatusTooltipAnvilSpark = "Gear repaired not long ago. Performed by {0}.\nThe Anvil-Spark Rite repaired your gear. No other Anvil-Spark Rite can repair it until this ends; death doesn't end it.";
-        internal const string StatusTooltipSkyCall = "Forsaken power renewed. Performed by {0}.\nThe sky renewed your forsaken power. No other Sky-Call Rite can renew it until this ends; death doesn't end it.";
+        internal static string StatusTooltipVerdant => Text.Get("status_tooltip_verdant");
+        internal static string StatusTooltipSkal => Text.Get("status_tooltip_skal");
+        internal static string StatusTooltipAnvilSpark => Text.Get("status_tooltip_anvil_spark");
+        internal static string StatusTooltipEldhrimnir => Text.Get("status_tooltip_eldhrimnir");
+        internal static string StatusTooltipRallyHorn => Text.Get("status_tooltip_rally_horn");
+        // {0}: who called, {1}: the Rally Call key, {2}: the wait after answering.
+        internal static string StatusTooltipRallyCall => Text.Get("status_tooltip_rally_call");
+        internal static string StatusTooltipSkyCall => Text.Get("status_tooltip_sky_call");
         // {1}: the radius in meters.
-        internal const string StatusTooltipCrimson = "Raid after raid. Performed by {0}.\nRaids keep coming within {1} m of the obliterator under a blood moon, and nowhere else. Nobody gets into or out of the bubble, and no portal there works, until it ends; no creature gets in or out. Nothing can be built or torn down inside, and only the Sanctuary Rite performed. Survive to the end for a reward in the obliterator for each kill.";
+        internal static string StatusTooltipCrimson => Text.Get("status_tooltip_crimson");
         // {1}: the radius in meters.
-        internal const string StatusTooltipRagnarok = "Boss after boss. Performed by {0}.\nBosses everyone inside has slain rise within {1} m of the obliterator, one after another, under a burning sky. Nobody gets into or out of the bubble, and no portal there works, until it ends. Nothing can be built or torn down inside, and only the Sanctuary Rite performed. Slay them all before the time runs out for treasure in the obliterator.";
-        internal const string SomeoneName = "someone";
+        internal static string StatusTooltipRagnarok => Text.Get("status_tooltip_ragnarok");
+        // {1}: the radius in meters.
+        internal static string StatusTooltipHoardBane => Text.Get("status_tooltip_hoard_bane");
+        internal static string SomeoneName => Text.Get("someone_name");
+        // Times left: "45 s", "30 min", "1 h", "1 h 30 min" (see TimeText).
+        internal static string TimeSeconds => Text.Get("time_seconds");
+        internal static string TimeMinutes => Text.Get("time_minutes");
+        internal static string TimeHours => Text.Get("time_hours");
+        internal static string TimeHoursMinutes => Text.Get("time_hours_minutes");
 
         // Item names in orange, as the game shows them in hover text.
         internal const string ItemColor = "orange";
         internal const string Faint = "#c9c9c9";
+        // Gray, for items that just burn.
+        private const string Dim = "#9a9a9a";
 
         // {0}: rite name, colored. {1}: the gray explanation (Explanation below), or nothing when Show Explanations is off.
         internal const string LeverBrings = "{0}{1}";
         internal const string Explanation = " <color=" + Faint + ">({0})</color>";
         // On a plant under the Verdant Rite (without AzuHoverStats, which shows the time itself): when it should be grown.
-        internal const string VerdantReadyIn = "\n<color=" + Faint + ">Grown in about {0} min</color>";
-        internal const string VerdantReadySoon = "\n<color=" + Faint + ">Grown in under a minute</color>";
+        internal static string VerdantReadyIn => "\n" + Colored(Faint, Text.Get("verdant_ready_in"));
+        internal static string VerdantReadySoon => "\n" + Colored(Faint, Text.Get("verdant_ready_soon"));
+        internal static string AnchorDespawnIn => "\n" + Colored(Faint, Text.Get("anchor_despawn_in"));
+        internal static string AnchorStaysBase => "\n" + Colored(Faint, Text.Get("anchor_stays_base"));
+        internal static string AnchorStaysTar => "\n" + Colored(Faint, Text.Get("anchor_stays_tar"));
         // On a fermenter under the Vat-Boil Rite (without AzuHoverStats): when it should be done.
-        internal const string StationReadyIn = "\n<color=" + Faint + ">Ready in about {0} min</color>";
-        internal const string StationReadySoon = "\n<color=" + Faint + ">Ready in under a minute</color>";
+        internal static string StationReadyIn => "\n" + Colored(Faint, Text.Get("station_ready_in"));
+        internal static string StationReadySoon => "\n" + Colored(Faint, Text.Get("station_ready_soon"));
+        // On a tamed young animal under the Kindred Rite: when it should be grown; on a pregnant one: when it gives birth.
+        internal static string KindredGrownIn => "\n" + Colored(Faint, Text.Get("kindred_grown_in"));
+        internal static string KindredGrownSoon => "\n" + Colored(Faint, Text.Get("kindred_grown_soon"));
+        internal static string KindredDueIn => "\n" + Colored(Faint, Text.Get("kindred_due_in"));
+        internal static string KindredDueSoon => "\n" + Colored(Faint, Text.Get("kindred_due_soon"));
+        // On a warm egg under the Kindred Rite: when it hatches.
+        internal static string KindredHatchesIn => "\n" + Colored(Faint, Text.Get("kindred_hatches_in"));
+        internal static string KindredHatchesSoon => "\n" + Colored(Faint, Text.Get("kindred_hatches_soon"));
+        // On a spawner under the Harrow-Spur Rite. {0}: seconds between spawns, {1}: creatures it keeps close by.
+        internal static string HarrowSpurSpawns => "\n" + Colored(Faint, Text.Get("harrow_spur_spawns"));
         // In AzuHoverStats' cooking times, under the Vat-Boil Rite.
-        internal const string WontBurn = "<color=#9fe07a>[won't burn]</color>";
-        internal const string LeverNotAllowed = "<color=#ff7a5c>Only admins can perform rites</color>";
+        internal static string WontBurn => Colored("#9fe07a", Text.Get("wont_burn"));
+        internal static string LeverNotAllowed => Colored("#ff7a5c", Text.Get("lever_not_allowed"));
         // On the lever of an obliterator with rites off, when rite items are in it.
-        internal const string LeverSwitchedOff = "<color=#9a9a9a>Rites are off: these items just burn (turn them on from the flap under the open obliterator)</color>";
+        internal static string LeverSwitchedOff => Colored(Dim, Text.Get("lever_switched_off"));
 
         // Topic of the popup when a rite becomes known (see RiteDiscovery).
-        internal const string NewRite = "New rite";
+        internal static string NewRite => Text.Get("new_rite");
 
-        internal const string HatchTitle = "<color=#9fd8ff>Burn to perform a rite:</color>";
+        internal static string HatchTitle => Colored("#9fd8ff", Text.Get("hatch_title"));
         internal const string HatchLine = "  <color=" + ItemColor + ">{0}</color>: {1}{2}";
 
-        internal const string TooltipDecides = "Performs the {0}{1} when burnt.";
+        // On the obliterator's lever and hatch, and the flap's active rites button: the rites performed at this
+        // obliterator that still go on, one per line: "  {rite}: {time left}". {0}: the time left.
+        internal static string ActiveTitle => Colored("#9fe07a", Text.Get("active_title"));
+        internal static string ActiveTooltip => Text.Get("active_tooltip");
+        internal static string ActiveLeft => Colored(Faint, Text.Get("active_left"));
+        internal static string ActivePaused => Colored(Dim, Text.Get("active_paused"));
+        // In place of the time left, for a rite with no time limit (the Ragnarök Rite).
+        internal static string ActiveUntimed => Colored(Faint, Text.Get("active_untimed"));
+        internal const string ActiveLine = "  {0}: {1}";
+        // On the active rites page, under a rite's name. {0}: what it does, {1}: who performed it.
+        internal static string ActiveDetail => Text.Get("active_detail");
+
+        internal static string TooltipDecides => Text.Get("tooltip_decides");
         // {0}: the rite that goes first and keeps this item's rite out.
-        internal const string TooltipOverruled = "<color=#9a9a9a>Just burns: the {0}, from a lower item, goes first and keeps it out.</color>";
-        internal const string TooltipOverruledShort = "<color=#9a9a9a>Just burns.</color>";
+        internal static string TooltipOverruled => Colored(Dim, Text.Get("tooltip_overruled"));
+        internal static string TooltipOverruledShort => Colored(Dim, Text.Get("tooltip_overruled_short"));
         // {0}: how many are needed, {1}: the rite, {2}: how many are in.
-        internal const string TooltipNeedsMore = "<color=#9a9a9a>Needs {0} to perform the {1} ({2} in), until then just burns.</color>";
-        internal const string TooltipNeedsMoreShort = "<color=#9a9a9a>Needs {0}.</color>";
+        internal static string TooltipNeedsMore => Colored(Dim, Text.Get("tooltip_needs_more"));
+        internal static string TooltipNeedsMoreShort => Colored(Dim, Text.Get("tooltip_needs_more_short"));
         // {0}: the Unmaking Rite. The materials it gives back are shown under the line.
-        internal const string TooltipUnmade = "The {0} unmakes it, giving back:";
-        internal const string TooltipUnmadeNothing = "<color=#9a9a9a>The {0} unmakes it, but too little went into it for anything to come back.</color>";
+        internal static string TooltipUnmade => Text.Get("tooltip_unmade");
+        internal static string TooltipUnmadeNothing => Colored(Dim, Text.Get("tooltip_unmade_nothing"));
         // An item with how many are needed: "2x Ooze", the number in white inside the item's orange.
         internal const string ItemAmount = "<color=#f2f2f2>{0}x</color> {1}";
+        // Different items, how many are needed: "3 different of Deer trophy / Elder trophy".
+        internal static string ItemsDifferent => Text.Get("items_different");
         // Between the names of a rite's key items: "Surtling core / Ruby".
         internal const string ItemSeparator = " / ";
 
         // The flap under the obliterator: its switch, and the rites page it opens.
-        internal const string SwitchTooltip = "Perform rites";
-        internal const string PageTooltip = "Rites";
-        internal const string SwitchedOn = "This obliterator performs rites";
-        internal const string SwitchedOff = "This obliterator burns as usual";
-        internal const string SwitchNotOwner = "Someone else is using this obliterator";
-        internal const string PanelHint = "Burn a rite item to perform its rite. The lowest one decides. Click an item to put it in.";
+        internal static string SwitchTooltip => Text.Get("switch_tooltip");
+        internal static string PageTooltip => Text.Get("page_tooltip");
+        internal static string SwitchedOn => Text.Get("switched_on");
+        internal static string SwitchedOff => Text.Get("switched_off");
+        internal static string SwitchNotOwner => Text.Get("switch_not_owner");
+        internal static string PanelHint => Text.Get("panel_hint");
         // Tooltip of an item on the rites page. {0}: how many it takes, {1}: how many you have.
-        internal const string PanelItemMissing = "Missing items";
-        internal const string PanelItemNeeds = "Needs {0}, you have {1}";
-        internal const string PanelItemPut = "Click to put {0} in";
-        internal const string PanelItemIn = "In the obliterator";
+        internal static string PanelItemMissing => Text.Get("panel_item_missing");
+        internal static string PanelItemNeeds => Text.Get("panel_item_needs");
+        internal static string PanelItemPut => Text.Get("panel_item_put");
+        internal static string PanelItemIn => Text.Get("panel_item_in");
+        internal static string PanelItemEnough => Text.Get("panel_item_enough");
+        internal static string PanelAnyDifferent => Text.Get("panel_any_different");
         // An item whose rite clashes with one already in. {0}: that rite.
-        internal const string PanelItemClash = "Clashes with a prepared rite";
-        internal const string PanelItemClashDetail = "The {0} is already prepared";
+        internal static string PanelItemClash => Text.Get("panel_item_clash");
+        internal static string PanelItemClashDetail => Text.Get("panel_item_clash_detail");
         // Clicking it. {0}: the clicked rite, {1}: the one already in.
-        internal const string PanelClashWarning = "The {1} is already prepared: the {0} can't share its burn";
+        internal static string PanelClashWarning => Text.Get("panel_clash_warning");
         // After the name of the rite keeping the clicked one out, for a moment.
-        internal const string PanelPrepared = "<color=#e8735f>Already prepared</color>";
+        internal static string PanelPrepared => Colored("#e8735f", Text.Get("panel_prepared"));
         // The "+N" button of a rite with more items than fit in its row. {0}: how many more.
-        internal const string PanelMoreItems = "Show {0} more";
-        internal const string PanelFewerItems = "Show fewer";
+        internal static string PanelMoreItems => Text.Get("panel_more_items");
+        internal static string PanelFewerItems => Text.Get("panel_fewer_items");
+        internal static string PanelOpenCompendium => Text.Get("panel_open_compendium");
         // After the name of the rite pulling the lever performs.
-        internal const string PanelReady = "<color=#8fe08f>Ready: pull the lever</color>";
-        internal const string PanelRowDetail = "<color=" + ItemColor + ">{0}</color>  <color=" + Faint + ">{1}</color>";
-        internal const string PanelRowItem = "<color=" + ItemColor + ">{0}</color>";
-        internal const string PanelMoreToFind = "{0} more rites wait to be found here: hold their items to learn them.";
-        internal const string PanelOneMoreToFind = "1 more rite waits to be found here: hold its item to learn it.";
-        internal const string CloseTooltip = "Close";
+        internal static string PanelReady => Colored("#8fe08f", Text.Get("panel_ready"));
+        internal static string PanelMoreToFind => Text.Get("panel_more_to_find");
+        internal static string PanelOneMoreToFind => Text.Get("panel_one_more_to_find");
+        internal static string CloseTooltip => Text.Get("close_tooltip");
     }
 
     // The "Tempest Rite" page of the Compendium (see RiteCompendium). Numbers in braces come from the settings.
     internal static class CompendiumTexts
     {
-        internal const string Topic = "Tempest Rite";
+        internal static string Topic => Text.Get("compendium_topic");
 
-        internal const string Intro =
-            "Rites are performed at an <color=orange>obliterator</color>. Open it and click the fire on the flap under it to turn its rites on: " +
-            "until then it burns everything as usual. Put a rite item in, along with whatever else you want to burn, and pull the lever. " +
-            "Once it burns, the rite takes hold.";
-        internal const string Rules =
-            "One burn performs every rite with enough of its item in. When two can't go together (two weather rites, say), the one from the " +
-            "lowest item goes first and the other's item just burns. Performing a rite again starts its time over. Each rite going on shows " +
-            "as a status with the time left, and the book on the obliterator's flap opens the rites page, where clicking an item puts in as " +
-            "many as its rite needs.";
-        internal const string AdminsOnly = "<color=#ff7a5c>On this server, only admins can perform rites.</color>";
-        internal const string Learning = "A rite shows here once you have held its item, the way recipes are learned.";
-        internal const string NoneKnown = "You know no rites yet: hold a rite item to learn its rite.";
-        internal const string MoreToFind = "{0} more rites wait to be found: hold their items to learn them.";
-        internal const string OneMoreToFind = "1 more rite waits to be found: hold its item to learn it.";
+        internal static string Intro => Text.Get("compendium_intro");
+        internal static string Rules => Text.Get("compendium_rules");
+        internal static string AdminsOnly => Colored("#ff7a5c", Text.Get("compendium_admins_only"));
+        internal static string Learning => Text.Get("compendium_learning");
+        internal static string NoneKnown => Text.Get("compendium_none_known");
+        internal static string MoreToFind => Text.Get("compendium_more_to_find");
+        internal static string OneMoreToFind => Text.Get("compendium_one_more_to_find");
 
         // Under each rite's name. {0}: the item(s) to burn.
-        internal const string Burn = "Burn {0}";
+        internal static string Burn => Text.Get("compendium_burn");
         internal const string Separator = "  ·  ";
-        internal const string Lasts = "lasts {0}";
-        internal const string AtOnce = "happens at once";
+        internal static string Lasts => Text.Get("compendium_lasts");
+        internal static string AtOnce => Text.Get("compendium_at_once");
         // {0}: how long the players have.
-        internal const string RagnarokTime = "{0} to slay them all";
+        internal static string RagnarokTime => Text.Get("compendium_ragnarok_time");
         // {0}: how long until the same rite can give a player something again.
-        internal const string KinshipWait = "{0} wait before the next";
+        internal static string KinshipWait => Text.Get("compendium_kinship_wait");
         // {0}: how long the player stays rested, {1}: the wait.
-        internal const string SkalTimes = "Rested for {0}, {1} wait before the next";
+        internal static string SkalTimes => Text.Get("compendium_skal_times");
 
         // What each group shares. {0}: the Domain radius or blessing range in meters.
-        internal const string GroupAtmospheric =
-            "The weather, for everyone, shown as each biome's own kind of it: snow in the mountains, Mistlands rain in the Mistlands, ash " +
-            "rain in the Ashlands. One weather rite at a time: a new one replaces the last. Raids, boss fights and dungeons keep their own " +
-            "weather, and a weather rite never makes a place warmer than its own weather would.";
-        internal const string GroupCelestial =
-            "The sun and the wind, for everyone. Time itself goes on as usual: days are counted, crops grow, beds go by the real clock and " +
-            "clocks show the real time.";
-        internal const string GroupBiomeMastery = "One part of the world bent to your will, for everyone.";
-        internal const string GroupDomain =
-            "Work within {0} m of the obliterator they were performed at, and their status shows only there. Each ends when its obliterator " +
-            "is destroyed. The Equilibrium Rite leaves them be, so nobody's growth or protection is ended by accident: only the Grounding " +
-            "Rite ends them.";
-        internal const string GroupBlessings =
-            "For the players standing within {0} m of the obliterator when it burns: its lightning strikes each of them, harmlessly. Each " +
-            "keeps their own, through logging out, until it ends or they die. The Equilibrium Rite leaves them be.";
-        internal const string GroupKinship =
-            "For everyone on the server at once, wherever they are. Each player stops what they are doing to toast, roar or flex, and nobody " +
-            "can be hurt meanwhile. Once a kinship rite gives a player something, no other one of the same rite can until the wait is over, " +
-            "even through death; a player it passes by gets no wait.";
-        internal const string GroupReckoning = "Fights for great rewards, and the rites that end others.";
+        internal static string GroupAtmospheric => Text.Get("compendium_group_atmospheric");
+        internal static string GroupCelestial => Text.Get("compendium_group_celestial");
+        internal static string GroupBiomeMastery => Text.Get("compendium_group_biome_mastery");
+        internal static string GroupDomain => Text.Get("compendium_group_domain");
+        internal static string GroupBlessings => Text.Get("compendium_group_blessings");
+        internal static string GroupKinship => Text.Get("compendium_group_kinship");
+        internal static string GroupReckoning => Text.Get("compendium_group_reckoning");
 
-        internal const string Clear =
-            "Clear skies: no rain, snow or fog, for building, farming and travelling. Cold biomes stay as cold as their own weather would make them.";
-        internal const string Thunderstorm =
-            "A thunderstorm: strong wind for sailing, and the weather serpents come out in. A snowstorm in the mountains.";
-        internal const string Rain =
-            "Rain: light rain in the meadows, snow in the mountains. Puts out spreading fire that has no roof over it, and keeps cinders from " +
-            "lighting more.";
-        internal const string Mist = "Mist: fog that hides what is far away.";
-        internal const string Aurora = "A clear sky with shimmering auroras at night, like the Deep North's, and calm, quiet winds.";
-        internal const string PolarDay =
-            "Polar day: the sun stays up and it counts as day, so creatures spawn as by day and night creatures leave.";
-        internal const string PolarNight =
-            "Polar night: the sun stays down and it counts as night, so night creatures spawn (more of them, and stronger) and nights are cold.";
-        internal const string GaleBreath =
-            "The wind blows as hard as it can, everywhere: the fastest sailing there is. Only its strength: it still turns with the weather. " +
-            "Together with the Tailwind Rite, it is behind your ship at full strength.";
-        internal const string NoMist = "No new Mistlands mist is made, and what is there fades. Creatures see as if there were no mist.";
-        internal const string Sootfall =
-            "In the Ashlands, the smoke and ash that come with its weather are turned off, and the heat shimmer near lava isn't shown. Only " +
-            "the look: the heat still burns.";
+        internal static string Clear => Text.Get("compendium_clear");
+        internal static string Thunderstorm => Text.Get("compendium_thunderstorm");
+        internal static string Rain => Text.Get("compendium_rain");
+        internal static string Mist => Text.Get("compendium_mist");
+        internal static string Aurora => Text.Get("compendium_aurora");
+        internal static string PolarDay => Text.Get("compendium_polar_day");
+        internal static string PolarNight => Text.Get("compendium_polar_night");
+        internal static string GaleBreath => Text.Get("compendium_gale_breath");
+        internal static string NoMist => Text.Get("compendium_no_mist");
+        internal static string Sootfall => Text.Get("compendium_sootfall");
         // {0}: serpent multiplier, {1}: fish school multiplier, {2}: big fish multiplier.
-        internal const string AbyssalSurge =
-            "The sea stirs: serpents come out {0}x as often at night and in rain and storms, and fish swim in schools {1}x as big in the sea, " +
-            "along coasts and in rivers. Each star of a fish is {2}x as likely, so more of them are big ones.";
+        internal static string AbyssalSurge => Text.Get("compendium_abyssal_surge");
         // {0}: how long a hurt creature fights back.
-        internal const string Packward =
-            "Creatures (not bosses, not tamed) shun the area: those inside find their way out, those outside don't wander in or follow a " +
-            "target in, but wait at the edge. One that gets hurt fights back for {0}, and so does its pack nearby against whoever it notices; the rest still " +
-            "run. A raid reaching the area pauses it (raid creatures are left alone) until the raid ends. They drip with fear and show a " +
-            "blue icon. Replaces a Carrion Rite going on.";
+        internal static string Packward => Text.Get("compendium_packward");
         // {0}: how far a drawn creature sees and hears, in percent.
-        internal const string Carrion =
-            "Creatures (not bosses, not tamed) walk to the obliterator, out of the woods and into your traps, pens or walls, trailing a green " +
-            "smell and showing a green icon. On the way they see and hear only {0}% as far, but one that notices you reacts as usual, then " +
-            "walks on once it calms down. A raid reaching the area pauses it (raid creatures are left alone) until the raid ends. " +
-            "Replaces a Packward Rite going on.";
+        internal static string Carrion => Text.Get("compendium_carrion");
         // {0}: growth multiplier.
-        internal const string Verdant =
-            "Crops, saplings and berry bushes grow {0}x as fast, some now and then giving off green motes. Looking at a plant or a " +
-            "picked bush shows it is under the rite. What they grew stays after the rite ends.";
+        internal static string Verdant => Text.Get("compendium_verdant");
         // {0}: speed multiplier.
-        internal const string VatBoil =
-            "Fermenters and cooking stations (the cooking station, the iron one and the oven) work {0}x as fast, some now and then " +
-            "giving off golden motes, and nothing cooked there burns while the rite lasts. What they did stays after the rite ends.";
+        internal static string VatBoil => Text.Get("compendium_vat_boil");
         // {0}: speed multiplier.
-        internal const string PitchBellows =
-            "Smelters, blast furnaces, charcoal kilns and eitr refineries work {0}x as fast, some now and then giving off ember motes. " +
-            "They still use up ore and fuel as usual, and need their roof and clear smoke. What they made stays after the rite ends.";
-        internal const string AmberMend =
-            "Damaged building pieces are repaired one after another, a couple each second, each with the hammer's repair effect.";
-        internal const string SovereignWard =
-            "Built pieces (walls, portals, chests, workbenches...) take no damage from anything: only the hammer takes them down. Hostile " +
-            "projectiles (Gjall fireballs, catapult rocks, drake frost) crumble as they cross in.";
-        internal const string SovereignSanctuary = " Players inside can't be hurt either.";
-        internal const string Grounding = "Ends the Domain rites going on.";
+        internal static string PitchBellows => Text.Get("compendium_pitch_bellows");
+        // {0}: breeding multiplier, {1}: crowd multiplier.
+        internal static string Kindred => Text.Get("compendium_kindred");
+        // {0}: spawn speed multiplier, {1}: creature cap multiplier.
+        internal static string HarrowSpur => Text.Get("compendium_harrow_spur");
+        internal static string AmberMend => Text.Get("compendium_amber_mend");
+        internal static string SovereignWard => Text.Get("compendium_sovereign_ward");
+        internal static string HearthHaul => Text.Get("compendium_hearth_haul");
+        internal static string HearthHaulCarry => Text.Get("compendium_hearth_haul_carry");
+        internal static string AetherClear => Text.Get("compendium_aether_clear");
+        internal static string SovereignSanctuary => Text.Get("compendium_sovereign_sanctuary");
+        internal static string Grounding => Text.Get("compendium_grounding");
         // {0}: loot multiplier, {1}: chance of one more item, {2}: of two more, both in percent.
-        internal const string CryptDelver =
-            "The first time you open a chest in a dungeon (crypts, caves, infested mines...), it gets {0}x the items (rounded up, so 1 " +
-            "becomes 2), with a {1}% chance of one more and {2}% of two more. The extra items can be anything the chest can hold. Each chest " +
-            "gives this once.";
+        internal static string CryptDelver => Text.Get("compendium_crypt_delver");
         // {0}: the food floor, in percent.
-        internal const string GlacialSatiety =
-            "Food fades only down to {0}% of what it gives (the game's own floor is about half), until it runs out.";
+        internal static string GlacialSatiety => Text.Get("compendium_glacial_satiety");
         // {0}: how much of a hit spreads, {1}: at how much health the rest breaks, both in percent.
-        internal const string VeinShatter =
-            "Hitting anything mined in pieces (rocks, ore veins, mud piles, ice, giant swords and skulls...) deals {0}% of the hit to the " +
-            "pieces next to it, and once it is down to {1}% of its health, the rest breaks at once. Each hit wears your pickaxe as usual; the " +
-            "shatter wears it once more for each piece it breaks.";
-        internal const string VeinShatterNoBreak =
-            "Hitting anything mined in pieces (rocks, ore veins, mud piles, ice, giant swords and skulls...) deals {0}% of the hit to the " +
-            "pieces next to it. Each hit wears your pickaxe as usual; the shatter wears it once more for each piece it breaks.";
+        internal static string VeinShatter => Text.Get("compendium_vein_shatter");
+        internal static string VeinShatterNoBreak => Text.Get("compendium_vein_shatter_no_break");
         // {0}: how much less wear, in percent.
-        internal const string CarapaceTemper = "Your equipped weapons, tools, bows, shields and armor lose {0}% less durability.";
-        internal const string GraveBind = "Dying doesn't lower your skills.";
-        internal const string GraveBindBeam =
-            " Your tombstone shines a beam into the sky that you can see from far away until you empty it.";
-        internal const string GraveBindReequip = " Looting your tombstone puts the gear you wore back on.";
+        internal static string CarapaceTemper => Text.Get("compendium_carapace_temper");
+        internal static string GraveBind => Text.Get("compendium_grave_bind");
+        internal static string GraveBindBeam => Text.Get("compendium_grave_bind_beam");
+        internal static string GraveBindReequip => Text.Get("compendium_grave_bind_reequip");
         // {0}: luck multiplier, {1}: what happens to an item the forge would destroy (Messages.FortuneForgeLoses or Keeps).
-        internal const string FortunesBoon =
-            "Your lucky rolls for extra items come {0}x as often: crafting and cauldron cooking, the cooking station, harvesting crops and " +
-            "other pickables. At the Forge of Potential, an upgrade that would destroy your item {1} instead, once, which ends the blessing.";
+        internal static string FortunesBoon => Text.Get("compendium_fortunes_boon");
         // {0}: the light's range in meters.
-        internal const string Luminary =
-            "You shine with a warm light like a lantern, lighting the ground and walls {0} m around you, in caves and dungeons too, and " +
-            "everyone sees it.";
-        internal const string LuminaryShadows = " Floors, ceilings and walls block it.";
+        internal static string Luminary => Text.Get("compendium_luminary");
+        internal static string LuminaryShadows => Text.Get("compendium_luminary_shadows");
         // {0}: pickup range in meters.
-        internal const string AbyssalDraw =
-            "Items fly to you from {0} m instead of 2 m. An item a closer player can pick up goes to them, unless their inventory is full.";
-        internal const string Tailwind =
-            "While you sail, the wind always blows from behind, like Moder's power, also for everyone on the same ship. Only its direction: " +
-            "its strength stays the weather's (the Gale-Breath Rite makes it the strongest).";
-        internal const string Skal =
-            "Everyone raises a toast, aglow like a stamina mead amid the crackle of a fire, and is Rested as if at comfort 3. Anyone rested " +
-            "longer already is passed by.";
-        internal const string SkyCall =
-            "Everyone whose forsaken power is cooling down is struck by lightning (no harm done), roars, and has it ready again. Anyone whose " +
-            "power is ready already is passed by.";
-        internal const string AnvilSpark =
-            "An anvil rings and sparks burst around everyone, who flexes and has every worn item in their inventory, equipped gear included, " +
-            "repaired, no workbench or forge needed. Anyone with nothing to repair is passed by.";
+        internal static string AbyssalDraw => Text.Get("compendium_abyssal_draw");
+        internal static string FairWind => Text.Get("compendium_fair_wind");
+        // {0}: how many times as close wild creatures have to be to see you while you gather.
+        internal static string HushFelling => Text.Get("compendium_hush_felling");
+        // {0}: how many times as long a recovery mead's wait is, {1}: how many times as long other meads last.
+        internal static string DraughtFlush => Text.Get("compendium_draught_flush");
+        internal static string SoulTether => Text.Get("compendium_soul_tether");
+        // {0}: how many times as fast Wet wears off.
+        internal static string TundraShroud => Text.Get("compendium_tundra_shroud");
+        internal static string Skal => Text.Get("compendium_skal");
+        internal static string SkyCall => Text.Get("compendium_sky_call");
+        internal static string AnvilSpark => Text.Get("compendium_anvil_spark");
+        internal static string Eldhrimnir => Text.Get("compendium_eldhrimnir");
+        // {0}: how long the call lasts, {1}: the Rally Call key.
+        internal static string RallyHorn => Text.Get("compendium_rally_horn");
         // {0}: pause between raids, {1}: radius in meters.
-        internal const string Crimson =
-            "Raids keep coming to the obliterator, one after another, {0} apart, picked among those the players within {1} m are ready for, " +
-            "with no wait and no base needed; lightning strikes the obliterator as each new raid comes. No other raid starts anywhere, and " +
-            "raid creatures only spawn inside. The sky turns to a blood moon and the area is marked on everyone's map.\n" +
-            "A shield bubble covers it: nobody and no creature gets in or out, no portal into or out of it works, nothing can be built, " +
-            "repaired or torn down inside, and no rite but the Sanctuary Rite can be performed there. No Domain rite works within it while " +
-            "it goes on.\n";
+        internal static string Crimson => Text.Get("compendium_crimson");
         // {0}: the reward for each kill.
-        internal const string CrimsonReward =
-            "Each kill inside shows in the top left corner: survive to the end and the obliterator holds {0} for each kill. ";
-        internal const string CrimsonNoReward = "Each kill inside shows in the top left corner. ";
-        internal const string CrimsonEnd =
-            "However it ends, the hostile creatures still inside die and drop nothing. It breaks off with no reward if the obliterator is " +
-            "destroyed, everyone inside falls or leaves, or the Sanctuary or Equilibrium Rite ends it. Only one Crimson or Ragnarök Rite " +
-            "can go on at a time.";
+        internal static string CrimsonReward => Text.Get("compendium_crimson_reward");
+        internal static string CrimsonNoReward => Text.Get("compendium_crimson_no_reward");
+        internal static string CrimsonEnd => Text.Get("compendium_crimson_end");
         // {0}: how many bosses, {1}: pause between bosses, {2}: radius in meters.
-        internal const string Ragnarok =
-            "A boss rush: {0} bosses rise at the obliterator one after another, weakest first, {1} apart, picked among those every player " +
-            "within {2} m has slain (with too few, some come again). If nobody inside has slain any boss, nothing rises. Which bosses come " +
-            "is only seen as each rises. The sky burns ember and gold and the area is marked on everyone's map.\n" +
-            "A shield bubble covers it like the Crimson Rite's: nobody gets in or out, bosses can't leave, no portal into or out of it " +
-            "works, nothing can be built, repaired or torn down inside, and no rite but the Sanctuary Rite can be performed there.\n" +
-            "Slay them all in time and lightning strikes the obliterator, which holds treasure: one roll for each boss, richer for stronger " +
-            "bosses. However it ends, the bosses and creatures still inside vanish and drop nothing. It breaks off with no reward if the " +
-            "time runs out, the obliterator is destroyed, everyone inside falls or leaves, or the Sanctuary or Equilibrium Rite ends it. " +
-            "Only one Crimson or Ragnarök Rite can go on at a time.";
-        internal const string Sanctuary =
-            "Ends the raid going on in the world at once, and any Crimson or Ragnarök Rite, without its reward. The only rite that can be " +
-            "performed within their bubble: to bail out, bring its item, have someone outside perform it, or let the enemies destroy the " +
-            "obliterator.";
-        internal const string Reset = "Ends every rite going on at once, except the Domain rites and blessings.";
+        internal static string Ragnarok => Text.Get("compendium_ragnarok");
+        // {0}: radius in meters, {1}: the elites' bubbles' radius.
+        internal static string HoardBane => Text.Get("compendium_hoard_bane");
+        internal static string Sanctuary => Text.Get("compendium_sanctuary");
+        internal static string Reset => Text.Get("compendium_reset");
+        internal static string SunFall => Text.Get("compendium_sun_fall");
+        internal static string NaturesRebound => Text.Get("compendium_natures_rebound");
         // {0}: share given back, in percent.
-        internal const string Unmaking =
-            "Every craftable weapon, tool, shield and piece of armor burnt with it gives back {0}% of what it took to make and upgrade, at least 1 of each material " +
-            "(levels above 4 give back what level 4 does). Everything else burns as usual.";
-        internal const string UnmakingUpgradeMaterials = " Gear upgraded past level 4 also gives back that share of the battle idols paid at the upgrade altar.";
+        internal static string Unmaking => Text.Get("compendium_unmaking");
+        internal static string UnmakingUpgradeMaterials => Text.Get("compendium_unmaking_upgrade_materials");
+        // {0}: the rite's radius in meters.
+        internal static string ElderSprout => Text.Get("compendium_elder_sprout");
+        internal static string PlumeWard => Text.Get("compendium_plume_ward");
+        internal static string SentrySight => Text.Get("compendium_sentry_sight");
+        internal static string TaprootSurge => Text.Get("compendium_taproot_surge");
+        internal static string MantleAnchor => Text.Get("compendium_mantle_anchor");
+        internal static string PrimalHearth => Text.Get("compendium_primal_hearth");
+        internal static string HearthKindle => Text.Get("compendium_hearth_kindle");
+        internal static string ScaldDrift => Text.Get("compendium_scald_drift");
+        internal static string TetherLock => Text.Get("compendium_tether_lock");
+        internal static string StriderGirth => Text.Get("compendium_strider_girth");
+        internal static string SecondKindle => Text.Get("compendium_second_kindle");
+        internal static string MorgenPouch => Text.Get("compendium_morgen_pouch");
+        internal static string TendrilDraw => Text.Get("compendium_tendril_draw");
+        internal static string SentrySparesAnimals => Text.Get("compendium_sentry_spares_animals");
     }
 
     internal static class DebugMessages
@@ -525,24 +932,29 @@ internal static class Constants
         internal const string RequestCheckConfig = "Please check your config entries for spelling and format!";
     }
 
-    // Sections are numbered as the rites page groups them: atmospheric, celestial, biome mastery, domain, blessings,
-    // kinship, reckoning.
+    // Sections are named "<group number> - <group> - <rite>", numbered as the rites page groups them (atmospheric, celestial,
+    // biome mastery, domain, blessings, kinship, reckoning), so Configuration Manager lists them in that order and a new
+    // rite never renumbers the others. Per-player settings come last (8 - Interface, 9 - Effects).
     internal static class Groups
     {
         internal static class General
         {
-            internal const string Group = "01 - General";
+            internal const string Group = "0 - General";
+            // Settings for a whole rite group sit in a section of the group's own name, listed before its rites.
+            internal const string AtmosphericGroup = "1 - Atmospheric";
+            internal const string DomainGroup = "4 - Domain";
+            internal const string BlessingsGroup = "5 - Blessings";
 
             internal static readonly ConfigInfo<WeatherPermission> WhoCanChange = new(
                 Group,
                 "Who Can Change Weather",
                 "Who may perform rites with the obliterator. Anyone: every player with the mod. " +
-                "AdminsOnly: only server admins (and the host). Others' key items just burn as usual.",
+                "AdminsOnly: only server admins (and the host). Others' key items are just obliterated as usual.",
                 WeatherPermission.Anyone,
                 true);
 
             internal static readonly ConfigInfo<WeatherBiomes> AffectedBiomes = new(
-                Group,
+                AtmosphericGroup,
                 "Affected Biomes",
                 "Biomes where weather rites (Clear Sky, Tempest, Downpour, Shrouding, Aurora) show. Elsewhere the biome keeps its own " +
                 "weather while the rite goes on. Each weather rite shows as that biome's own kind of it (see its Environments setting). " +
@@ -552,21 +964,23 @@ internal static class Constants
                 true);
 
             internal static readonly ConfigInfo<float> DomainRadius = new(
-                Group,
+                DomainGroup,
                 "Domain Rites Radius",
                 new ConfigDescription(
-                    "How far from their obliterator the Domain rites (Packward, Carrion, Verdant, Vat-Boil, Pitch-Bellows, Amber-Mend) work, in " +
+                    "How far from their obliterator the Domain rites (Packward, Carrion, Verdant, Vat-Boil, Pitch-Bellows, Kindred, Harrow-Spur, Amber-Mend, " +
+                    "Sovereign Ward, Hearth-Haul, Aether-Clear, Elder-Sprout, Sentry-Sight, Taproot-Surge, Pitch-Seal, Primal-Hearth, " +
+                    "Hearth-Kindle) work, in " +
                     "meters. Their status and message only show this near it.",
                     new AcceptableValueRange<float>(5f, 500f)),
                 100f,
                 true);
 
             internal static readonly ConfigInfo<float> BlessingRange = new(
-                Group,
+                BlessingsGroup,
                 "Blessings Range",
                 new ConfigDescription(
-                    "How close to the obliterator players must stand when it burns to receive a blessing (Crypt Delver, Glacial " +
-                    "Satiety, Vein-Shatter, Carapace Temper, Grave-Bind, Fortune's Boon, Luminary, Abyssal Draw, Tailwind), in " +
+                    "How close to the obliterator players must stand when its thunder strikes to receive a blessing (Crypt Delver, Glacial " +
+                    "Satiety, Vein-Shatter, Carapace Temper, Grave-Bind, Fortune's Boon, Luminary, Abyssal Draw, Fair-Wind), in " +
                     "meters. 10 is the range Forsaken powers are shared in.",
                     new AcceptableValueRange<float>(2f, 100f)),
                 10f,
@@ -593,25 +1007,28 @@ internal static class Constants
         // ---- Atmospheric ----
 
         internal static readonly RiteSettings Clear = new(
-            "02 - Clear Sky Rite",
+            "1 - Atmospheric - Clear Sky",
             "the Clear Sky Rite (clear skies)",
             "SurtlingCore",
             "a surtling core",
             "No rain, snow or fog: for building, farming and travelling in peace. Cold biomes stay as cold as their own weather makes them.",
             true,
+            amount: 2,
+            minutes: 20f,
             environments: "Default: Clear, Mistlands: Mistlands_clear, AshLands: Ashlands_ashrain_clear");
 
         internal static readonly RiteSettings Thunderstorm = new(
-            "03 - Tempest Rite",
+            "1 - Atmospheric - Tempest",
             "the Tempest Rite (a thunderstorm)",
             "CopperOre",
             "copper ore",
             "Strong wind for sailing, and the weather serpents come out in. A snowstorm in the mountains.",
             true,
+            minutes: 20f,
             environments: "Default: ThunderStorm, Mountain: SnowStorm, Mistlands: Mistlands_thunder, AshLands: Ashlands_storm");
 
         internal static readonly RiteSettings Rain = new(
-            "04 - Downpour Rite",
+            "1 - Atmospheric - Downpour",
             "the Downpour Rite (rain)",
             "Ooze",
             "ooze",
@@ -619,40 +1036,57 @@ internal static class Constants
             "cinders from lighting more (the Tempest Rite does too).",
             true,
             amount: 2,
+            minutes: 20f,
             environments: "Default: Rain, Meadows: LightRain, Swamp: SwampRain, Mountain: Snow, Mistlands: Mistlands_rain, AshLands: Ashlands_ashrain");
 
         internal static readonly RiteSettings Mist = new(
-            "05 - Shrouding Rite",
+            "1 - Atmospheric - Shrouding",
             "the Shrouding Rite (mist)",
             "Cloudberry",
             "cloudberries",
             "Fog that hides what is far away.",
             true,
             amount: 3,
+            minutes: 20f,
             environments: "Default: Misty, BlackForest: DeepForest Mist, Mistlands: Mistlands_clear, AshLands: Ashlands_misty");
 
         internal static readonly RiteSettings Aurora = new(
-            "06 - Aurora Rite",
+            "1 - Atmospheric - Aurora",
             "the Aurora Rite (auroras and calm winds)",
-            "SilverNecklace",
-            "a silver necklace",
+            "Crystal",
+            "crystals",
             "A clear sky with shimmering auroras at night, like the Deep North's, and calm, quiet winds. " + CustomEnvironmentHelp,
             true,
+            amount: 3,
+            minutes: 20f,
             environments: "Default: " + CustomEnvironmentNames.Aurora);
+
+        internal static readonly RiteSettings Reset = new(
+            "1 - Atmospheric - Equilibrium",
+            "the Equilibrium Rite (ends the atmospheric rites)",
+            "BoneFragments",
+            "bone fragments",
+            "Ends the atmospheric rites going on (Clear Sky, Tempest, Downpour, Shrouding, Aurora) at once, so the world's own " +
+            "weather comes back. Other rites are left be.",
+            true,
+            lasts: false,
+            amount: 9);
 
         // ---- Celestial ----
 
         internal static readonly RiteSettings PolarDay = new(
-            "07 - Sun Zenith Rite",
+            "2 - Celestial - Sun Zenith",
             "the Sun Zenith Rite (polar day)",
             "Ruby",
             "a ruby",
             "It is day all the time: the sun stays up, creatures spawn as by day and night creatures leave. Time goes on: days are " +
             "counted, clocks show the real time, and beds go by the real clock.",
-            true);
+            true,
+            amount: 2,
+            minutes: 60f);
 
         internal static readonly RiteSettings PolarNight = new(
-            "08 - Midnight Rite",
+            "2 - Celestial - Midnight",
             "the Midnight Rite (polar night)",
             "SilverOre",
             "silver ore",
@@ -661,28 +1095,38 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings GaleBreath = new(
-            "09 - Gale-Breath Rite",
+            "2 - Celestial - Gale-Breath",
             "the Gale-Breath Rite (the strongest wind)",
-            "FreezeGland",
-            "freeze glands",
+            "DragonTear",
+            "a dragon tear",
             "The wind blows as hard as it can, everywhere, for everyone with the mod. Only its strength: it still turns with the " +
-            "weather. With the Tailwind Rite it is behind your ship at full strength.",
+            "weather. With the Fair-Wind Rite it is never against your ship and always at full strength.",
+            true);
+
+        internal static readonly RiteSettings SunFall = new(
+            "2 - Celestial - Sun-Fall",
+            "the Sun-Fall Rite (ends the celestial rites)",
+            "GreydwarfEye",
+            "greydwarf eyes",
+            "Ends the celestial rites going on (Sun Zenith, Midnight, Gale-Breath) at once, so day, night and wind go back to " +
+            "their own course. Other rites are left be.",
             true,
-            amount: 3);
+            lasts: false,
+            amount: 8);
 
         // ---- Biome mastery ----
 
         internal static readonly RiteSettings NoMist = new(
-            "10 - True Sight Rite",
+            "3 - Biome Mastery - True Sight",
             "the True Sight Rite (no Mistlands mist)",
-            "Eitr",
-            "refined eitr",
+            "DvergrKeyFragment",
+            "a sealbreaker fragment",
             "The Mistlands mist is gone, for you and for what creatures can see. Off by default: it takes away much of the Mistlands' challenge.",
             true,
-            amount: 3);
+            minutes: 60f);
 
         internal static readonly RiteSettings Sootfall = new(
-            "11 - Sootfall Rite",
+            "3 - Biome Mastery - Sootfall",
             "the Sootfall Rite (no Ashlands smoke or heat haze)",
             "MushroomSmokePuff",
             "smoke puffs",
@@ -690,9 +1134,8 @@ internal static class Constants
             true,
             amount: 3);
 
-
         internal static readonly RiteSettings AbyssalSurge = new(
-            "12 - Abyssal Surge Rite",
+            "3 - Biome Mastery - Abyssal Surge",
             "the Abyssal Surge Rite (more serpents and fish)",
             "SerpentScale",
             "serpent scales",
@@ -722,10 +1165,21 @@ internal static class Constants
             3f,
             true);
 
+        internal static readonly RiteSettings NaturesRebound = new(
+            "3 - Biome Mastery - Natures Rebound",
+            "the Nature's Rebound Rite (ends the biome mastery rites)",
+            "Guck",
+            "guck",
+            "Ends the biome mastery rites going on (True Sight, Sootfall, Abyssal Surge) at once, so mist, smoke and sea go back " +
+            "to their own ways. Other rites are left be.",
+            true,
+            lasts: false,
+            amount: 3);
+
         // ---- Domain ----
 
         internal static readonly RiteSettings Packward = new(
-            "13 - Packward Rite",
+            "4 - Domain - Packward",
             "the Packward Rite (creatures shun the area)",
             "WolfFang",
             "wolf fangs",
@@ -747,13 +1201,13 @@ internal static class Constants
         internal static readonly ConfigInfo<float> PackwardFightSeconds = new(
             Packward.Enabled.Group,
             "Fight Back Seconds",
-            new ConfigDescription("For how many seconds after it was last hurt a creature fights instead of shunning the area. Its pack nearby (same faction, within sight) fights whoever it notices for as long.",
+            new ConfigDescription("For how many seconds after it was last hurt a creature fights instead of shunning the area. Its pack nearby (same faction, within sight) fights whoever it notices for as long. Either way it runs once it hasn't sensed a foe for about 5 seconds.",
                 new AcceptableValueRange<float>(0f, 300f)),
             30f,
             true);
 
         internal static readonly RiteSettings Carrion = new(
-            "14 - Carrion Rite",
+            "4 - Domain - Carrion",
             "the Carrion Rite (creatures come)",
             "Pukeberries",
             "bukeperries",
@@ -761,7 +1215,8 @@ internal static class Constants
             "traps, pens or walls. Their senses dull while they do, but one that notices someone reacts as usual, then walks on " +
             "once it calms down. Raid creatures are left alone, and a raid reaching the area pauses the rite. Replaces a Packward Rite going on.",
             true,
-            amount: 3);
+            amount: 3,
+            minutes: 15f);
 
         internal static readonly ConfigInfo<string> CarrionExcluded = new(
             Carrion.Enabled.Group,
@@ -780,14 +1235,15 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings Verdant = new(
-            "15 - Verdant Rite",
+            "4 - Domain - Verdant",
             "the Verdant Rite (plants grow faster)",
-            "AncientSeed",
-            "ancient seeds",
+            "Root",
+            "roots",
             "Plants, crops, saplings and berry bushes within the Domain radius of the obliterator grow faster for as long as it " +
             "lasts, some now and then giving off green motes; what they grew stays after it ends.",
             true,
-            amount: 9);
+            amount: 3,
+            minutes: 45f);
 
         internal static readonly ConfigInfo<float> VerdantGrowthMultiplier = new(
             Verdant.Enabled.Group,
@@ -799,15 +1255,16 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings VatBoil = new(
-            "16 - Vat-Boil Rite",
+            "4 - Domain - Vat-Boil",
             "the Vat-Boil Rite (fermenting and cooking go faster)",
             "Bilebag",
             "bile bags",
             "Fermenters and cooking stations (cooking station, iron cooking station, oven) within the Domain radius of the obliterator " +
             "work faster, some now and then giving off golden motes, and nothing cooked there burns while it lasts; what they did stays " +
-            "after it ends. 30 minutes at 2x: about one fermentation.",
+            "after it ends. 20 minutes at 2x: about one fermentation.",
             true,
-            amount: 2);
+            amount: 2,
+            minutes: 20f);
 
         internal static readonly ConfigInfo<float> VatBoilSpeedMultiplier = new(
             VatBoil.Enabled.Group,
@@ -819,14 +1276,14 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings PitchBellows = new(
-            "17 - Pitch-Bellows Rite",
+            "4 - Domain - Pitch-Bellows",
             "the Pitch-Bellows Rite (smelters and kilns work faster)",
-            "Tar",
-            "tar",
-            "Smelters, blast furnaces, charcoal kilns and eitr refineries within the Domain radius of the obliterator work faster, some " +
+            "CharredBone",
+            "charred bones",
+            "Smelters, blast furnaces and charcoal kilns (not eitr refineries) within the Domain radius of the obliterator work faster, some " +
             "now and then giving off ember motes, using up ore and fuel as usual; what they made stays after it ends.",
             true,
-            amount: 5);
+            amount: 8);
 
         internal static readonly ConfigInfo<float> PitchBellowsSpeedMultiplier = new(
             PitchBellows.Enabled.Group,
@@ -838,8 +1295,80 @@ internal static class Constants
             2f,
             true);
 
+        internal static readonly RiteSettings Kindred = new(
+            "4 - Domain - Kindred",
+            "the Kindred Rite (tamed animals breed and grow faster)",
+            "ChickenEgg",
+            "eggs",
+            "Tamed animals within the Domain radius of the obliterator breed faster: they fall pregnant and give birth (hens lay) " +
+            "sooner, their young grow up faster, and more of them can live close together before they stop breeding. Now and " +
+            "then a few of them give off hearts. What they did stays after it ends.",
+            true,
+            amount: 10,
+            minutes: 60f);
+
+        internal static readonly ConfigInfo<float> KindredGrowthMultiplier = new(
+            Kindred.Enabled.Group,
+            "Breeding Speed Multiplier",
+            new ConfigDescription(
+                "How many times as fast tamed animals under the Kindred Rite fall pregnant, carry their young (hens: lay eggs) and " +
+                "grow up, and warm eggs hatch: 2 is twice as fast.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly ConfigInfo<float> KindredCrowdMultiplier = new(
+            Kindred.Enabled.Group,
+            "Crowd Limit Multiplier",
+            new ConfigDescription(
+                "Tamed animals stop breeding once too many of their kind are close by (4 boars within 10 m, say). Under the Kindred " +
+                "Rite that limit is this many times as high: 2 lets twice as many live together.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly RiteSettings HarrowSpur = new(
+            "4 - Domain - Harrow-Spur",
+            "the Harrow-Spur Rite (creature spawners spawn faster)",
+            "Ectoplasm",
+            "ectoplasm",
+            "Creature spawners within the Domain radius of the obliterator (Greydwarf nests, Draugr body piles, bone piles, " +
+            "charred spawners, any object with the game's spawner part, from other mods too) spawn creatures faster and keep " +
+            "more of them around before they stop. For farming what they drop.",
+            true,
+            amount: 3);
+
+        internal static readonly ConfigInfo<float> HarrowSpurSpeedMultiplier = new(
+            HarrowSpur.Enabled.Group,
+            "Spawn Speed Multiplier",
+            new ConfigDescription(
+                "How many times as fast spawners under the Harrow-Spur Rite spawn: 3 is three times as fast (a Greydwarf nest " +
+                "every 10 seconds instead of 30).",
+                new AcceptableValueRange<float>(1f, 10f)),
+            3f,
+            true);
+
+        internal static readonly ConfigInfo<float> HarrowSpurCapMultiplier = new(
+            HarrowSpur.Enabled.Group,
+            "Creature Cap Multiplier",
+            new ConfigDescription(
+                "A spawner stops once enough of its creatures are around it (a Greydwarf nest: 3 close by). Under the " +
+                "Harrow-Spur Rite that limit, close by and in all, is this many times as high: 2 lets twice as many gather.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly ConfigInfo<string> HarrowSpurExcluded = new(
+            HarrowSpur.Enabled.Group,
+            "Excluded Spawners",
+            "Prefab names of the spawners the Harrow-Spur Rite leaves alone, separated by commas (Spawner_GreydwarfNest, " +
+            "BonePileSpawner...). The names of the spawners it reaches are written to the BepInEx log the first time. " +
+            "Empty: every spawner in its area.",
+            "",
+            true);
+
         internal static readonly RiteSettings AmberMend = new(
-            "18 - Amber-Mend Rite",
+            "4 - Domain - Amber-Mend",
             "the Amber-Mend Rite (buildings mend)",
             "Resin",
             "resin",
@@ -850,14 +1379,15 @@ internal static class Constants
             minutes: 5f);
 
         internal static readonly RiteSettings SovereignWard = new(
-            "19 - Sovereign Ward Rite",
+            "4 - Domain - Sovereign Ward",
             "the Sovereign Ward Rite (buildings can't be harmed)",
             "QueenDrop",
             "a majestic carapace",
             "Built pieces within the Domain radius of the obliterator (walls, portals, chests, workbenches...) take no damage from " +
             "anything: they can only be taken down on purpose, with the hammer. Hostile projectiles (Gjall fireballs, catapult " +
-            "rocks, drake frost) crumble harmlessly as they cross into it.",
-            true);
+            "rocks, drake frost) crumble harmlessly as they cross into it, or a tenth of a second after being shot within it.",
+            true,
+            minutes: 60f);
 
         internal static readonly ConfigInfo<Toggle> SovereignSanctuary = new(
             SovereignWard.Enabled.Group,
@@ -866,14 +1396,184 @@ internal static class Constants
             Toggle.Off,
             true);
 
+        internal static readonly RiteSettings HearthHaul = new(
+            "4 - Domain - Hearth-Haul",
+            "the Hearth-Haul Rite (players carry more)",
+            "BlackMetalScrap",
+            "black metal scrap",
+            "Players within the Domain radius of the obliterator can carry more, and carrying too much only slows them, as " +
+            "usual: walking with too much uses up no stamina, and stamina comes back as usual. For hauling ore and building " +
+            "material home.",
+            true,
+            amount: 3,
+            minutes: 30f);
+
+        internal static readonly ConfigInfo<float> HearthHaulCarryBonus = new(
+            HearthHaul.Enabled.Group,
+            "Carry Weight Bonus",
+            new ConfigDescription(
+                "How much more players under the Hearth-Haul Rite can carry: 300 doubles a player's usual 300 (a Megingjord " +
+                "belt adds 150 on top). The world's carry weight modifier applies to it too.",
+                new AcceptableValueRange<float>(0f, 2000f)),
+            300f,
+            true);
+
+        internal static readonly ConfigInfo<Toggle> HearthHaulFreeStamina = new(
+            HearthHaul.Enabled.Group,
+            "Free Stamina",
+            "On: under the Hearth-Haul Rite, carrying too much only slows players (no running, jumping or dodging, as usual): " +
+            "walking uses up no stamina and stamina comes back as usual. Off: carrying too much costs stamina as usual.",
+            Toggle.On,
+            true);
+
+        internal static readonly RiteSettings AetherClear = new(
+            "4 - Domain - Aether-Clear",
+            "the Aether-Clear Rite (no Mistlands mist in the area)",
+            "Wisp",
+            "wisps",
+            "The Domain radius of the obliterator is free of Mistlands mist, as around a Wisplight, only far bigger: no mist is " +
+            "made there, what drifts in is pushed back out, and creatures inside see as if there were no mist.",
+            true,
+            amount: 20,
+            minutes: 60f);
+
+        internal static readonly RiteSettings ElderSprout = new(
+            "4 - Domain - Elder-Sprout",
+            "the Elder-Sprout Rite (tree stumps grow back as saplings)",
+            "AncientSeed",
+            "ancient seeds",
+            "Tree stumps within the Domain radius of the obliterator are taken away one after another, about one each second, each " +
+            "with a puff of splinters, and a sapling of the same tree is planted where it stood, turned a random way. Trees felled " +
+            "while it goes on sprout too. Stumps of trees no sapling grows into (swamp trees, the old meadow stumps) stay.",
+            true,
+            amount: 15,
+            minutes: 5f);
+
+        internal static readonly RiteSettings SentrySight = new(
+            "4 - Domain - Sentry-Sight",
+            "the Sentry-Sight Rite (ballistas shoot every foe)",
+            "MechanicalSpring",
+            "a mechanical spring",
+            "Ballistas within the Domain radius of the obliterator aim at every hostile creature they see, whatever trophies are " +
+            "set in them, and never at players or tamed animals. They still need bolts.",
+            true,
+            minutes: 60f);
+
+        internal static readonly ConfigInfo<Toggle> SentrySpareAnimals = new(
+            SentrySight.Enabled.Group,
+            "Spare Passive Animals",
+            "On: ballistas under the Sentry-Sight Rite leave alone animals that only flee (deer, hares...). Off: they shoot " +
+            "those too, like any other creature.",
+            Toggle.On,
+            true);
+
+        internal static readonly RiteSettings TaprootSurge = new(
+            "4 - Domain - Taproot-Surge",
+            "the Taproot-Surge Rite (sap flows faster)",
+            "ProustitePowder",
+            "proustite powder",
+            "Sap extractors and eitr refineries within the Domain radius of the obliterator work faster (refineries using soft " +
+            "tissue and sap as usual), and ancient Yggdrasil roots there fill up with sap faster. Some now and then give off " +
+            "glowing sap drops. What they made stays after it ends.",
+            true,
+            amount: 2,
+            minutes: 60f);
+
+        internal static readonly ConfigInfo<float> TaprootSpeedMultiplier = new(
+            TaprootSurge.Enabled.Group,
+            "Speed Multiplier",
+            new ConfigDescription(
+                "How many times as fast sap extractors and eitr refineries work under the Taproot-Surge Rite: 2 is twice as fast.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly ConfigInfo<float> TaprootRootMultiplier = new(
+            TaprootSurge.Enabled.Group,
+            "Root Refill Multiplier",
+            new ConfigDescription(
+                "How many times as fast ancient Yggdrasil roots fill up with sap again under the Taproot-Surge Rite: 2 is twice as fast.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly RiteSettings MantleAnchor = new(
+            "4 - Domain - Pitch-Seal",
+            "the Pitch-Seal Rite (dropped items stay)",
+            "Tar",
+            "tar",
+            "Items lying on the ground within the Domain radius of the obliterator never despawn, even far from any workbench: " +
+            "for farms where creatures spawn and die on their own. Creatures still spawn. Once it ends, each item's usual hour " +
+            "starts from then.",
+            true,
+            amount: 3,
+            minutes: 60f);
+
+        internal static readonly RiteSettings PrimalHearth = new(
+            "4 - Domain - Primal-Hearth",
+            "the Primal-Hearth Rite (wisps and embers come faster)",
+            "SulfurStone",
+            "sulfur",
+            "Wisp fountains and eternal pyres within the Domain radius of the obliterator draw wisps and embers more often and " +
+            "hold more of them before they are full.",
+            true,
+            minutes: 15f);
+
+        internal static readonly ConfigInfo<float> PrimalHearthSpawnMultiplier = new(
+            PrimalHearth.Enabled.Group,
+            "Draw Multiplier",
+            new ConfigDescription(
+                "How many times as often a wisp fountain or eternal pyre tries to draw a wisp or ember under the Primal-Hearth Rite: 2 is twice as often (the game tries every 10 seconds, so every 5 seconds).",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly ConfigInfo<float> PrimalHearthCapacityMultiplier = new(
+            PrimalHearth.Enabled.Group,
+            "Capacity Multiplier",
+            new ConfigDescription(
+                "How many times as many wisps or embers a wisp fountain or eternal pyre holds before it is full under the Primal-Hearth Rite: 2 is twice as many.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly RiteSettings HearthKindle = new(
+            "4 - Domain - Hearth-Kindle",
+            "the Hearth-Kindle Rite (rest comes faster)",
+            "FaderEmber",
+            "embers",
+            "Players resting by a fire within the Domain radius of the obliterator become Rested faster, and that Rested lasts " +
+            "longer. Burning fires there now and then give off little rest signs.",
+            true,
+            amount: 3,
+            minutes: 60f);
+
+        internal static readonly ConfigInfo<float> KindleRestingMultiplier = new(
+            HearthKindle.Enabled.Group,
+            "Resting Speed Multiplier",
+            new ConfigDescription(
+                "How many times as fast resting by a fire makes players Rested under the Hearth-Kindle Rite: 2 is twice as fast.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly ConfigInfo<float> KindleRestedMultiplier = new(
+            HearthKindle.Enabled.Group,
+            "Rested Duration Multiplier",
+            new ConfigDescription(
+                "How many times as long the Rested players get by a fire under the Hearth-Kindle Rite lasts: 1.5 is half as long again.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            1.5f,
+            true);
+
         internal static readonly RiteSettings Unmaking = new(
-            "20 - Unmaking Rite",
+            "7 - Reckoning - Unmaking",
             "the Unmaking Rite (gear back into materials)",
             "Thunderstone",
             "a thunderstone",
-            "Every craftable weapon, tool, shield and piece of armor burnt along with it gives back part of what it took to make " +
+            "Every craftable weapon, tool, shield and piece of armor sacrificed along with it gives back part of what it took to make " +
             "and upgrade it (station materials up to level 4; the upgrade altar's materials, like battle idols, for levels past 4 " +
-            "if Return Upgrade Materials is on). Everything else burns as usual.",
+            "if Return Upgrade Materials is on). Everything else is obliterated as usual.",
             true,
             lasts: false);
 
@@ -893,21 +1593,23 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings Grounding = new(
-            "21 - Grounding Rite",
+            "4 - Domain - Grounding",
             "the Grounding Rite (ends the Domain rites)",
             "Flint",
             "flint",
-            "Ends the Domain rites going on (Packward, Carrion, Verdant, Vat-Boil, Pitch-Bellows, Amber-Mend, Sovereign Ward) at once. The Equilibrium Rite leaves them be.",
+            "Ends the Domain rites going on (Packward, Carrion, Verdant, Vat-Boil, Pitch-Bellows, Kindred, Harrow-Spur, Amber-Mend, Sovereign Ward, Hearth-Haul, " +
+            "Aether-Clear, Elder-Sprout, Sentry-Sight, Taproot-Surge, Pitch-Seal, Primal-Hearth, Hearth-Kindle) at once.",
             true,
-            lasts: false);
+            lasts: false,
+            amount: 2);
 
         // ---- Blessings: only for the players within the blessing range when the obliterator burns ----
 
-        private const string BlessingNote = " A blessing: only players within the Blessings Range of the obliterator when it burns " +
-            "receive it, struck by its lightning (no harm done). It ends at death; the Equilibrium Rite leaves it be.";
+        private const string BlessingNote = " A blessing: only players within the Blessings Range of the obliterator when its thunder strikes " +
+            "receive it, struck by its lightning (no harm done). It ends at death.";
 
         internal static readonly RiteSettings CryptDelver = new(
-            "22 - Crypt Delver Rite",
+            "5 - Blessings - Crypt Delver",
             "the Crypt Delver Rite (more dungeon loot)",
             "CryptKey",
             "a swamp key",
@@ -939,13 +1641,14 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings GlacialSatiety = new(
-            "23 - Glacial Satiety Rite",
+            "5 - Blessings - Glacial Satiety",
             "the Glacial Satiety Rite (food fades slower)",
-            "DragonTear",
-            "a dragon tear",
+            "FreezeGland",
+            "freeze glands",
             "Eaten food fades only down to the Food Floor Multiplier of what it gives, instead of half, until it runs out." + BlessingNote,
             true,
-            minutes: 90f);
+            amount: 3,
+            minutes: 45f);
 
         internal static readonly ConfigInfo<float> FoodFloor = new(
             GlacialSatiety.Enabled.Group,
@@ -955,7 +1658,7 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings VeinShatter = new(
-            "24 - Vein-Shatter Rite",
+            "5 - Blessings - Vein-Shatter",
             "the Vein-Shatter Rite (rocks and ore shatter)",
             "HardAntler",
             "a hard antler",
@@ -987,23 +1690,23 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings CarapaceTemper = new(
-            "25 - Carapace Temper Rite",
+            "5 - Blessings - Carapace Temper",
             "the Carapace Temper Rite (gear wears slower)",
             "Mandible",
             "mandibles",
-            "Equipped weapons, tools, bows, shields and armor lose less durability." + BlessingNote,
+            "Equipped weapons, tools, bows, shields and armor last longer before they break." + BlessingNote,
             true,
             amount: 2);
 
-        internal static readonly ConfigInfo<float> WearMultiplier = new(
+        internal static readonly ConfigInfo<float> DurabilityMultiplier = new(
             CarapaceTemper.Enabled.Group,
-            "Wear Multiplier",
-            new ConfigDescription("How much of the usual durability equipped gear loses: 0.4 is 40% (60% less). 0: no wear.", new AcceptableValueRange<float>(0f, 1f)),
-            0.4f,
+            "Durability Multiplier",
+            new ConfigDescription("How many times longer equipped gear lasts: 1.75 is 75% longer (it loses 1/1.75 of the usual durability).", new AcceptableValueRange<float>(1f, 10f)),
+            1.75f,
             true);
 
         internal static readonly RiteSettings GraveBind = new(
-            "26 - Grave-Bind Rite",
+            "5 - Blessings - Grave-Bind",
             "the Grave-Bind Rite (no skill loss on death)",
             "YagluthDrop",
             "a torn spirit",
@@ -1012,22 +1715,8 @@ internal static class Constants
             true,
             minutes: 60f);
 
-        internal static readonly ConfigInfo<Toggle> GraveBeacon = new(
-            GraveBind.Enabled.Group,
-            "Tombstone Beam",
-            "Show a beam into the sky over your tombstone after a death under the Grave-Bind Rite.",
-            Toggle.On,
-            false);
-
-        internal static readonly ConfigInfo<Toggle> GraveReequip = new(
-            GraveBind.Enabled.Group,
-            "Re-Equip Gear",
-            "After a death under the Grave-Bind Rite, put the gear you wore back on once you loot your tombstone.",
-            Toggle.On,
-            false);
-
         internal static readonly RiteSettings FortunesBoon = new(
-            "27 - Fortunes Boon Rite",
+            "5 - Blessings - Fortunes Boon",
             "the Fortune's Boon Rite (more luck)",
             "Wishbone",
             "a wishbone",
@@ -1035,7 +1724,7 @@ internal static class Constants
             "harvesting crops and other pickables. At the Forge of Potential, the first upgrade that would destroy your item " +
             "doesn't: the item loses the Forge Break Penalty in levels instead, and that ends the blessing." + BlessingNote,
             true,
-            minutes: 5f);
+            minutes: 15f);
 
         internal static readonly ConfigInfo<float> LuckMultiplier = new(
             FortunesBoon.Enabled.Group,
@@ -1053,69 +1742,400 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings Luminary = new(
-            "28 - Luminary Rite",
+            "5 - Blessings - Luminary",
             "the Luminary Rite (you shine)",
-            "Wisp",
-            "wisps",
+            "Lantern",
+            "a Dvergr Lantern",
             "You shine with a warm light like a lantern, lighting the ground and walls around you, in caves and dungeons too, " +
             "and everyone with the mod sees it." + BlessingNote,
             true,
-            amount: 5);
+            minutes: 60f);
 
         internal static readonly ConfigInfo<float> LuminaryRange = new(
             Luminary.Enabled.Group,
             "Light Range",
             new ConfigDescription("How far around you the light reaches, in meters.", new AcceptableValueRange<float>(3f, 50f)),
-            16f,
+            20f,
             true);
 
-        internal static readonly ConfigInfo<float> LuminaryStrength = new(
-            Luminary.Enabled.Group,
-            "Light Strength Multiplier",
-            new ConfigDescription("How bright the light around you is: 0.5 is half as bright, 2 twice as bright. The range stays the same.", new AcceptableValueRange<float>(0.1f, 2f)),
-            1f,
-            false);
-
-        internal static readonly ConfigInfo<float> LuminaryBodyLight = new(
-            Luminary.Enabled.Group,
-            "Body Light Multiplier",
-            new ConfigDescription("How bright the soft light that keeps the shining player's body lit is: 1 as usual, lower it if the body looks too bright. 0: no body light.", new AcceptableValueRange<float>(0f, 2f)),
-            1f,
-            false);
-
-        internal static readonly ConfigInfo<Toggle> LuminaryShadows = new(
-            Luminary.Enabled.Group,
-            "Light Shadows",
-            "On: floors, ceilings and walls block the light, so it doesn't shine through to the floor above or below or the next " +
-            "room. Off: a little lighter on the graphics card, but the light goes through everything within its range. Also " +
-            "needs shadows on in the game's graphics settings.",
-            Toggle.On,
-            false);
-
         internal static readonly RiteSettings AbyssalDraw = new(
-            "29 - Abyssal Draw Rite",
+            "5 - Blessings - Abyssal Draw",
             "the Abyssal Draw Rite (items fly to you)",
             "Chitin",
             "chitin",
             "Items on the ground fly to you from much farther than the game's 2 m. An item a closer player can pick up goes to " +
             "them instead, unless their inventory is full." + BlessingNote,
             true,
-            amount: 4);
+            amount: 4,
+            minutes: 60f);
 
         internal static readonly ConfigInfo<float> DrawRange = new(
             AbyssalDraw.Enabled.Group,
             "Pickup Range",
             new ConfigDescription("How far away items fly to you from, in meters.", new AcceptableValueRange<float>(2f, 30f)),
-            12f,
+            10f,
             true);
 
-        internal static readonly RiteSettings Tailwind = new(
-            "30 - Tailwind Rite",
-            "the Tailwind Rite (wind behind your ship)",
+        internal static readonly RiteSettings FairWind = new(
+            "5 - Blessings - Fair-Wind",
+            "the Fair-Wind Rite (never a headwind)",
             "DragonEgg",
             "a dragon egg",
-            "While you sail, the wind always blows from behind, like Moder's power, also for everyone on the same ship. Only its " +
-            "direction: how strong it is stays the weather's (the Gale-Breath Rite makes it the strongest)." + BlessingNote,
+            "While you sail, the wind never blows against your ship, also for everyone on the same ship: steer into it and it " +
+            "turns aside, just enough for the sail to catch it. Any other wind stays as the weather made it. Only its direction: " +
+            "how strong it is stays the weather's (the Gale-Breath Rite makes it the strongest)." + BlessingNote,
+            true);
+
+        internal static readonly RiteSettings HushFelling = new(
+            "5 - Blessings - Hush-Felling",
+            "the Hush-Felling Rite (the wild ignores your toil)",
+            "GoblinTotem",
+            "a fuling totem",
+            "The wild ignores your toil: chopping, pickaxing and harvesting make no sound, falling logs alert no one, and while " +
+            "you gather, wild creatures have to come closer to see you. Fighting is as loud as ever." + BlessingNote,
+            true,
+            minutes: 60f);
+
+        internal static readonly ConfigInfo<float> HushNoticeMultiplier = new(
+            HushFelling.Enabled.Group,
+            "Notice Multiplier",
+            new ConfigDescription(
+                "While you gather under the Hush-Felling Rite, wild creatures (not bosses or tamed) see you only from 1/this " +
+                "as far as usual: 2 means they have to come twice as close (from 50 m down to 25 m). Gathering: " +
+                "a few seconds after you last hit a tree, log, rock or bush, unless you fought since. 1: as usual.",
+                new AcceptableValueRange<float>(1f, 5f)),
+            2f,
+            true);
+
+        internal static readonly RiteSettings DraughtFlush = new(
+            "5 - Blessings - Draught-Flush",
+            "the Draught-Flush Rite (meads work longer, recover sooner)",
+            "RoyalJelly",
+            "royal jelly",
+            "Recovery meads (health, stamina, eitr) can be drunk again sooner, and every other mead (lingering meads, resistance " +
+            "meads, barley wine and the like) lasts longer. Only meads drunk while blessed." + BlessingNote,
+            true,
+            amount: 5,
+            minutes: 45f);
+
+        internal static readonly ConfigInfo<float> DraughtRecoveryMultiplier = new(
+            DraughtFlush.Enabled.Group,
+            "Recovery Wait Multiplier",
+            new ConfigDescription(
+                "Under the Draught-Flush Rite, a recovery mead (one that restores health, stamina or eitr within a short time) " +
+                "waits this times as long before another of its kind can be drunk: 0.5 halves the wait. What it restores, and " +
+                "how fast, stays the same; the wait is never shorter than the restoring. 1: as usual.",
+                new AcceptableValueRange<float>(0.1f, 1f)),
+            0.5f,
+            true);
+
+        internal static readonly ConfigInfo<float> DraughtBuffMultiplier = new(
+            DraughtFlush.Enabled.Group,
+            "Mead Duration Multiplier",
+            new ConfigDescription(
+                "Under the Draught-Flush Rite, every other mead (lingering meads, resistance meads, barley wine, tasty mead and " +
+                "the like) lasts this times as long: 1.5 makes a 10 minute mead last 15. Anything it restores over its whole " +
+                "time is restored at the same pace, for longer. 1: as usual.",
+                new AcceptableValueRange<float>(1f, 5f)),
+            1.5f,
+            true);
+
+        internal static readonly RiteSettings SoulTether = new(
+            "5 - Blessings - Soul-Tether",
+            "the Soul-Tether Rite (your tombstones come to the obliterator)",
+            "UndeadBjornRibcage",
+            "a vile ribcage",
+            "Every tombstone of each blessed player, wherever in the world it lies, is pulled to the obliterator: set down " +
+            "around it on the ground it stands on, spread out so none sits in another or in anything there. It happens at " +
+            "once. A blessing: only players within the Blessings Range of the obliterator when its thunder strikes receive it, struck by " +
+            "its lightning (no harm done).",
+            true,
+            lasts: false);
+
+        internal static readonly ConfigInfo<float> TetherLeaveWithin = new(
+            SoulTether.Enabled.Group,
+            "Leave Tombstones Within",
+            new ConfigDescription(
+                "Under the Soul-Tether Rite, a tombstone of yours already lying this many meters or closer to the obliterator " +
+                "stays where it is; any farther away is pulled in next to it. Lower it to pull in tombstones close by too: 0 " +
+                "pulls every one (those already by the obliterator may be set down again in another free spot).",
+                new AcceptableValueRange<float>(0f, 16f)),
+            16f,
+            true);
+
+        internal static readonly RiteSettings TundraShroud = new(
+            "5 - Blessings - Tundra Shroud",
+            "the Tundra Shroud Rite (rain and night don't chill you)",
+            "LeatherScraps, DeerHide, TrollHide, BjornHide, WolfPelt, LoxPelt, ScaleHide, AskHide, MooseHide, SealHide",
+            "different hides and pelts",
+            "Rain no longer makes you Wet and nightfall (or any merely cold weather) no longer makes you Cold. Freezing (the " +
+            "mountains, blizzards, the Deep North's frost) is untouched: that still needs frost resistance or a fire. Water " +
+            "still makes you Wet when you swim or wade in it, but you dry off as fast as by a fire." + BlessingNote,
+            true,
+            amount: 3,
+            minutes: 30f,
+            distinctKeys: true);
+
+        internal static readonly ConfigInfo<float> ShroudDryingMultiplier = new(
+            TundraShroud.Enabled.Group,
+            "Drying Speed Multiplier",
+            new ConfigDescription(
+                "Under the Tundra Shroud Rite, Wet (from swimming or wading) wears off this times as fast: 11 is as fast as " +
+                "drying by a fire. By a fire it dries as fast as it does there. 1: as usual.",
+                new AcceptableValueRange<float>(1f, 50f)),
+            11f,
+            true);
+
+        internal static readonly RiteSettings ScaldDrift = new(
+            "5 - Blessings - Scald-Drift",
+            "the Scald-Drift Rite (boiling seas and lava burn less)",
+            "BonemawSerpentTooth",
+            "a bonemaw tooth",
+            "The Ashlands' boiling sea burns you far less, and lava no longer kills you at once." + BlessingNote,
+            true,
+            minutes: 45f);
+
+        internal static readonly ConfigInfo<float> ScaldDamageMultiplier = new(
+            ScaldDrift.Enabled.Group,
+            "Boiling Water Damage Multiplier",
+            new ConfigDescription(
+                "How much damage the Ashlands' boiling sea does under the Scald-Drift Rite: 0.25 is a quarter of it.",
+                new AcceptableValueRange<float>(0f, 1f)),
+            0.25f,
+            true);
+
+        internal static readonly ConfigInfo<float> ScaldTickSlowdown = new(
+            ScaldDrift.Enabled.Group,
+            "Boiling Water Burn Interval Multiplier",
+            new ConfigDescription(
+                "How many times as long the boiling sea waits between burns under the Scald-Drift Rite: 10 burns ten times less often.",
+                new AcceptableValueRange<float>(1f, 50f)),
+            10f,
+            true);
+
+        internal static readonly ConfigInfo<float> ScaldLavaDamageMultiplier = new(
+            ScaldDrift.Enabled.Group,
+            "Lava Damage Multiplier",
+            new ConfigDescription(
+                "How much damage lava does under the Scald-Drift Rite: 0.5 is half of it. Lava stays deadly, just not at once.",
+                new AcceptableValueRange<float>(0f, 1f)),
+            0.5f,
+            true);
+
+        internal static readonly ConfigInfo<float> ScaldLavaTickSlowdown = new(
+            ScaldDrift.Enabled.Group,
+            "Lava Burn Interval Multiplier",
+            new ConfigDescription(
+                "How many times as long lava waits between burns under the Scald-Drift Rite: 5 burns five times less often.",
+                new AcceptableValueRange<float>(1f, 50f)),
+            5f,
+            true);
+
+        internal static readonly RiteSettings TetherLock = new(
+            "5 - Blessings - Tether-Lock",
+            "the Tether-Lock Rite (your harpoon holds)",
+            "MorgenSinew",
+            "morgen sinew",
+            "Your harpoon line is harder to snap, pulling on it uses less stamina, and it reels what it holds in faster. It works " +
+            "fully when the harpooned creature is handled by a game with the mod (usually yours)." + BlessingNote,
+            true);
+
+        internal static readonly ConfigInfo<float> TetherStrengthMultiplier = new(
+            TetherLock.Enabled.Group,
+            "Line Strength Multiplier",
+            new ConfigDescription(
+                "How many times as far your harpoon line stretches before it snaps under the Tether-Lock Rite: 2 is twice as far.",
+                new AcceptableValueRange<float>(1f, 10f)),
+            2f,
+            true);
+
+        internal static readonly ConfigInfo<float> TetherStaminaMultiplier = new(
+            TetherLock.Enabled.Group,
+            "Pull Stamina Multiplier",
+            new ConfigDescription(
+                "How much stamina pulling on your harpoon line uses under the Tether-Lock Rite: 0.5 is half.",
+                new AcceptableValueRange<float>(0f, 1f)),
+            0.5f,
+            true);
+
+        internal static readonly ConfigInfo<float> TetherReelMultiplier = new(
+            TetherLock.Enabled.Group,
+            "Reel Speed Multiplier",
+            new ConfigDescription(
+                "How many times as fast your harpoon line reels in what it holds under the Tether-Lock Rite: 1.5 is half as fast again.",
+                new AcceptableValueRange<float>(1f, 5f)),
+            1.5f,
+            true);
+
+        internal static readonly RiteSettings StriderGirth = new(
+            "5 - Blessings - Strider-Girth",
+            "the Strider-Girth Rite (your mount gets its breath back fast and fights for you)",
+            "AskBladder",
+            "an asksvin bladder",
+            "The mount you ride gets its stamina back faster and attacks on your attack keys." + BlessingNote,
+            true,
+            minutes: 45f);
+
+        internal static readonly ConfigInfo<float> StriderRegenMultiplier = new(
+            StriderGirth.Enabled.Group,
+            "Stamina Regen Multiplier",
+            new ConfigDescription(
+                "How many times as fast the mount you ride gets its stamina back under the Strider-Girth Rite: 10 is ten times as fast.",
+                new AcceptableValueRange<float>(1f, 30f)),
+            10f,
+            true);
+
+        internal static readonly ConfigInfo<float> StriderAttackStamina = new(
+            StriderGirth.Enabled.Group,
+            "Attack Stamina",
+            new ConfigDescription(
+                "How much stamina the mount uses for its attack (your attack key) under the Strider-Girth Rite. A mount has about 100. Without enough, it doesn't attack.",
+                new AcceptableValueRange<float>(0f, 100f)),
+            10f,
+            true);
+
+        internal static readonly ConfigInfo<float> StriderSecondaryStamina = new(
+            StriderGirth.Enabled.Group,
+            "Secondary Attack Stamina",
+            new ConfigDescription(
+                "How much stamina the mount uses for its second attack (your secondary attack key) under the Strider-Girth Rite.",
+                new AcceptableValueRange<float>(0f, 100f)),
+            20f,
+            true);
+
+        internal static readonly ConfigInfo<string> StriderSwappedMounts = new(
+            StriderGirth.Enabled.Group,
+            "Swapped Attack Mounts",
+            "Prefab names of the mounts whose two attacks swap keys under the Strider-Girth Rite, separated by commas. By " +
+            "default your attack key uses a mount's bite or swipe and the secondary attack key its stomp or slam.",
+            "Asksvin,Moose",
+            true);
+
+        internal static readonly RiteSettings SecondKindle = new(
+            "5 - Blessings - Second-Kindle",
+            "the Second-Kindle Rite (cheat death once)",
+            "FaderDrop",
+            "kindled ribs",
+            "The next blow that would kill you doesn't: you are left with part of your health, flames burst from you and foes " +
+            "nearby are thrown back and staggered (no damage done). Then the blessing ends." + BlessingNote,
+            true,
+            minutes: 60f);
+
+        internal static readonly ConfigInfo<float> KindleHealthShare = new(
+            SecondKindle.Enabled.Group,
+            "Health Restored Multiplier",
+            new ConfigDescription(
+                "How much of your health you are left with when the Second-Kindle Rite saves you: 0.4 is 40%.",
+                new AcceptableValueRange<float>(0.05f, 1f)),
+            0.4f,
+            true);
+
+        internal static readonly ConfigInfo<float> KindleKnockbackRadius = new(
+            SecondKindle.Enabled.Group,
+            "Knockback Radius",
+            new ConfigDescription(
+                "How far around you foes are thrown back when the Second-Kindle Rite saves you, in meters.",
+                new AcceptableValueRange<float>(0f, 30f)),
+            6f,
+            true);
+
+        internal static readonly RiteSettings PlumeWard = new(
+            "5 - Blessings - Plume-Ward",
+            "the Plume-Ward Rite (soft falls)",
+            "CelestialFeather",
+            "celestial feathers",
+            "You take less fall damage, and the first fall that would still kill you does you no harm at all, which uses the " +
+            "blessing up. Each softened landing gives off a puff of pale down." + BlessingNote,
+            true,
+            amount: 2,
+            minutes: 60f);
+
+        internal static readonly ConfigInfo<float> PlumeWardFallDamage = new(
+            PlumeWard.Enabled.Group,
+            "Fall Damage Multiplier",
+            new ConfigDescription(
+                "How much fall damage you take under the Plume-Ward Rite: 0.5 is half of it. A fall that would still kill you does no harm, and ends the blessing.",
+                new AcceptableValueRange<float>(0f, 1f)),
+            0.5f,
+            true);
+
+        internal static readonly RiteSettings MorgenPouch = new(
+            "5 - Blessings - Morgen-Pouch",
+            "the Morgen-Pouch Rite (carry your mount and pets)",
+            "MorgenHeart",
+            "morgen hearts",
+            "While it lasts, the Morgen-Pouch ability beside the Guardian Power pulls the tamed creatures you petted last, near " +
+            "you, into a pocket (a mount, a wolf, a boar, a chicken...), just as they are: health, stars, name and saddle. Use it " +
+            "again to let them out around you. They go through portals with you. When it runs out, or you die, they come " +
+            "out where you are. Summoned creatures can be pocketed too; a new summon over your limit takes the one that started " +
+            "following you first, even from the pocket." + BlessingNote,
+            true,
+            amount: 3,
+            minutes: 30f);
+
+        internal static readonly ConfigInfo<int> MorgenPouchCount = new(
+            MorgenPouch.Enabled.Group,
+            "Creatures",
+            new ConfigDescription(
+                "How many tamed creatures the Morgen-Pouch Rite holds: those you petted last, within Capture Range.",
+                new AcceptableValueRange<int>(1, 10)),
+            3,
+            true);
+
+        internal static readonly ConfigInfo<float> MorgenPouchRange = new(
+            MorgenPouch.Enabled.Group,
+            "Capture Range",
+            new ConfigDescription(
+                "How far from you, at most, the tamed creatures you petted can be for the Morgen-Pouch Rite to take them, in meters.",
+                new AcceptableValueRange<float>(2f, 30f)),
+            10f,
+            true);
+
+        internal static readonly ConfigInfo<float> MorgenPouchReleaseCooldown = new(
+            MorgenPouch.Enabled.Group,
+            "Release Cooldown",
+            new ConfigDescription(
+                "How long after the Morgen-Pouch takes creatures before you can let them out, in seconds.",
+                new AcceptableValueRange<float>(0f, 600f)),
+            30f,
+            true);
+
+        internal static readonly ConfigInfo<float> MorgenPouchCaptureCooldown = new(
+            MorgenPouch.Enabled.Group,
+            "Capture Cooldown",
+            new ConfigDescription(
+                "How long after you let creatures out of the Morgen-Pouch before it can take any again, in seconds.",
+                new AcceptableValueRange<float>(0f, 600f)),
+            60f,
+            true);
+
+        internal static readonly RiteSettings TendrilDraw = new(
+            "5 - Blessings - Tendril-Draw",
+            "the Tendril-Draw Rite (arrows saved, spears return)",
+            "WrithanRoots",
+            "a writhan root",
+            "Arrows and crossbow bolts you shoot sometimes aren't used up, and a spear you throw comes back to your hands " +
+            "after it strikes a foe, a shield or the ground, from however far: the farther, the longer it flies." + BlessingNote,
+            true,
+            minutes: 45f);
+
+        internal static readonly ConfigInfo<float> TendrilAmmoChance = new(
+            TendrilDraw.Enabled.Group,
+            "Ammo Saved Chance",
+            new ConfigDescription(
+                "The chance an arrow or crossbow bolt you shoot isn't used up under the Tendril-Draw Rite: 0.5 is one in two.",
+                new AcceptableValueRange<float>(0f, 1f)),
+            0.5f,
+            true);
+
+        internal static readonly ConfigInfo<float> TendrilReturnSpeed = new(
+            TendrilDraw.Enabled.Group,
+            "Spear Return Speed",
+            new ConfigDescription(
+                "How fast a thrown spear flies back to you under the Tendril-Draw Rite, in meters a second. One that strikes " +
+                "close by is back in your hands at once.",
+                new AcceptableValueRange<float>(5f, 200f)),
+            20f,
             true);
 
         // ---- Kinship: for everyone on the server at once, wherever they are ----
@@ -1123,7 +2143,7 @@ internal static class Constants
         private const string KinshipNote = " A kinship rite: everyone on the server receives it at once, wherever they are.";
 
         internal static readonly RiteSettings Skal = new(
-            "31 - Skal Rite",
+            "6 - Kinship - Skal",
             "the Skål Rite (everyone drinks and rests)",
             "MeadTasty",
             "tasty mead",
@@ -1146,7 +2166,7 @@ internal static class Constants
             true);
 
         internal static readonly RiteSettings SkyCall = new(
-            "32 - Sky-Call Rite",
+            "6 - Kinship - Sky-Call",
             "the Sky-Call Rite (forsaken powers renewed)",
             "YmirRemains",
             "Ymir flesh",
@@ -1159,7 +2179,7 @@ internal static class Constants
             "in minutes of play. Death doesn't end it.");
 
         internal static readonly RiteSettings AnvilSpark = new(
-            "33 - Anvil-Spark Rite",
+            "6 - Kinship - Anvil-Spark",
             "the Anvil-Spark Rite (everyone's gear repaired)",
             "SharpeningStone",
             "a sharpening stone",
@@ -1172,10 +2192,60 @@ internal static class Constants
             minutesDescription: "How long after the Anvil-Spark Rite repairs a player's gear no other one can repair it, " +
             "in minutes of play. Death doesn't end it.");
 
+        // Any of the feasts, the Meadows' to the Deep North's.
+        internal static readonly RiteSettings Eldhrimnir = new(
+            "6 - Kinship - Eldhrimnir",
+            "the Eldhrímnir Rite (everyone's food fresh again)",
+            "FeastMeadows_Material, FeastBlackforest_Material, FeastSwamps_Material, FeastOceans_Material, FeastMountains_Material, " +
+            "FeastPlains_Material, FeastMistlands_Material, FeastAshlands_Material, FeastDeepNorth_Material",
+            "a feast",
+            "Everyone cheers, aglow like a health mead, and every food they have eaten is fresh again, as if just eaten: its " +
+            "full time, health, stamina and eitr back. Nobody can be hurt while cheering. A player whose food had more than a " +
+            "little of its time used up (Free Use Multiplier) can't be fed by another Eldhrímnir Rite for a while; one whose " +
+            "food is all still fresh, or who has eaten nothing, is passed by." + KinshipNote,
+            true,
+            minutes: 60f,
+            minutesDescription: "How long after the Eldhrímnir Rite makes a player's used food fresh again no other one can, " +
+            "in minutes of play. Death doesn't end it.");
+
+        internal static readonly ConfigInfo<float> EldhrimnirFreeUse = new(
+            Eldhrimnir.Enabled.Group,
+            "Free Use Multiplier",
+            new ConfigDescription("How much of each food's time a player can have used up and still be passed by the " +
+                "Eldhrímnir Rite, times its full time: 0.1 is 10%. Only a player any of whose foods had more used up is fed (and gets the wait).",
+                new AcceptableValueRange<float>(0f, 1f)),
+            0.1f,
+            true);
+
+        internal static readonly RiteSettings RallyHorn = new(
+            "6 - Kinship - Rally-Horn",
+            "the Rally-Horn Rite (everyone called to the obliterator)",
+            "TankardAnniversary",
+            "an anniversary tankard",
+            "Everyone not at the obliterator (within the Blessings Range) hears the call: for Call Seconds a Rally Call " +
+            "status and a Rally Call slot beside the Guardian Power show, and pressing the Rally Call Shortcut brings them " +
+            "to the obliterator: they kneel, lightning strikes where they kneel (no harm done) and they vanish, then arrive " +
+            "kneeling around the obliterator on the same level in another strike, and soon stand up, free to move; meanwhile " +
+            "nobody can hurt them. As with a portal, a player carrying anything that can't go through one can't answer " +
+            "until it is put away, and nobody can answer in the middle of a fight. A " +
+            "player who answers can't answer another Rally-Horn Rite for a while; letting the call fade costs nothing." + KinshipNote,
+            true,
+            minutes: 60f,
+            minutesDescription: "How long after answering the Rally-Horn Rite's call a player can't answer another, in minutes " +
+            "of play. Death doesn't end it. Letting a call fade starts no wait.");
+
+        internal static readonly ConfigInfo<float> RallyCallSeconds = new(
+            RallyHorn.Enabled.Group,
+            "Call Seconds",
+            new ConfigDescription("How long each player has to answer the Rally-Horn Rite's call, in seconds.",
+                new AcceptableValueRange<float>(10f, 600f)),
+            120f,
+            true);
+
         // ---- Reckoning ----
 
         internal static readonly RiteSettings Crimson = new(
-            "34 - Crimson Rite",
+            "7 - Reckoning - Crimson",
             "the Crimson Rite (raid after raid)",
             "WitheredBone",
             "withered bones",
@@ -1185,17 +2255,19 @@ internal static class Constants
             "creatures only spawn within the radius. A shield bubble covers " +
             "the radius: from when it starts, players inside can't get out and players outside can't get in, and no portal " +
             "into or out of it works, until it ends. No creature inside can get out, and none outside can get in. Nothing can " +
-            "be built, repaired or torn down inside, and no rite but the Sanctuary Rite performed there. Each creature " +
-            "slain inside counts; survive to the end and the obliterator, struck by lightning, holds a reward for each kill. " +
+            "be built, repaired or torn down inside, and no rite but the Sanctuary Rite performed there. " +
+            "The next raid comes almost at once; the creatures of the last " +
+            "raid still inside die as it comes. Each creature slain inside counts; survive to the end and the obliterator, struck by lightning, holds a reward for each kill. " +
             "However it ends, the hostile creatures still inside die and drop nothing (not counted; spawners and nests are left " +
-            "alone). It breaks off early if the obliterator is destroyed, everyone inside falls or leaves, or the Sanctuary " +
-            "or Equilibrium Rite ends it. Only one Crimson or Ragnarök Rite can go on at a time, and no Domain rite works " +
+            "alone). The obliterator can't be destroyed while it goes on and no creature goes after it; a beam of light rises from it. " +
+            "It breaks off early if everyone inside falls or leaves, or the Sanctuary " +
+            "Rite ends it. Only one Crimson or Ragnarök Rite can go on at a time, and no Domain rite works " +
             "within its bubble: one at an obliterator inside is cancelled. Its status and messages only " +
             "show near the obliterator; its area is marked on everyone's map.",
             true,
-            amount: 3,
+            amount: 5,
             minutes: 10f,
-            radius: 75f);
+            radius: 50f);
 
         internal static readonly ConfigInfo<string> CrimsonRewardItem = new(
             Crimson.Enabled.Group,
@@ -1209,21 +2281,43 @@ internal static class Constants
             "Reward Per Kill",
             new ConfigDescription("How many of the reward item each creature slain within the bubble gives, when the Crimson Rite is survived.",
                 new AcceptableValueRange<int>(0, 100)),
-            2,
+            1,
             true);
 
-        internal static readonly ConfigInfo<Toggle> CrimsonBubble = new(
+        internal static readonly ConfigInfo<float> CrimsonRewardPerPlayer = new(
             Crimson.Enabled.Group,
-            "Show Bubble",
-            "Show the shield bubble over the Crimson Rite's radius. Players are held inside (or kept out) either way.",
-            Toggle.On,
-            false);
+            "Reward Per Extra Player",
+            new ConfigDescription("How much more reward each player beyond the first brings, as a share of one player's " +
+                "(the players alive inside as it is won count). 0.5: two players get 1.5 times as much, three twice, four " +
+                "2.5 times. 0: the same however many fight.", new AcceptableValueRange<float>(0f, 5f)),
+            0.5f,
+            true);
 
         internal static readonly ConfigInfo<float> CrimsonPause = new(
             Crimson.Enabled.Group,
             "Pause Between Raids Seconds",
-            new ConfigDescription("How long after a raid ends the next one starts.", new AcceptableValueRange<float>(5f, 600f)),
-            20f,
+            new ConfigDescription("How long after a raid ends the next one starts. The creatures of the last raid still inside die " +
+                "as the next one comes (dropping nothing, not counted).", new AcceptableValueRange<float>(0f, 600f)),
+            2f,
+            true);
+
+        internal static readonly ConfigInfo<float> CrimsonSpawnMultiplier = new(
+            Crimson.Enabled.Group,
+            "Raid Spawn Multiplier",
+            new ConfigDescription("How many times as many creatures the Crimson Rite's raids bring as the game's own raids, and how " +
+                "many times as often they spawn.", new AcceptableValueRange<float>(1f, 5f)),
+            1f,
+            true);
+
+        internal static readonly ConfigInfo<float> CrimsonCatchUp = new(
+            Crimson.Enabled.Group,
+            "Raid Catch-Up",
+            new ConfigDescription("How much raids below the players inside are brought up to them. A raid's tier is the strongest " +
+                "boss it needs slain (Ragnarök Rite's Bosses setting); the players' is the lowest, among them, of the strongest raid " +
+                "each is ready for. For each step between them, times this: about a third more creatures in bigger groups, more " +
+                "often stars, up to two stars from three steps (from four, every creature has one). 0: raids as the game " +
+                "makes them.", new AcceptableValueRange<float>(0f, 3f)),
+            1f,
             true);
 
         internal static readonly ConfigInfo<string> CrimsonEnvironment = new(
@@ -1243,68 +2337,98 @@ internal static class Constants
         { IsAdvanced = true };
 
         internal static readonly RiteSettings Ragnarok = new(
-            "35 - Ragnarok Rite",
+            "7 - Reckoning - Ragnarok",
             "the Ragnarök Rite (boss after boss)",
             "TrophyEikthyr, TrophyTheElder, TrophyBonemass, TrophyDragonQueen, TrophyGoblinKing, TrophySeekerQueen, TrophyFader",
-            "any boss trophies",
-            "Bosses rise at the obliterator one after another, picked among those every player within the radius has slain " +
-            "(each player's own boss kills; with player based raids off, the world's count for everyone), weaker ones first. " +
-            "With none, nothing rises and everyone there is told why. The sky burns, and a shield bubble covers the radius: " +
+            "different boss trophies",
+            "Bosses rise at the obliterator one after another, picked among those every player within the radius has " +
+            "slain (each player's own boss kills; with player based raids off, the world's count for everyone), weaker ones " +
+            "first. A boss gets a star for every two bosses between it and the strongest they have all slain, and each star " +
+            "raises it to the boss two places up (after Bonemass, Eikthyr is 1 star and as strong as Bonemass): its health " +
+            "(its resistances counted) and damage are raised to match, and so are those of what it summons. With none slain, " +
+            "nothing rises and everyone there is told why. The sky burns, and a shield bubble covers the radius: " +
             "from when it starts, players inside can't get out and players outside can't get in, and no portal into or out of " +
             "it works; no creature gets in or out. Nothing can be built, repaired or torn down inside, and no rite but the " +
-            "Sanctuary Rite performed there. Lightning strikes the obliterator as each boss falls. Slay them all before the " +
-            "time runs out and the obliterator, struck by " +
-            "lightning, holds treasure: one roll of the treasure table for each boss, the stronger the boss the more precious " +
-            "and plentiful. However it ends, the bosses and hostile creatures still inside vanish and drop nothing. It breaks " +
-            "off with no reward if the time runs out, the obliterator is destroyed, everyone inside falls or leaves, or the " +
-            "Sanctuary or Equilibrium Rite ends it. Only one Crimson or Ragnarök Rite can go on at a time, and no Domain rite " +
+            "Sanctuary Rite performed there. Lightning strikes the obliterator as each boss falls. The bosses drop what they " +
+            "usually do but their trophies. There is no time limit: slay them all and the obliterator, struck by lightning, " +
+            "holds treasure: rolls of the treasure table (valuables) for each boss, the stronger the strongest boss slain the " +
+            "more precious and plentiful. However it ends, the bosses and hostile creatures still inside vanish and drop nothing. " +
+            "The obliterator can't be destroyed while it goes on and no creature goes after it; a beam of light rises from it. " +
+            "It breaks off with no reward if everyone inside falls or leaves, or the " +
+            "Sanctuary Rite ends it. Only one Crimson or Ragnarök Rite can go on at a time, and no Domain rite " +
             "works within its bubble: one at an obliterator inside is cancelled. Its status and " +
             "messages only show near the obliterator; its area is marked on everyone's map.",
             true,
+            lasts: false,
             amount: 3,
-            minutes: 20f,
-            radius: 75f,
-            minutesDescription: "How long the players have to slay every boss of the Ragnarök Rite, in minutes of play. When it " +
-            "runs out, the bosses withdraw and there is no reward.");
+            radius: 50f,
+            distinctKeys: true);
 
         internal static readonly ConfigInfo<string> RagnarokBosses = new(
             Ragnarok.Enabled.Group,
             "Bosses",
             "Prefab names of the bosses the Ragnarök Rite can call, weakest first: their place in this list is how strong they " +
-            "count for the treasure. A player has slain a boss when they have the key it sets as it dies (Eikthyr: " +
-            "defeated_eikthyr...). Modded bosses work too when they set such a key.",
+            "count for the treasure. A player has slain a boss when they have " +
+            "the key it sets as it dies (Eikthyr: defeated_eikthyr...). Modded bosses work too when they set such a key.",
             "Eikthyr, gd_king, Bonemass, Dragon, GoblinKing, SeekerQueen, Fader",
             true);
 
         internal static readonly ConfigInfo<int> RagnarokBossCount = new(
             Ragnarok.Enabled.Group,
             "Boss Count",
-            new ConfigDescription("How many bosses rise, one after another. Different ones are picked while there are enough; " +
-                "with fewer eligible, some come again.", new AcceptableValueRange<int>(1, 10)),
+            new ConfigDescription("How many bosses rise, one after another, a different one each while there are enough: with " +
+                "fewer that everyone has slain, ones only some have slain fill in, and only then do some come again.",
+                new AcceptableValueRange<int>(1, 10)),
             3,
             true);
 
         internal static readonly ConfigInfo<float> RagnarokPause = new(
             Ragnarok.Enabled.Group,
             "Pause Between Bosses Seconds",
-            new ConfigDescription("How long after a boss falls the next one rises.", new AcceptableValueRange<float>(3f, 120f)),
-            10f,
+            new ConfigDescription("How long after a boss falls the next one rises.", new AcceptableValueRange<float>(1f, 120f)),
+            5f,
+            true);
+
+        internal static readonly ConfigInfo<float> RagnarokHealthMultiplier = new(
+            Ragnarok.Enabled.Group,
+            "Health Multiplier",
+            new ConfigDescription("Multiplies every boss's health (and its summons') after it is raised by its stars " +
+                "(1: as hard to kill as the boss it is raised to).", new AcceptableValueRange<float>(0.1f, 10f)),
+            1f,
+            true);
+
+        internal static readonly ConfigInfo<float> RagnarokDamageMultiplier = new(
+            Ragnarok.Enabled.Group,
+            "Damage Multiplier",
+            new ConfigDescription("Multiplies every boss's damage (and its summons') after it is raised by its stars " +
+                "(1: hits as hard as the boss it is raised to).", new AcceptableValueRange<float>(0.1f, 10f)),
+            1f,
             true);
 
         internal static readonly ConfigInfo<string> RagnarokTreasure = new(
             Ragnarok.Enabled.Group,
             "Treasure",
-            "The treasure table, as Item: Min-Max pairs, from the least to the most precious. One item is rolled for each boss " +
-            "slain: the weakest boss most likely gives the first, the strongest the last, and stronger bosses roll toward Max.",
-            "Amber: 3-6, AmberPearl: 2-5, Ruby: 2-4, SilverNecklace: 1-3",
+            "The treasure table, as Item: Min-Max pairs, from the least to the most precious. It is rolled Treasure Rolls Per " +
+            "Boss times for each boss, whichever bosses came: the weaker the strongest boss everyone inside has slain, the " +
+            "more likely the first; the stronger, the more likely the last, rolling toward Max.",
+            "Amber: 6-10, AmberPearl: 4-6, Ruby: 2-5, SilverNecklace: 2-4",
             true);
 
-        internal static readonly ConfigInfo<Toggle> RagnarokBubble = new(
+        internal static readonly ConfigInfo<int> RagnarokTreasureRolls = new(
             Ragnarok.Enabled.Group,
-            "Show Bubble",
-            "Show the shield bubble over the Ragnarök Rite's radius. Players are held inside (or kept out) either way.",
-            Toggle.On,
-            false);
+            "Treasure Rolls Per Boss",
+            new ConfigDescription("How many times the Treasure table is rolled for each boss.", new AcceptableValueRange<int>(1, 10)),
+            4,
+            true);
+
+        internal static readonly ConfigInfo<float> RagnarokRewardPerPlayer = new(
+            Ragnarok.Enabled.Group,
+            "Reward Per Extra Player",
+            new ConfigDescription("How much more treasure each player beyond the first brings, as a share of one player's " +
+                "(the players alive inside as it is won count). 0.5: two players get 1.5 times as much, three twice, four " +
+                "2.5 times. 0: the same however many fight.", new AcceptableValueRange<float>(0f, 5f)),
+            0.5f,
+            true);
 
         internal static readonly ConfigInfo<string> RagnarokEnvironment = new(
             Ragnarok.Enabled.Group,
@@ -1322,33 +2446,179 @@ internal static class Constants
             true)
         { IsAdvanced = true };
 
+        internal static readonly RiteSettings HoardBane = new(
+            "7 - Reckoning - Hoard-Bane",
+            "the Hoard-Bane Rite (Hildir's minibosses)",
+            "chest_hildir1, chest_hildir2, chest_hildir3",
+            "one of Hildir's chests",
+            "One of Hildir's minibosses comes for its chest: the brass chest calls Brenna with skeletons, the " +
+            "silver chest Geirrhafa with ulvs, the bronze chest Zil and Thungr with fulings, each harder than the last. It rises on the " +
+            "edge of the arena with four followers (every 30 seconds, while fewer than two stand, one more comes in furthest from the players), under a shield that takes no damage. Three elites, each with a name of its own " +
+            "and a pack (Brenna: a 3 star troll with a log, a 1 star abomination, a 1 star wraith; Geirrhafa: a 1 star stone golem, " +
+            "a 2 star fenring, a 1 star cultist; Zil and Thungr: a 3 star fuling berserker, a 1 star vile and lox), never fleeing, each " +
+            "wait with their pack in a small bubble of their own on the edge: they don't move and take no damage until a player " +
+            "steps into their bubble or hits one of them (from afar too, which only wakes them: no sneak attack), and then the " +
+            "whole pack wakes. Lightning strikes the miniboss as each elite falls; with the last its shield breaks, and until " +
+            "then the miniboss only walks, slowly. Nothing the rite brings attacks the " +
+            "rest of it. The miniboss is stronger than usual, the stronger the strongest boss " +
+            "everyone inside has slain (the Ragnarök Rite's Bosses setting), never as strong as that boss, and drops no chest " +
+            "nor trophy. Slay it and the obliterator, struck by lightning, holds treasure: coins and valuables (each chest its own, the bronze " +
+            "richest, then the silver, then the brass), and the battle and protection idols of the age everyone inside has reached. A shield bubble covers the radius as for the Ragnarök Rite: " +
+            "nobody gets in or out, no portal works, nothing can be built inside, and only the Sanctuary Rite performed there. " +
+            "There is no time limit. The obliterator can't be destroyed while it goes on and no creature goes after it; a beam " +
+            "of light rises from it. It breaks off with no reward if everyone inside falls or " +
+            "leaves, or the Sanctuary Rite ends it, but the chest isn't lost: it waits in the obliterator again. " +
+            "However it ends, what it brought vanishes. Only one Crimson, " +
+            "Ragnarök or Hoard-Bane Rite can go on at a time.",
+            true,
+            lasts: false,
+            amount: 1,
+            radius: 50f);
+
+        internal static readonly ConfigInfo<float> HoardBaneEliteRadius = new(
+            HoardBane.Enabled.Group,
+            "Elite Bubble Radius",
+            new ConfigDescription("How big each elite's bubble is, in meters: a player stepping into it wakes the elite. The " +
+                "bubbles sit evenly around the edge of the arena.", new AcceptableValueRange<float>(3f, 30f)),
+            10f,
+            true);
+
+        internal static readonly ConfigInfo<float> HoardBaneHealthShare = new(
+            HoardBane.Enabled.Group,
+            "Miniboss Health Share",
+            new ConfigDescription("How hard to kill the miniboss is, as a share of the strongest boss everyone inside has slain " +
+                "(its resistances counted; the brothers split it). Never less than 1.5 times its own health.",
+                new AcceptableValueRange<float>(0.05f, 2f)),
+            0.4f,
+            true);
+
+        internal static readonly ConfigInfo<float> HoardBaneDamageShare = new(
+            HoardBane.Enabled.Group,
+            "Miniboss Damage Share",
+            new ConfigDescription("How hard the miniboss hits, as a share of the strongest boss everyone inside has slain (its " +
+                "average damage per attack). Never less than 1.2 times its own.", new AcceptableValueRange<float>(0.05f, 2f)),
+            0.6f,
+            true);
+
+        // Each chest's treasure: the brass chest (Brenna), the silver (Geirrhafa), the bronze (Zil and Thungr), by the fight's
+        // place (see HoardBaneLoot.Encounters). The harder the fight, the richer.
+        private static readonly string[] HoardBaneChestNames = ["Brass Chest", "Silver Chest", "Bronze Chest"];
+
+        internal static readonly ConfigInfo<string>[] HoardBaneCoins =
+        [
+            HoardBaneCoinsFor(0, "Coins: 300-800"),
+            HoardBaneCoinsFor(1, "Coins: 600-1500"),
+            HoardBaneCoinsFor(2, "Coins: 1200-2500")
+        ];
+
+        internal static readonly ConfigInfo<string>[] HoardBaneTreasure =
+        [
+            HoardBaneTreasureFor(0, "Amber: 3-6, AmberPearl: 2-4, Ruby: 1-3, SilverNecklace: 1-2"),
+            HoardBaneTreasureFor(1, "Amber: 4-8, AmberPearl: 3-6, Ruby: 2-5, SilverNecklace: 2-4"),
+            HoardBaneTreasureFor(2, "Amber: 6-10, AmberPearl: 4-8, Ruby: 3-6, SilverNecklace: 3-5")
+        ];
+
+        internal static readonly ConfigInfo<int>[] HoardBaneTreasureRolls =
+        [
+            HoardBaneRollsFor(0, 3),
+            HoardBaneRollsFor(1, 4),
+            HoardBaneRollsFor(2, 6)
+        ];
+
+        private static ConfigInfo<string> HoardBaneCoinsFor(int chest, string value) => new(
+            HoardBane.Enabled.Group,
+            $"{HoardBaneChestNames[chest]} Coins",
+            $"The coins in the {HoardBaneChestNames[chest].ToLowerInvariant()}'s treasure, as Item: Min-Max (any amount in " +
+            "between, evenly). Empty: none.",
+            value,
+            true);
+
+        private static ConfigInfo<string> HoardBaneTreasureFor(int chest, string value) => new(
+            HoardBane.Enabled.Group,
+            $"{HoardBaneChestNames[chest]} Treasure",
+            $"The valuables in the {HoardBaneChestNames[chest].ToLowerInvariant()}'s treasure, as Item: Min-Max pairs, from " +
+            "the least to the most precious, rolled as the Ragnarök Rite's: the stronger the strongest boss everyone inside " +
+            "has slain, the more likely the last, rolling toward Max.",
+            value,
+            true);
+
+        private static ConfigInfo<int> HoardBaneRollsFor(int chest, int value) => new(
+            HoardBane.Enabled.Group,
+            $"{HoardBaneChestNames[chest]} Treasure Rolls",
+            new ConfigDescription($"How many times the {HoardBaneChestNames[chest]} Treasure table is rolled.",
+                new AcceptableValueRange<int>(0, 20)),
+            value,
+            true);
+
+        internal static readonly ConfigInfo<float> HoardBaneRewardPerPlayer = new(
+            HoardBane.Enabled.Group,
+            "Reward Per Extra Player",
+            new ConfigDescription("How much more treasure (coins, valuables and idols) each player beyond the first brings, as a share of one player's " +
+                "(the players alive inside as it is won count). 0.5: two players get 1.5 times as much, three twice, four " +
+                "2.5 times. 0: the same however many fight.", new AcceptableValueRange<float>(0f, 5f)),
+            0.5f,
+            true);
+
+        internal static readonly ConfigInfo<string> HoardBaneIdols = new(
+            HoardBane.Enabled.Group,
+            "Idols",
+            "The idols in the treasure, as Boss: Item: Min-Max, by the strongest boss everyone inside has slain (prefab names " +
+            "of the Ragnarök Rite's Bosses setting; None: no boss slain). List a boss more than once for several idols. A boss " +
+            "not listed takes the entries of the nearest weaker one listed. The defaults are the battle (UpgraderNWeapon) and " +
+            "protection (UpgraderNArmor) idols of the age the players are in: wooden with no boss slain, black metal once " +
+            "everyone has slain Moder (however far some of them went), bloodgold after the Fader.",
+            "None: Upgrader0Weapon: 1-2, None: Upgrader0Armor: 1-2, " +
+            "Eikthyr: Upgrader1Weapon: 1-2, Eikthyr: Upgrader1Armor: 1-2, " +
+            "gd_king: Upgrader2Weapon: 1-2, gd_king: Upgrader2Armor: 1-2, " +
+            "Bonemass: Upgrader3Weapon: 1-2, Bonemass: Upgrader3Armor: 1-2, " +
+            "Dragon: Upgrader4Weapon: 1-2, Dragon: Upgrader4Armor: 1-2, " +
+            "GoblinKing: Upgrader5Weapon: 1-2, GoblinKing: Upgrader5Armor: 1-2, " +
+            "SeekerQueen: Upgrader6Weapon: 1-2, SeekerQueen: Upgrader6Armor: 1-2, " +
+            "Fader: Upgrader7Weapon: 1-2, Fader: Upgrader7Armor: 1-2",
+            true);
+
+        internal static readonly ConfigInfo<string> HoardBaneEnvironment = new(
+            HoardBane.Enabled.Group,
+            "Environment",
+            "The sky shown near the obliterator while the fight goes on. " + CustomEnvironmentHelp,
+            CustomEnvironmentNames.HoardBane,
+            true)
+        { IsAdvanced = true };
+
+        internal static readonly ConfigInfo<string> HoardBaneSkyBase = new(
+            HoardBane.Enabled.Group,
+            "Cursed Sky Base Environment",
+            "The game environment the cursed sky is made from, dimmed and tinted violet.",
+            "Misty",
+            true)
+        { IsAdvanced = true };
+
         internal static readonly RiteSettings Sanctuary = new(
-            "36 - Sanctuary Rite",
+            "7 - Reckoning - Sanctuary",
             "the Sanctuary Rite (ends the raid)",
             "IronScrap",
             "scrap iron",
-            "Ends the raid going on in the world at once, and any Crimson or Ragnarök Rite (without its reward). The only rite " +
+            "Ends the raid going on in the world at once, and any Crimson, Ragnarök or Hoard-Bane Rite (without its reward). The only rite " +
             "that can be performed within their bubble.",
             true,
             lasts: false,
             amount: 3);
 
-        internal static readonly RiteSettings Reset = new(
-            "37 - Equilibrium Rite",
-            "the Equilibrium Rite (ends all rites)",
-            "BoneFragments",
-            "bone fragments",
-            "Ends every rite going on at once, except the Domain rites, so nobody's growth or protection is ended by accident " +
-            "(the Grounding Rite ends those), and the blessings players carry.",
-            true,
-            lasts: false,
-            amount: 3);
+        internal static readonly ConfigInfo<Toggle> SanctuaryOnlyInside = new(
+            Sanctuary.Enabled.Group,
+            "Ends Fights Only From Inside",
+            "On: a Crimson, Ragnarök or Hoard-Bane Rite can only be ended by the Sanctuary Rite performed at its own " +
+            "obliterator, inside the bubble. Performed anywhere else while one goes on, it is refused and keeps its key " +
+            "items, so nobody outside can end someone else's fight. Off: performed anywhere, it ends the fight.",
+            Toggle.Off);
 
         private const string CustomEnvironmentHelp = "Its sky is made by the mod from the game's own (see Environments).";
 
         internal static class Display
         {
-            internal const string Group = "38 - Display";
+            // Per player, never synced: what you see and press (8), and how the rites look in the world (9).
+            internal const string Group = "8 - Interface";
+            internal const string EffectsGroup = "9 - Effects";
 
             internal static readonly ConfigInfo<Toggle> ShowStatus = new(
                 Group,
@@ -1376,7 +2646,7 @@ internal static class Constants
                 Group,
                 "Show Obliterator Highlights",
                 "With the obliterator open, the rite item that decides gets a frame in its rite's color and any others a dim gray one, " +
-                "and their tooltips say which rite they perform or that they just burn.",
+                "and their tooltips say which rite they perform or that they are sacrificed for nothing.",
                 Toggle.On,
                 false);
 
@@ -1385,57 +2655,6 @@ internal static class Constants
                 "Show Explanations",
                 "Show the gray explanations next to rite names (what each rite does, why an item decides) in hover texts, item tooltips " +
                 "and the rites page. Off: only the item and the rite's name, for less clutter once you know them.",
-                Toggle.On,
-                false);
-
-            internal static readonly ConfigInfo<Toggle> ShowVerdantSparkles = new(
-                Group,
-                "Show Verdant Sparkles",
-                "Under the Verdant Rite, now and then a few of the plants and bushes growing faster give off green motes.",
-                Toggle.On,
-                false);
-
-            internal static readonly ConfigInfo<Toggle> ShowVatBoilMotes = new(
-                Group,
-                "Show Vat-Boil Motes",
-                "Under the Vat-Boil Rite, now and then a few of the fermenters and cooking stations working faster give off golden motes.",
-                Toggle.On,
-                false);
-
-            internal static readonly ConfigInfo<Toggle> ShowPitchBellowsMotes = new(
-                Group,
-                "Show Pitch-Bellows Motes",
-                "Under the Pitch-Bellows Rite, now and then a few of the smelters and kilns working faster give off ember motes.",
-                Toggle.On,
-                false);
-
-            internal static readonly ConfigInfo<Toggle> ShowBlessingLightning = new(
-                Group,
-                "Show Blessing Lightning",
-                "Show the lightning striking each player who receives a blessing.",
-                Toggle.On,
-                false);
-
-            internal static readonly ConfigInfo<Toggle> ShowCreatureEffects = new(
-                Group,
-                "Show Creature Effects",
-                "Creatures shunning a Packward Rite drip with fear, and creatures drawn by a Carrion Rite trail a green smell.",
-                Toggle.On,
-                false);
-
-            internal static readonly ConfigInfo<Toggle> ShowCreatureIcons = new(
-                Group,
-                "Show Creature Icons",
-                "Where the game shows its yellow and red alert icons over a creature: a blue drop while it shuns a Packward Rite, " +
-                "a green heart while a Carrion Rite draws it.",
-                Toggle.On,
-                false);
-
-            internal static readonly ConfigInfo<Toggle> ShowDomainEffects = new(
-                Group,
-                "Show Domain Effects",
-                "While a Domain rite goes on, rings in its color spread out from the obliterator over its area, one at a time, " +
-                "and the obliterator glows and gives off rising motes in the colors of its rites.",
                 Toggle.On,
                 false);
 
@@ -1453,6 +2672,248 @@ internal static class Constants
                 "or pull an obliterator, every rite you already know shows; after that, each rite whose item you find for the first time.",
                 Toggle.On,
                 false);
+
+            internal static readonly ConfigInfo<Toggle> GraveReequip = new(
+                Group,
+                "Grave-Bind Re-Equip Gear",
+                "After a death under the Grave-Bind Rite, put the gear you wore back on once you loot your tombstone.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<KeyboardShortcut> MorgenPouchShortcut = new(
+                Group,
+                "Morgen-Pouch Shortcut",
+                "Your own key for the Morgen-Pouch ability while the Morgen-Pouch Rite lasts: pocket the creatures you petted, or let " +
+                "them out (also in the game's Settings > Controls). Works while moving.",
+                new KeyboardShortcut(KeyCode.P, KeyCode.LeftAlt),
+                false);
+
+            internal static readonly ConfigInfo<KeyboardShortcut> RallyCallShortcut = new(
+                Group,
+                "Rally Call Shortcut",
+                "Your own key for answering the Rally-Horn Rite's call while it lasts (also in the game's Settings > Controls). " +
+                "Works while moving.",
+                new KeyboardShortcut(KeyCode.Y),
+                false);
+
+            internal static readonly ConfigInfo<KeyboardShortcut> RallyRefuseShortcut = new(
+                Group,
+                "Rally Refuse Shortcut",
+                "Your own key for refusing the Rally-Horn Rite's call while it lasts, letting it go at once (also in the game's " +
+                "Settings > Controls). Works while moving.",
+                new KeyboardShortcut(KeyCode.N),
+                false);
+
+            internal static readonly ConfigInfo<KeyboardShortcut> DomainBorderShortcut = new(
+                Group,
+                "Domain Bounds Shortcut",
+                "While you are in a Domain rite's area, show or hide its edge (also in the game's Settings > Controls). Your " +
+                "choice is kept for the next area. Works while moving. Leave empty to hide the Bounds slot.",
+                new KeyboardShortcut(KeyCode.B, KeyCode.LeftAlt),
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowBlessingLightning = new(
+                EffectsGroup,
+                "Show Blessing Lightning",
+                "Show the lightning striking each player who receives a blessing.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowCreatureIcons = new(
+                EffectsGroup,
+                "Show Creature Icons",
+                "Where the game shows its yellow and red alert icons over a creature: a blue drop while it shuns a Packward Rite, " +
+                "a green heart while a Carrion Rite draws it.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowDomainEffects = new(
+                EffectsGroup,
+                "Show Domain Effects",
+                "While a Domain rite goes on, rings in its color spread out from the obliterator over its area, one at a time, " +
+                "and the obliterator glows and gives off rising motes in the colors of its rites, each rite in its own shape " +
+                "(Verdant leaves, Vat-Boil bubbles, Pitch-Bellows embers and forge sparks, Kindred hearts, Harrow-Spur little ghosts, Sovereign Ward stars, Hearth-Haul feathers, " +
+                "Sentry-Sight bolts, Taproot-Surge sap drops, Pitch-Seal blobs of pitch, Primal-Hearth violet flames, Hearth-Kindle crescent moons).",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> AlwaysShowDomainBorder = new(
+                EffectsGroup,
+                "Always Show Domain Border",
+                "Show the edge of every Domain rite's area near you all the time. Off: only the edge of the area you are in " +
+                "shows (and for 5 seconds after you leave it), and a Bounds slot beside the Guardian Power switches it on or off.",
+                Toggle.Off,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowVerdantSparkles = new(
+                EffectsGroup,
+                "Show Verdant Sparkles",
+                "Under the Verdant Rite, now and then a few of the plants and bushes growing faster give off green leaves.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowVatBoilMotes = new(
+                EffectsGroup,
+                "Show Vat-Boil Motes",
+                "Under the Vat-Boil Rite, now and then a few of the fermenters and cooking stations working faster give off golden bubbles.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowPitchBellowsMotes = new(
+                EffectsGroup,
+                "Show Pitch-Bellows Motes",
+                "Under the Pitch-Bellows Rite, now and then a few of the smelters and kilns working faster give off embers.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<UnityEngine.Color> PitchBellowsFireTint = new(
+                EffectsGroup,
+                "Pitch-Bellows Fire Tint",
+                "Under the Pitch-Bellows Rite, the fire of smelters, kilns and furnaces near you leans toward this color (in your game only). " +
+                "Its alpha is how far: 0 leaves the fire as usual, 1 turns it fully that color.",
+                new UnityEngine.Color(0.8f, 0.12f, 0.06f, 0.4f),
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowKindredHearts = new(
+                EffectsGroup,
+                "Show Kindred Hearts",
+                "Under the Kindred Rite, now and then a few of the tamed young and pregnant animals and warm eggs it reaches give off pink hearts.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowHarrowSpurMotes = new(
+                EffectsGroup,
+                "Show Harrow-Spur Motes",
+                "Under the Harrow-Spur Rite, now and then a few of the spawners it reaches give off little ghosts, bigger for bigger spawners.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowHearthHaulFeathers = new(
+                EffectsGroup,
+                "Show Hearth-Haul Feathers",
+                "Under the Hearth-Haul Rite, players carrying too much give off drifting feathers, showing why they can still walk " +
+                "without tiring (seen by everyone with the mod).",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowSentrySightMotes = new(
+                EffectsGroup,
+                "Show Sentry-Sight Motes",
+                "Under the Sentry-Sight Rite, now and then a few of the ballistas it reaches give off steel-blue bolts.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowTaprootSurgeMotes = new(
+                EffectsGroup,
+                "Show Taproot-Surge Motes",
+                "Under the Taproot-Surge Rite, now and then a few of the sap extractors, eitr refineries and ancient roots it reaches give off glowing sap drops.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<UnityEngine.Color> TaprootSurgeFireTint = new(
+                EffectsGroup,
+                "Taproot-Surge Fire Tint",
+                "Under the Taproot-Surge Rite, the fire and glow of eitr refineries near you turn this color, and their machinery moves as " +
+                "fast as they work (in your game only). Its alpha is how far: 0 leaves the fire as usual, 1 turns it fully that color.",
+                new UnityEngine.Color(0.1f, 0.45f, 1f, 1f),
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowMantleAnchorMotes = new(
+                EffectsGroup,
+                "Show Pitch-Seal Motes",
+                "Under the Pitch-Seal Rite, the items it holds on the ground give off little blobs of pitch with a coin stuck in them instead of their usual yellow sparks.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowPrimalHearthMotes = new(
+                EffectsGroup,
+                "Show Primal-Hearth Motes",
+                "Under the Primal-Hearth Rite, now and then a few of the wisp fountains and eternal pyres it reaches give off violet flames.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<float> PrimalHearthGlow = new(
+                EffectsGroup,
+                "Primal-Hearth Glow",
+                new ConfigDescription(
+                    "How many times as bright the wisp fountains and eternal pyres the Primal-Hearth Rite reaches glow near you (their light, glowing parts and flames). 1 is as usual.",
+                    new AcceptableValueRange<float>(1f, 4f)),
+                2f,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowHearthKindleMotes = new(
+                EffectsGroup,
+                "Show Hearth-Kindle Motes",
+                "Under the Hearth-Kindle Rite, now and then a few of the burning fires it reaches give off little rest signs, " +
+                "and while you rest by a fire there its embers arc into you, with a puff of Rested symbols when you become Rested.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowPlumeWardDown = new(
+                EffectsGroup,
+                "Show Plume-Ward Down",
+                "Under the Plume-Ward Rite, each landing it softens gives off a puff of pale down (seen by everyone with the mod).",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> ShowMorgenPouchGlow = new(
+                EffectsGroup,
+                "Show Morgen-Pouch Marks",
+                "Under the Morgen-Pouch Rite, the creatures your pouch would take wear a violet glow, like a Guardian Power's (seen only by you).",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> GraveBeacon = new(
+                EffectsGroup,
+                "Show Grave-Bind Beam",
+                "Show a beam into the sky over your tombstone after a death under the Grave-Bind Rite.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<float> LuminaryStrength = new(
+                EffectsGroup,
+                "Luminary Light Strength",
+                new ConfigDescription("How bright the light around you is: 0.5 is half as bright, 2 twice as bright. The range stays the same.", new AcceptableValueRange<float>(0.1f, 2f)),
+                0.6f,
+                false);
+
+            internal static readonly ConfigInfo<float> LuminaryBodyLight = new(
+                EffectsGroup,
+                "Luminary Body Light",
+                new ConfigDescription("How bright the soft light that keeps the shining player's body lit is: 1 as usual, lower it if the body looks too bright. 0: no body light.", new AcceptableValueRange<float>(0f, 2f)),
+                1f,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> LuminaryShadows = new(
+                EffectsGroup,
+                "Luminary Shadows",
+                "On: floors, ceilings and walls block the light, so it doesn't shine through to the floor above or below or the next " +
+                "room. Off: a little lighter on the graphics card, but the light goes through everything within its range. Also " +
+                "needs shadows on in the game's graphics settings.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> CrimsonBubble = new(
+                EffectsGroup,
+                "Show Crimson Bubble",
+                "Show the shield bubble over the Crimson Rite's radius. Players are held inside (or kept out) either way.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> RagnarokBubble = new(
+                EffectsGroup,
+                "Show Ragnarok Bubble",
+                "Show the shield bubble over the Ragnarök Rite's radius. Players are held inside (or kept out) either way.",
+                Toggle.On,
+                false);
+
+            internal static readonly ConfigInfo<Toggle> HoardBaneBubble = new(
+                EffectsGroup,
+                "Show Hoard-Bane Bubble",
+                "Show the shield bubble over the Hoard-Bane Rite's radius. Players are held inside (or kept out) either way; the " +
+                "elites' bubbles and the miniboss's shield always show.",
+                Toggle.On,
+                false);
         }
     }
 }
@@ -1463,6 +2924,7 @@ internal static class CustomEnvironmentNames
     internal const string Aurora = "TempestRite_Aurora";
     internal const string Bloodmoon = "TempestRite_Bloodmoon";
     internal const string Ragnarok = "TempestRite_Ragnarok";
+    internal const string HoardBane = "TempestRite_HoardBane";
 }
 
 // The settings of one rite, in its own section.
@@ -1477,16 +2939,19 @@ internal sealed class RiteSettings
     internal ConfigInfo<string>? Environments { get; }
     // Only for rites that work around the obliterator.
     internal ConfigInfo<float>? Radius { get; }
+    // Whether only different key items count toward the Key Item Amount (two of the same count once).
+    internal bool DistinctKeys { get; }
 
     // minutesDescription: what the Duration Minutes setting means, when it isn't how long the rite goes on.
     internal RiteSettings(string group, string effect, string keyItem, string keyItemName, string why, bool enabled, bool lasts = true,
         string? environments = null, string namePrefix = "", int amount = 1, float minutes = 30f, float radius = 0f,
-        string? minutesDescription = null)
+        string? minutesDescription = null, bool distinctKeys = false)
     {
+        DistinctKeys = distinctKeys;
         Enabled = new(
             group,
             namePrefix + "Enabled",
-            $"Burning {keyItemName} in the obliterator performs {effect}. {why}",
+            $"Sacrificing {keyItemName} in the obliterator performs {effect}. {why}",
             enabled ? Toggle.On : Toggle.Off,
             true);
 
@@ -1503,9 +2968,10 @@ internal sealed class RiteSettings
         KeyItem = new(
             group,
             namePrefix + "Key Item",
-            $"Prefab names of the items that perform {effect} when burnt, separated by commas (default {keyItem}, {keyItemName}). " +
-            "Add others to let any of them work: any mix of them counts toward the Key Item Amount. An item performs one rite " +
-            "only: when two rites list it, the one in the lower numbered section keeps it.",
+            $"Prefab names of the items that perform {effect} when sacrificed, separated by commas (default {keyItem}, {keyItemName}). " +
+            (distinctKeys ? "Add others to let any of them work: each different one counts once toward the Key Item Amount. "
+                : "Add others to let any of them work: any mix of them counts toward the Key Item Amount. ") + "An item performs one rite " +
+            "only: when two rites list it, the one listed first on the rites page keeps it.",
             keyItem,
             true);
 
@@ -1513,7 +2979,8 @@ internal sealed class RiteSettings
             group,
             namePrefix + "Key Item Amount",
             new ConfigDescription(
-                $"How many key items (any mix of them) have to be in the obliterator to perform {effect}. Fewer just burn.",
+                (distinctKeys ? $"How many different key items have to be in the obliterator to perform {effect} (two of the same count once). "
+                    : $"How many key items (any mix of them) have to be in the obliterator to perform {effect}. ") + "Fewer are sacrificed for nothing.",
                 new AcceptableValueRange<int>(1, 100)),
             amount,
             true);

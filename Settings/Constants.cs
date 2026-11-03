@@ -18,7 +18,7 @@ internal static class Constants
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "1.0.1";
+        internal const string ModVersion = "1.0.2";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
         internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
@@ -1122,7 +1122,7 @@ internal static class Constants
             "the True Sight Rite (no Mistlands mist)",
             "DvergrKeyFragment",
             "a sealbreaker fragment",
-            "The Mistlands mist is gone, for you and for what creatures can see. Off by default: it takes away much of the Mistlands' challenge.",
+            "The Mistlands mist is gone, for you and for what creatures can see. It takes away much of the Mistlands' challenge, so turn it off if you want to keep that.",
             true,
             minutes: 60f);
 

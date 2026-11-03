@@ -147,7 +147,7 @@ Fights at the obliterator, under a **shield bubble** nobody can leave or enter u
 | | Sacrifice | Rite | What it does |
 | :---: | --- | --- | --- |
 | <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Crimson.png" width="48" alt="Crimson Rite"> | **5 Withered bones** | **Crimson Rite** | **Survive the night.** Raids pour in one after another for **10 minutes** under a blood moon, toughened to match how far you have come. Hold out for **coins for every kill**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Ragnarok.png" width="48" alt="Ragnarök Rite"> | **3 different Boss trophies** | **Ragnarök Rite** | **A boss rush.** Bosses you have slain rise again, each brought up to the strongest one you have all beaten. Bring them all down for **treasure**. |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Ragnarok.png" width="48" alt="Ragnarök Rite"> | **3 different Boss trophies** | **Ragnarök Rite** | **A boss rush.** Bosses you have slain rise again, each brought up to the strongest one you have all beaten. Bring them all down for **treasure**. Needs Bonemass slain; Eikthyr and the Elder then count for you even if you missed them. |
 | <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/HoardBane.png" width="48" alt="Hoard-Bane Rite"> | **One of Hildir's chests** | **Hoard-Bane Rite** | **Someone wants their chest back.** Its owner comes shielded, with elite guards around the arena. Break the shield, win the fight, and take **coins, valuables and upgrade idols**. Lose and the chest waits for another try. |
 | <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Sanctuary.png" width="48" alt="Sanctuary Rite"> | **3 Scrap iron** | **Sanctuary Rite** | Ends any raid going on, or any of these fights, with no reward. |
 | <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Unmaking.png" width="48" alt="Unmaking Rite"> | **Thunderstone** | **Unmaking Rite** | Weapons, tools and armor sacrificed with it give back **80%** of what they cost. |
@@ -205,5 +205,5 @@ Report bugs or suggest improvements on [GitHub](https://github.com/JoksterCube/T
 ---
 
 **Author:** JoksterCube<br>
-**Version:** 1.0.0<br>
+**Version:** 1.0.1<br>
 **License:** [GNU GPL v3 or later](https://www.gnu.org/licenses/gpl-3.0.html)

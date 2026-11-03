@@ -13,7 +13,9 @@ namespace JoksterCube.TempestRite.Domain;
 // 1. Asking: the players within the radius are asked which bosses they have slain (the key a boss gives as it dies, or
 //    a kill of it in their character's stats: the game gives the key only to the player whose game had the boss).
 //    The bosses every one of them has slain can come (with player based raids off, the world's keys count for all).
-//    With none, it ends at once and everyone there is told why.
+//    A player who has slain Bonemass (the last early boss) or a stronger one counts Eikthyr and the Elder as slain too;
+//    if nobody inside has got that far, it ends at once and its key items go back into the obliterator (see
+//    BossRoster.EarlyBosses). With no boss slain by everyone, it ends at once too. Either way everyone there is told why.
 // 2. Bosses are picked, different ones while there are enough (those slain by only some of them
 //    fill in before any comes again), in a random order. Each below the strongest boss everyone has slain is raised to it, with a
 //    star for each place below it (see RagnarokPower): one player inside spawns it within the bubble, and the next rises a little after it falls. Their
@@ -38,7 +40,9 @@ internal static class RagnarokRush
         TimeUp = 4,
         NoBosses = 5,
         NoOne = 6,
-        NoSpawn = 7
+        NoSpawn = 7,
+        // Nobody inside has slain the last early boss (Bonemass) or a stronger one: its key items are given back.
+        TooEarly = 8
     }
 
     private enum Phase
@@ -264,9 +268,17 @@ internal static class RagnarokRush
         List<int> eligible = [];
         // Slain by some but not all: they fill in before any boss comes again.
         List<int> spare = [];
-        BossRoster.Slain(Roster, Answers.Values, eligible, spare);
         if (Answers.Count < Asked.Count)
             Plugin.ModLogger.LogInfo($"Ragnarök Rite: {Asked.Count - Answers.Count} players inside didn't answer (no mod?); left out of the choice.");
+        if (Roster.Count > 0 && !FillEarly())
+        {
+            bool givenBack = IncursionPending.GiveBack(WeatherKind.Ragnarok, _center);
+            Plugin.ModLogger.LogInfo($"Ragnarök Rite: nobody inside has slain {Roster[Math.Min(BossRoster.EarlyBosses, Roster.Count) - 1].Prefab} " +
+                $"or a stronger boss{(givenBack ? "" : " (no key items to give back)")}.");
+            Stop(Ending.TooEarly);
+            return;
+        }
+        BossRoster.Slain(Roster, Answers.Values, eligible, spare);
         if (eligible.Count == 0)
         {
             Stop(Ending.NoBosses);
@@ -282,6 +294,22 @@ internal static class RagnarokRush
         _current = 0;
         _spawnTries = 0;
         Rest(FirstRiseDelay);
+    }
+
+    // Each player who got past the early bosses counts them all as slain (the world's keys too, when they count for
+    // everyone). Whether anyone inside got that far.
+    private static bool FillEarly()
+    {
+        List<string> keys = Roster.ConvertAll(boss => boss.Key);
+        HashSet<string> world = BossRoster.WorldSlain(Roster);
+        bool past = BossRoster.PastEarly(keys, world);
+        foreach (HashSet<string> slain in Answers.Values)
+        {
+            slain.UnionWith(world);
+            BossRoster.FillEarly(keys, slain);
+            past |= BossRoster.PastEarly(keys, slain);
+        }
+        return past;
     }
 
     // ---- 2. Rising and fighting ----

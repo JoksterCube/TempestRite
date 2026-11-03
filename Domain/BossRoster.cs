@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using JoksterCube.TempestRite.Settings;
 using UnityEngine;
@@ -82,6 +83,37 @@ internal static class BossRoster
             if (all) everyone.Add(place);
             else if (someone) some.Add(place);
         }
+    }
+
+    // The Ragnarök Rite's early bosses: the first ones of the Bosses setting (Eikthyr, the Elder, Bonemass). A player
+    // who has slain the last of them or a stronger one counts them all as slain, so those who missed the early game
+    // aren't left out; until someone inside has got that far, the rite calls no boss.
+    internal const int EarlyBosses = 3;
+
+    // Adds the early bosses to what a player has slain when they got past them. keys: the bosses' keys, weakest first.
+    internal static void FillEarly(IList<string> keys, HashSet<string> slain)
+    {
+        if (!PastEarly(keys, slain)) return;
+        for (int place = 0; place < Math.Min(EarlyBosses, keys.Count); place++) slain.Add(keys[place]);
+    }
+
+    // Whether the last early boss (with fewer bosses in the setting, the strongest) or a stronger one is among these.
+    internal static bool PastEarly(IList<string> keys, ICollection<string> slain)
+    {
+        for (int place = Math.Min(EarlyBosses, keys.Count) - 1; place >= 0 && place < keys.Count; place++)
+            if (slain.Contains(keys[place])) return true;
+        return false;
+    }
+
+    // The bosses' keys the world has, when they count for everyone (see Slain); otherwise none.
+    internal static HashSet<string> WorldSlain(List<Boss> roster)
+    {
+        HashSet<string> world = [];
+        if (!ZoneSystem.instance || ZoneSystem.instance.GetGlobalKey(GlobalKeys.PlayerEvents) || AdvancementProgression.PrivateRaids())
+            return world;
+        foreach (Boss boss in roster)
+            if (ZoneSystem.instance.GetGlobalKey(boss.Key)) world.Add(boss.Key);
+        return world;
     }
 
     // The share of damage it takes, on average over the damage types players deal.

@@ -22,6 +22,10 @@ internal static class IncursionPending
     private static float _until;
     // The server's: the key items burnt for it, given back if it is refused.
     private static readonly List<(string item, int amount)> Keys = [];
+    // The server's: those of the rite last performed, given back if it calls nothing after all (see GiveBack).
+    private static WeatherKind _burntKind;
+    private static Vector3 _burntAt;
+    private static readonly List<(string item, int amount)> Burnt = [];
 
     internal static void Register(ZRoutedRpc rpc)
     {
@@ -35,6 +39,8 @@ internal static class IncursionPending
         _at = Vector3.zero;
         _until = 0f;
         Keys.Clear();
+        _burntKind = WeatherKind.None;
+        Burnt.Clear();
     }
 
     // The rite whose lever was pulled, and where, if it isn't performed yet.
@@ -147,34 +153,49 @@ internal static class IncursionPending
     }
 
     // On the server, as the rite there is performed or refused: no longer pending. Refused, its key items burnt for it
-    // go back into the obliterator.
+    // go back into the obliterator; performed, they are kept a while (see GiveBack).
     internal static void Done(WeatherKind kind, Vector3 at, bool refused)
     {
         if (!Is(kind, at)) return;
-        if (refused && Keys.Count > 0) Refund(kind, at);
+        if (refused && Keys.Count > 0) Refund(kind, at, Keys);
+        _burntKind = refused ? WeatherKind.None : kind;
+        _burntAt = at;
+        Burnt.Clear();
+        if (!refused) Burnt.AddRange(Keys);
         Keys.Clear();
         Tell(WeatherKind.None, at, 0f);
     }
 
-    private static void Refund(WeatherKind kind, Vector3 at)
+    // On the server: the rite performed there calls nothing after all (the Ragnarök Rite with nobody past the early
+    // bosses), so the key items burnt for it go back into the obliterator. Whether there were any to give back.
+    internal static bool GiveBack(WeatherKind kind, Vector3 at)
+    {
+        if (_burntKind != kind || Utils.DistanceXZ(_burntAt, at) > IncursionArena.SamePlace || Burnt.Count == 0) return false;
+        Refund(kind, at, Burnt);
+        _burntKind = WeatherKind.None;
+        Burnt.Clear();
+        return true;
+    }
+
+    private static void Refund(WeatherKind kind, Vector3 at, List<(string item, int amount)> keys)
     {
         ZDOID obliterator = Obliterator(at);
         ZDO? zdo = obliterator.IsNone() ? null : ZDOMan.instance.GetZDO(obliterator);
         long owner = zdo?.GetOwner() ?? 0L;
         if (owner == 0L)
         {
-            Plugin.ModLogger.LogWarning($"{WeatherKinds.Name(kind)} refused: no obliterator to give its key items back to.");
+            Plugin.ModLogger.LogWarning($"{WeatherKinds.Name(kind)}: no obliterator to give its key items back to.");
             return;
         }
         ZPackage package = new();
-        package.Write(Keys.Count);
-        foreach ((string item, int amount) in Keys)
+        package.Write(keys.Count);
+        foreach ((string item, int amount) in keys)
         {
             package.Write(item);
             package.Write(amount);
         }
         ZRoutedRpc.instance.InvokeRoutedRPC(owner, obliterator, Rpcs.ObliteratorRefund, package);
-        Plugin.ModLogger.LogInfo($"{WeatherKinds.Name(kind)} refused: its key items go back into the obliterator.");
+        Plugin.ModLogger.LogInfo($"{WeatherKinds.Name(kind)}: its key items go back into the obliterator.");
     }
 
     private const string ObliteratorPrefab = "incinerator";

@@ -18,7 +18,7 @@ internal static class Constants
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "1.0.0";
+        internal const string ModVersion = "1.0.1";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
         internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
@@ -546,6 +546,7 @@ internal static class Constants
         internal static string RagnarokBegins => Text.Get("ragnarok_begins");
         internal static string RagnarokNoBosses => Text.Get("ragnarok_no_bosses");
         internal static string RagnarokNoOne => Text.Get("ragnarok_no_one");
+        internal static string RagnarokTooEarly => Text.Get("ragnarok_too_early");
         // {0}: the boss.
         internal static string RagnarokRises => Text.Get("ragnarok_rises");
         internal static string RagnarokFalls => Text.Get("ragnarok_falls");
@@ -2346,7 +2347,9 @@ internal static class Constants
             "first. A boss gets a star for every two bosses between it and the strongest they have all slain, and each star " +
             "raises it to the boss two places up (after Bonemass, Eikthyr is 1 star and as strong as Bonemass): its health " +
             "(its resistances counted) and damage are raised to match, and so are those of what it summons. With none slain, " +
-            "nothing rises and everyone there is told why. The sky burns, and a shield bubble covers the radius: " +
+            "nothing rises and everyone there is told why. A player who has slain the third boss of the Bosses setting (Bonemass) " +
+            "or a stronger one counts the first two (Eikthyr, the Elder) as slain too; if nobody inside has, nothing rises " +
+            "and the key items go back into the obliterator. The sky burns, and a shield bubble covers the radius: " +
             "from when it starts, players inside can't get out and players outside can't get in, and no portal into or out of " +
             "it works; no creature gets in or out. Nothing can be built, repaired or torn down inside, and no rite but the " +
             "Sanctuary Rite performed there. Lightning strikes the obliterator as each boss falls. The bosses drop what they " +

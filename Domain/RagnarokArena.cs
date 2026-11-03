@@ -208,6 +208,7 @@ internal static class RagnarokArena
             RagnarokRush.Ending.TimeUp => Messages.RagnarokFailedTime,
             RagnarokRush.Ending.NoBosses => Messages.RagnarokNoBosses,
             RagnarokRush.Ending.NoOne => Messages.RagnarokNoOne,
+            RagnarokRush.Ending.TooEarly => Messages.RagnarokTooEarly,
             RagnarokRush.Ending.NoSpawn => Messages.RagnarokFailedSpawn,
             _ => Messages.RagnarokFailedEnded
         };

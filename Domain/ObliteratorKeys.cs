@@ -245,14 +245,26 @@ internal static class ObliteratorKeys
     // Each rite that is turned on and one of whose items the local player has found: the only ones shown to them.
     internal static IEnumerable<WeatherKind> Known() => Enabled().Where(IsKnown);
 
-    // Whether the local player has found one of the rite's items (held it at least once), as the game keeps it for
-    // recipes. Until then the rite is never mentioned to them; burning the item still performs it.
+    // Whether the local player has found enough of the rite's items to perform it (held them at least once), as the game
+    // keeps it for recipes: one of them, or for a rite that takes different items, as many different ones as it takes
+    // (fewer when its list is shorter). Until then the rite is never mentioned to them; burning the items still performs it.
+    // The Ley-Survey Rite also waits for a Crimson, Ragnarök or Hoard-Bane Rite to be known (and on): until then there is no
+    // fight to survey the ground for.
     internal static bool IsKnown(WeatherKind kind)
     {
-        foreach (string item in Items(kind))
-            if (IsItemKnown(item)) return true;
+        if (kind == WeatherKind.LeySurvey && !SurveyWanted()) return false;
+        IReadOnlyList<string> items = Items(kind);
+        int needed = Distinct(kind) ? System.Math.Min(Amount(kind), items.Count) : 1;
+        int found = 0;
+        foreach (string item in items)
+            if (IsItemKnown(item) && ++found >= needed) return true;
         return false;
     }
+
+    // The arena rites the Ley-Survey Rite surveys the ground for.
+    internal static readonly WeatherKind[] Surveyed = [WeatherKind.Crimson, WeatherKind.Ragnarok, WeatherKind.HoardBane];
+
+    private static bool SurveyWanted() => Surveyed.Any(kind => PluginConfig.IsEnabled(kind) && IsKnown(kind));
 
     // Whether the local player has found this item. A rite's other items stay hidden until they find those too.
     internal static bool IsItemKnown(string prefabName)

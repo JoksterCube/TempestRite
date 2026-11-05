@@ -32,6 +32,55 @@ internal static class GlacialSatietyPatch
         }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
     }
+
+    // How much longer food lasts under the blessing (1: as usual).
+    internal static float Stretch(Player player) =>
+        PatchGuard.IsDisabled(Feature) || player != Player.m_localPlayer || !Blessings.IsActive(WeatherKind.GlacialSatiety)
+            ? 1f
+            : Mathf.Max(1f, PluginConfig.FoodDurationMultiplier.Value);
+}
+
+// The Glacial Satiety Rite also makes food last longer: the game takes a second off each food's time once its food
+// timer fills up, and under the blessing that timer fills only 1 / Food Duration Multiplier as fast. The fade follows
+// the time left, so it slows the same way.
+[HarmonyPatch(typeof(Player), nameof(Player.UpdateFood))]
+internal static class GlacialSatietyTimePatch
+{
+    private static void Prefix(Player __instance, float dt, bool forceUpdate)
+    {
+        if (forceUpdate) return;
+        float stretch = GlacialSatietyPatch.Stretch(__instance);
+        if (stretch <= 1f) return;
+        __instance.m_foodUpdateTimer -= dt * Game.m_foodRate * (1f - 1f / stretch);
+    }
+}
+
+// The food times under the food bar show how long each food lasts while the blessing holds: the time left times the
+// Food Duration Multiplier. Once it ends they show the game's own time again.
+[HarmonyPatch(typeof(Hud), nameof(Hud.UpdateFood))]
+internal static class GlacialSatietyHudPatch
+{
+    private static void Postfix(Hud __instance, Player player)
+    {
+        float stretch = GlacialSatietyPatch.Stretch(player);
+        if (stretch <= 1f) return;
+        List<Player.Food> foods = player.GetFoods();
+        for (int i = 0; i < __instance.m_foodTime.Length && i < foods.Count; i++)
+        {
+            float seconds = foods[i].m_time / Game.m_foodRate * stretch;
+            TMPro.TMP_Text text = __instance.m_foodTime[i];
+            if (seconds >= 60f)
+            {
+                text.text = Mathf.CeilToInt(seconds / 60f) + "m";
+                text.color = Color.white;
+            }
+            else
+            {
+                text.text = Mathf.FloorToInt(seconds) + "s";
+                text.color = new Color(1f, 1f, 1f, 0.4f + Mathf.Sin(Time.time * 10f) * 0.6f);
+            }
+        }
+    }
 }
 
 // The Carapace Temper Rite: item tooltips show the tempered durability under the game's own (not in the crafting list).

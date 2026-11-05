@@ -104,6 +104,7 @@ internal static class WeatherStatus
             case WeatherKind.Crimson: return Format(Messages.StatusTooltipCrimson, who, Meters(kind));
             case WeatherKind.Ragnarok: return Format(Messages.StatusTooltipRagnarok, who, Meters(kind));
             case WeatherKind.HoardBane: return Format(Messages.StatusTooltipHoardBane, who, Meters(kind));
+            case WeatherKind.LeySurvey: return Format(Messages.StatusTooltipLeySurvey, who, Meters(kind)) + LeySurvey.Report();
             case WeatherKind.VatBoil: return Format(Messages.StatusTooltipVatBoil, who, Meters(kind), Times(PluginConfig.VatBoilSpeedMultiplier.Value));
             case WeatherKind.PitchBellows:
                 return Format(Messages.StatusTooltipPitchBellows, who, Meters(kind), Times(PluginConfig.PitchBellowsSpeedMultiplier.Value));
@@ -156,7 +157,7 @@ internal static class WeatherStatus
             case WeatherKind.AbyssalDraw: return Format(Messages.StatusTooltipAbyssalDraw, who, Mathf.RoundToInt(PluginConfig.DrawRange.Value));
             case WeatherKind.AbyssalSurge:
                 return Format(Messages.StatusTooltipAbyssalSurge, who, Times(PluginConfig.SerpentMultiplier.Value), Times(PluginConfig.FishMultiplier.Value));
-            case WeatherKind.GlacialSatiety: return Format(Messages.StatusTooltipGlacialSatiety, who, Percent(PluginConfig.FoodFloor.Value));
+            case WeatherKind.GlacialSatiety: return Format(Messages.StatusTooltipGlacialSatiety, who, Percent(PluginConfig.FoodFloor.Value), Percent(PluginConfig.FoodDurationMultiplier.Value - 1f));
             case WeatherKind.VeinShatter:
                 return Format(Messages.StatusTooltipVeinShatter, who, Percent(PluginConfig.VeinSpread.Value), Percent(PluginConfig.VeinShatterAt.Value));
             case WeatherKind.CarapaceTemper: return Format(Messages.StatusTooltipCarapaceTemper, who, Percent(GearWear.Multiplier - 1f));

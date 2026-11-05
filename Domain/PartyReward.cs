@@ -6,11 +6,12 @@ namespace JoksterCube.TempestRite.Domain;
 
 // The Crimson, Ragnarök and Hoard-Bane Rites' rewards grow with the players who fought: alone, the usual reward; each
 // player more adds this share of it (0.5: two players get 1.5 times as much, three twice, four 2.5 times).
-// The players counted are those alive inside the bubble as the reward is won: the fallen and those who left don't count.
+// The players counted are those alive inside the Blood Grounds as the reward is won: the fallen and those who left don't count.
+// Players beyond the rite's Max Rewarded Players add nothing.
 internal static class PartyReward
 {
-    internal static float Multiplier(int players, float perExtraPlayer) =>
-        1f + Math.Max(0f, perExtraPlayer) * Math.Max(0, players - 1);
+    internal static float Multiplier(int players, float perExtraPlayer, int maxPlayers = int.MaxValue) =>
+        1f + Math.Max(0f, perExtraPlayer) * Math.Max(0, Math.Min(players, Math.Max(1, maxPlayers)) - 1);
 
     // amount times the multiplier, rounded down or up at random so that on average it is exact (1 x 1.5: 1 or 2, half
     // the time each). Roll from 0 to 1.

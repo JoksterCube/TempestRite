@@ -9,18 +9,18 @@ using static JoksterCube.TempestRite.Settings.Constants;
 namespace JoksterCube.TempestRite.Domain;
 
 // The Hoard-Bane Rite on the server (and in single player or when hosting); players' games spawn the fight, tell when
-// its creatures fall and show it all (see HoardBaneArena, and IncursionArena for the bubble):
+// its creatures fall and show it all (see HoardBaneArena, and IncursionArena for the Blood Grounds):
 // 1. The chest burnt picks the fight (see HoardBaneLoot): the player who burnt it says which, right before asking for
 //    the rite. The players inside are asked which bosses they have slain, as for the Ragnarök Rite: the strongest boss
 //    everyone has slain sets how strong the miniboss is and the treasure.
-// 2. One player inside spawns it all: three dormant elites in bubbles evenly around the edge, and the miniboss (or both
+// 2. One player inside spawns it all: three dormant elites in lairs evenly around the edge, and the miniboss (or both
 //    brothers) on the edge between them with its followers, shielded.
 //    Every 30 seconds after, while fewer than two followers stand, one more comes in where it is furthest from the
 //    players (see HoardBaneLoot.FarthestFrom), spawned by the player nearest that place.
 // 3. Each elite falling strikes the miniboss with lightning; when the last falls, its shield breaks (told again and
 //    again, so a game taking the miniboss over later knows). When every miniboss falls, it ends and the obliterator
 //    receives treasure. There is no time limit.
-// A miniboss or elite that falls out of the bubble and can't be put back (see ArenaRescue), or is gone without falling:
+// A miniboss or elite that falls out of the Blood Grounds and can't be put back (see ArenaRescue), or is gone without falling:
 // an elite counts as slain; a miniboss too once its shield is down, else it rises again, whole and shielded.
 // It breaks off with no reward when the obliterator is destroyed, everyone inside has fallen or left, or the Sanctuary
 // Rite ends it; the chest burnt isn't lost then: it goes back into the obliterator (or, with none left, to
@@ -90,7 +90,7 @@ internal static class HoardBaneRush
     private static int _encounter;
     // The strongest boss everyone inside has slain (its place in the roster), or -1.
     private static int _strongest = -1;
-    // Where the first elite's bubble is, in degrees around the obliterator.
+    // Where the first elite's lair is, in degrees around the obliterator.
     private static float _angle;
     // Each miniboss's health and damage multipliers, by its place in the fight.
     private static readonly List<(float health, float damage)> Power = [];
@@ -116,6 +116,8 @@ internal static class HoardBaneRush
 
     private static ZDOID _rewardAt = ZDOID.None;
     private static readonly List<(string item, int amount)> Reward = [];
+    // Survived: the treasure comes in a chest struck down by the obliterator. Failed: the chest burnt goes back inside.
+    private static bool _rewardInChest;
     private static int _rewardTries;
     private static float _nextReward;
 
@@ -272,7 +274,7 @@ internal static class HoardBaneRush
 
     private static HoardBaneLoot.Encounter Fight => HoardBaneLoot.Encounters[_encounter];
 
-    // A raid going on that reaches the bubble ends: no raid comes while it goes on (see CrimsonPatch).
+    // A raid going on that reaches the Blood Grounds ends: no raid comes while it goes on (see CrimsonPatch).
     private static void EndRaidHere()
     {
         RandEventSystem? raids = RandEventSystem.instance;
@@ -470,7 +472,7 @@ internal static class HoardBaneRush
         else if (Bosses.TryGetValue(id, out int place)) BossFell(id, place);
     }
 
-    // From the game that owns it: it fell out of the bubble and couldn't be put back (see ArenaRescue).
+    // From the game that owns it: it fell out of the Blood Grounds and couldn't be put back (see ArenaRescue).
     private static void RPC_Lost(long sender, ZDOID id)
     {
         if (!IsServer() || !_running || id.IsNone()) return;
@@ -662,6 +664,7 @@ internal static class HoardBaneRush
         ClearFight();
         if (Reward.Count > 0)
         {
+            _rewardInChest = ending == Ending.Survived;
             _rewardAt = _obliterator;
             _rewardTries = 0;
             _nextReward = 0f;
@@ -696,8 +699,7 @@ internal static class HoardBaneRush
         for (int i = 0; i < PluginConfig.HoardBaneTreasureRolls[chest].Value; i++) strengths.Add(strength);
         rolled.AddRange(RagnarokLoot.Roll(table, strengths, () => UnityEngine.Random.value));
         List<HoardBaneLoot.Idol> idols = HoardBaneLoot.ParseIdols(PluginConfig.HoardBaneIdols.Value, problems);
-        foreach (RagnarokLoot.Treasure idol in HoardBaneLoot.PickIdols(idols, Roster.ConvertAll(r => r.Prefab), _strongest))
-            rolled.Add((idol.Item, HoardBaneLoot.Amount(idol, UnityEngine.Random.value)));
+        rolled.AddRange(HoardBaneLoot.RollIdols(idols, Roster.ConvertAll(r => r.Prefab), _strongest, () => UnityEngine.Random.value));
         foreach (string problem in problems)
             Plugin.ModLogger.LogWarning($"Hoard-Bane Rite: couldn't read \"{problem}\" in its Coins, Treasure or Idols setting.");
         foreach ((string item, int amount) in rolled)
@@ -709,12 +711,13 @@ internal static class HoardBaneRush
         }
         // More players, more treasure: each item's amount times the multiplier for the players alive inside as it is won.
         int players = Math.Max(1, PlayersInside().Count);
-        float multiplier = PartyReward.Multiplier(players, PluginConfig.HoardBaneRewardPerPlayer.Value);
+        float multiplier = PartyReward.Multiplier(players, PluginConfig.HoardBaneRewardPerPlayer.Value, PluginConfig.HoardBaneMaxPlayers.Value);
         PartyReward.ScaleAll(Reward, multiplier, () => UnityEngine.Random.value);
         Plugin.ModLogger.LogInfo($"Hoard-Bane Rite: {players} players inside, treasure x{multiplier:0.##}.");
     }
 
-    // The game that owns the obliterator puts the treasure inside (see RagnarokArena.Reward).
+    // The game that owns the obliterator strikes the treasure down in a chest beside it (see TreasureChests), or puts the
+    // chest burnt back inside (see RagnarokArena.Reward). Tried again for a while when nobody owns it right now.
     private static void GiveRewardLater()
     {
         if (Reward.Count == 0 || _running || Time.time < _nextReward) return;
@@ -734,14 +737,18 @@ internal static class HoardBaneRush
             Reward.Clear();
             return;
         }
-        ZPackage package = new();
-        package.Write(Reward.Count);
-        foreach ((string item, int amount) in Reward)
+        if (_rewardInChest) TreasureChests.Send(zdo, "Hoard-Bane Rite", [("", [.. Reward])]);
+        else
         {
-            package.Write(item);
-            package.Write(amount);
+            ZPackage package = new();
+            package.Write(Reward.Count);
+            foreach ((string item, int amount) in Reward)
+            {
+                package.Write(item);
+                package.Write(amount);
+            }
+            ZRoutedRpc.instance.InvokeRoutedRPC(owner, zdo.m_uid, Rpcs.HoardBaneReward, package);
         }
-        ZRoutedRpc.instance.InvokeRoutedRPC(owner, zdo.m_uid, Rpcs.HoardBaneReward, package);
         Reward.Clear();
     }
 

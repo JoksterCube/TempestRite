@@ -15,7 +15,7 @@ internal static class ObliteratorPatches
     {
         private const string Feature = "Obliterator lever";
 
-        // Within a Crimson, Ragnarök or Hoard-Bane Rite's bubble, any obliterator but the rite's own does nothing.
+        // Within a Crimson, Ragnarök or Hoard-Bane Rite's Blood Grounds, any obliterator but the rite's own does nothing.
         private static bool Prefix(Incinerator __instance, Humanoid user, ref bool __result)
         {
             if (PatchGuard.IsDisabled(Feature)) return true;

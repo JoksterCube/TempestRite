@@ -22,7 +22,7 @@ internal static class ArenaRescue
     private const float FallDepth = 4f;
     // Without known ground, deeper than this under the water's surface.
     private const float LostDepth = 60f;
-    // How far past the edge counts as out (the bubble holds creatures within half a meter).
+    // How far past the edge counts as out (the Blood Grounds hold creatures within half a meter).
     private const float EdgeSlack = 3f;
     // How many times it is put back before it is given up on, and how long it has to stay in for those to be forgotten.
     private const int PutBackTries = 3;
@@ -131,12 +131,12 @@ internal static class ArenaRescue
         {
             Vector2 offset = UnityEngine.Random.insideUnitCircle * (radius * BackWithin);
             Vector3 point = center + new Vector3(offset.x, 0f, offset.y);
-            if (!zones || !zones.GetSolidHeight(point, out float ground) || ground < zones.m_waterLevel) continue;
+            if (!IncursionArena.DryGroundAt(point, out float ground)) continue;
             point.y = ground + 1f;
             return point;
         }
         Vector3 beside = center + Vector3.forward * 3f;
-        beside.y = (zones && zones.GetSolidHeight(beside, out float height) ? Mathf.Max(height, center.y) : center.y) + 1f;
+        beside.y = (IncursionArena.GroundAt(beside, out float height) ? Mathf.Max(height, center.y) : center.y) + 1f;
         return beside;
     }
 

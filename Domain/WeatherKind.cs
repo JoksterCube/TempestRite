@@ -84,7 +84,9 @@ internal enum WeatherKind
     // Carries the blessed player's mount and following pets in a pocket, let out again by an ability (see PetPouch).
     MorgenPouch = 61,
     // Saves some arrows and bolts, and brings thrown spears back to the blessed player (see TendrilDraw).
-    TendrilDraw = 62
+    TendrilDraw = 62,
+    // Shows around the obliterator whether a Crimson, Ragnarök or Hoard-Bane Rite could be fought there (see LeySurvey).
+    LeySurvey = 63
 }
 
 // Rites in different slots go on side by side, each with its own time: rain during polar night is fine. A new one
@@ -124,7 +126,9 @@ internal enum EffectSlot
     // The Primal-Hearth Rite: wisp fountains and eternal pyres.
     Lures = 21,
     // The Hearth-Kindle Rite: players resting by a fire.
-    Resting = 22
+    Resting = 22,
+    // The Ley-Survey Rite: an arena's site checked.
+    Survey = 23
 }
 
 // How rites are grouped on the rites page, and colored.
@@ -219,6 +223,7 @@ internal static class WeatherKinds
         [WeatherKind.HoardBane] = new(() => Messages.HoardBaneName, () => Messages.HoardBanePlain, RiteGroup.Reckoning, EffectSlot.Incursion, located: true),
         [WeatherKind.Sanctuary] = new(() => Messages.SanctuaryName, () => Messages.SanctuaryPlain, RiteGroup.Reckoning, null),
         [WeatherKind.Unmaking] = new(() => Messages.UnmakingName, () => Messages.UnmakingPlain, RiteGroup.Reckoning, null),
+        [WeatherKind.LeySurvey] = new(() => Messages.LeySurveyName, () => Messages.LeySurveyPlain, RiteGroup.Reckoning, EffectSlot.Survey, located: true),
     };
 
     // In the order they are listed to players: by group.
@@ -236,7 +241,7 @@ internal static class WeatherKinds
         WeatherKind.DraughtFlush, WeatherKind.SoulTether, WeatherKind.TundraShroud, WeatherKind.ScaldDrift, WeatherKind.TetherLock,
         WeatherKind.StriderGirth, WeatherKind.SecondKindle, WeatherKind.PlumeWard, WeatherKind.MorgenPouch, WeatherKind.TendrilDraw,
         WeatherKind.Skal, WeatherKind.SkyCall, WeatherKind.AnvilSpark, WeatherKind.Eldhrimnir, WeatherKind.RallyHorn,
-        WeatherKind.Crimson, WeatherKind.Ragnarok, WeatherKind.HoardBane, WeatherKind.Sanctuary, WeatherKind.Unmaking
+        WeatherKind.LeySurvey, WeatherKind.Crimson, WeatherKind.Ragnarok, WeatherKind.HoardBane, WeatherKind.Sanctuary, WeatherKind.Unmaking
     ];
 
     // Every slot, in the order of their numbers.
@@ -246,7 +251,7 @@ internal static class WeatherKinds
         EffectSlot.Verdant, EffectSlot.Creatures, EffectSlot.Fermenting, EffectSlot.Mending, EffectSlot.Ocean,
         EffectSlot.Ward, EffectSlot.Wind, EffectSlot.Smelting, EffectSlot.Breeding, EffectSlot.Spawners,
         EffectSlot.Carrying, EffectSlot.Clearing, EffectSlot.Sprouting, EffectSlot.Sentries, EffectSlot.Sap,
-        EffectSlot.Anchoring, EffectSlot.Lures, EffectSlot.Resting
+        EffectSlot.Anchoring, EffectSlot.Lures, EffectSlot.Resting, EffectSlot.Survey
     ];
 
     // The slots of the Domain rites: ended only by the Grounding Rite.
@@ -256,10 +261,17 @@ internal static class WeatherKinds
             or EffectSlot.Clearing or EffectSlot.Sprouting or EffectSlot.Sentries or EffectSlot.Sap
             or EffectSlot.Anchoring or EffectSlot.Lures or EffectSlot.Resting;
 
+    // The slots of the rites that end when the obliterator they were performed at is destroyed (see DomainAnchors).
+    internal static bool EndsWithObliterator(EffectSlot slot) => IsDomainSlot(slot) || slot == EffectSlot.Survey;
+
+    // Whether performing this rite ends the Ley-Survey Rite (and a refused arena's glimpse): any other Reckoning rite.
+    internal static bool EndsSurvey(WeatherKind kind) => kind != WeatherKind.LeySurvey && IsKnown(kind) && Group(kind) == RiteGroup.Reckoning;
+
     // Whether a rite ends another going on: the Equilibrium Rite the atmospheric ones, the Sun-Fall Rite the celestial
     // ones, the Nature's Rebound Rite the biome mastery ones, the Grounding Rite the Domain ones, the Sanctuary Rite the
-    // Crimson, Ragnarök and Hoard-Bane Rites, and those the Domain ones (see WeatherState.Start).
-    internal static bool Ends(WeatherKind ender, WeatherKind kind) => ender switch
+    // Crimson, Ragnarök and Hoard-Bane Rites, and those the Domain ones (see WeatherState.Start); every other Reckoning
+    // rite the Ley-Survey Rite.
+    internal static bool Ends(WeatherKind ender, WeatherKind kind) => (kind == WeatherKind.LeySurvey && EndsSurvey(ender)) || ender switch
     {
         WeatherKind.Reset => HasSlot(kind) && Group(kind) == RiteGroup.Atmospheric,
         WeatherKind.SunFall => HasSlot(kind) && Group(kind) == RiteGroup.Celestial,
@@ -269,7 +281,7 @@ internal static class WeatherKinds
         _ => IsIncursion(ender) && HasSlot(kind) && IsDomainSlot(Slot(kind))
     };
 
-    // The Crimson, Ragnarök and Hoard-Bane Rites: fights within a bubble around the obliterator.
+    // The Crimson, Ragnarök and Hoard-Bane Rites: fights on Blood Grounds around the obliterator.
     internal static bool IsIncursion(WeatherKind kind) => HasSlot(kind) && Slot(kind) == EffectSlot.Incursion;
 
     // Whether two rites can't both be performed by one burn: the same rite, the same slot, one ends the other, or both
@@ -386,6 +398,7 @@ internal static class WeatherKinds
         WeatherKind.SecondKindle => Messages.SecondKindleFlavour,
         WeatherKind.MorgenPouch => Messages.MorgenPouchFlavour,
         WeatherKind.TendrilDraw => Messages.TendrilDrawFlavour,
+        WeatherKind.LeySurvey => Messages.LeySurveyFlavour,
         _ => Plain(kind)
     };
 
@@ -450,6 +463,7 @@ internal static class WeatherKinds
         WeatherKind.HoardBane => Messages.HoardBanePerformed,
         WeatherKind.Sanctuary => Messages.SanctuaryPerformed,
         WeatherKind.Unmaking => Messages.UnmakingPerformed,
+        WeatherKind.LeySurvey => Messages.LeySurveyPerformed,
         _ => Plain(kind)
     };
 

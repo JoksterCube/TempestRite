@@ -8,7 +8,7 @@ using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Patches;
 
-// While a Crimson, Ragnarök or Hoard-Bane Rite goes on, its bubble belongs to the fight, in the game that owns each thing:
+// While a Crimson, Ragnarök or Hoard-Bane Rite goes on, its Blood Grounds belong to the fight, in the game that owns each thing:
 // - spawners within it (nests, bone piles, the creature spawners of locations and dungeons) stay still, and nothing
 //   spawns there on its own: only what the rite brings. They go on as before once it ends;
 // - no boss altar whose boss could rise within it answers.
@@ -113,7 +113,7 @@ internal static class IncursionSpawnPatches
 }
 
 // While a Crimson, Ragnarök or Hoard-Bane Rite goes on, nothing carries the local player into, out of or within its
-// bubble: portals, dungeon doors, the map or console teleports, other mods. Coming up out of a dungeon still works.
+// Blood Grounds: portals, dungeon doors, the map or console teleports, other mods. Coming up out of a dungeon still works.
 [HarmonyPatch(typeof(Player), nameof(Player.TeleportTo))]
 internal static class IncursionTeleportPatch
 {
@@ -140,7 +140,7 @@ internal static class IncursionTeleportPatch
     }
 }
 
-// While a Crimson, Ragnarök or Hoard-Bane Rite goes on, the edge of its bubble stops the local player and the creatures
+// While a Crimson, Ragnarök or Hoard-Bane Rite goes on, the edge of its Blood Grounds stops the local player and the creatures
 // as a wall: right after the game sets a character's speed for the physics step (only in the game that owns it), the
 // part that would carry it through the edge is taken away (see IncursionArena.AtWall).
 [HarmonyPatch(typeof(Character), nameof(Character.UpdateMotion))]

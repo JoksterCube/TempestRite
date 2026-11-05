@@ -11,7 +11,7 @@ namespace JoksterCube.TempestRite.Domain;
 //   obliterator (again: back to its full time). SE_TempestRite_SoulTether pulls their tombstones to where they stand.
 //   Only blessings are listed: everything else is the world's or comes from someone else.
 // - clearstatus (and anything else that clears all statuses, or removes one of the mod's) ends the local player's
-//   blessings, kinship rite waits and an open rally call. Rites everyone shares (weather, Domain, the arena rites...)
+//   blessings, kinship rite waits, an open rally call and a refused arena's ring. Rites everyone shares (weather, Domain, the arena rites...)
 //   are the world's, not the player's: their statuses come back the next moment, so nobody leaves a fight this way.
 internal static class StatusCommands
 {
@@ -19,6 +19,9 @@ internal static class StatusCommands
     private const string Prefix = "SE_TempestRite_";
     internal const string RallyCallName = Prefix + "RallyCall";
     private static readonly int RallyCallHash = RallyCallName.GetStableHashCode();
+    // Where a refused Crimson, Ragnarök or Hoard-Bane Rite would be fought (see LeySurvey).
+    internal const string ArenaPreviewStatus = Prefix + "ArenaPreview";
+    private static readonly int ArenaPreviewHash = ArenaPreviewStatus.GetStableHashCode();
 
     // The status of each rite, by its hash; the blessings among them can be added.
     private static readonly Dictionary<int, WeatherKind> Kinds = [];
@@ -103,6 +106,7 @@ internal static class StatusCommands
         try
         {
             if (hash == RallyCallHash) RallyHorn.Dismiss();
+            else if (hash == ArenaPreviewHash) LeySurvey.Dismiss();
             else if (TryKind(hash, out WeatherKind kind)) End(kind);
         }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
@@ -116,6 +120,7 @@ internal static class StatusCommands
         {
             foreach (WeatherKind kind in WeatherKinds.All) End(kind);
             RallyHorn.Dismiss();
+            LeySurvey.Dismiss();
         }
         catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
     }

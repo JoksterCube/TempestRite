@@ -9,7 +9,7 @@ using static JoksterCube.TempestRite.Settings.Constants;
 namespace JoksterCube.TempestRite.Domain;
 
 // The Ragnarök Rite on the server (and in single player or when hosting); players' games spawn the bosses, tell when
-// they fall and show it all (see RagnarokArena, and IncursionArena for the bubble):
+// they fall and show it all (see RagnarokArena, and IncursionArena for the Blood Grounds):
 // 1. Asking: the players within the radius are asked which bosses they have slain (the key a boss gives as it dies, or
 //    a kill of it in their character's stats: the game gives the key only to the player whose game had the boss).
 //    The bosses every one of them has slain can come (with player based raids off, the world's keys count for all).
@@ -18,15 +18,16 @@ namespace JoksterCube.TempestRite.Domain;
 //    BossRoster.EarlyBosses). With no boss slain by everyone, it ends at once too. Either way everyone there is told why.
 // 2. Bosses are picked, different ones while there are enough (those slain by only some of them
 //    fill in before any comes again), in a random order. Each below the strongest boss everyone has slain is raised to it, with a
-//    star for each place below it (see RagnarokPower): one player inside spawns it within the bubble, and the next rises a little after it falls. Their
+//    star for each place below it (see RagnarokPower): one player inside spawns it within the Blood Grounds, and the next rises a little after it falls. Their
 //    drops but trophies are theirs to keep.
-// 3. When the last falls, it ends and the obliterator receives treasure (see RagnarokLoot): a few rolls of the treasure
-//    table (valuables) for each boss, as rich as the strongest boss slain. There is no time limit.
-// A boss that keeps falling out of the bubble (through the ground) is put back, and if that doesn't hold, slain where the
+// 3. When the last falls, it ends and each boss slain gives a chest, struck down around the obliterator by the game
+//    that owns it (see TreasureChests): the resources of the boss's own lands, more for each star it had (see
+//    RagnarokLoot). No valuables. There is no time limit.
+// A boss that keeps falling out of the Blood Grounds (through the ground) is put back, and if that doesn't hold, slain where the
 // players can reach its drops (see ArenaRescue): it counts as slain.
 // It breaks off with no reward when the obliterator is destroyed, everyone inside has fallen or
 // left, or the Sanctuary Rite ends it (only one Crimson or Ragnarök Rite goes on at a time, and only the
-// Sanctuary Rite can be performed within its bubble, see IncursionArena.RiteRefused). However it ends, the bosses still
+// Sanctuary Rite can be performed within its Blood Grounds, see IncursionArena.RiteRefused). However it ends, the bosses still
 // standing are taken away.
 // Not kept through a server restart: a Ragnarök Rite still going on then simply ends.
 internal static class RagnarokRush
@@ -102,9 +103,9 @@ internal static class RagnarokRush
     private static int _spawnTries;
     private static float _lostSince = -1f;
 
-    // Treasure the obliterator's owner hasn't been reached for yet.
+    // Treasure the obliterator's owner hasn't been reached for yet: each boss's chest.
     private static ZDOID _rewardAt = ZDOID.None;
-    private static readonly List<(string item, int amount)> Reward = [];
+    private static readonly List<(string boss, List<(string item, int amount)> loot)> Reward = [];
     private static int _rewardTries;
     private static float _nextReward;
 
@@ -214,7 +215,7 @@ internal static class RagnarokRush
         Ask();
     }
 
-    // A raid going on that reaches the bubble ends: no raid comes while the bosses rise (see CrimsonPatch).
+    // A raid going on that reaches the Blood Grounds ends: no raid comes while the bosses rise (see CrimsonPatch).
     private static void EndRaidHere()
     {
         RandEventSystem? raids = RandEventSystem.instance;
@@ -418,12 +419,12 @@ internal static class RagnarokRush
         Rest(Mathf.Max(0f, PluginConfig.RagnarokPause.Value));
     }
 
-    // From the game that owns it: it kept falling out of the bubble (through the ground) and couldn't even be slain there
+    // From the game that owns it: it kept falling out of the Blood Grounds (through the ground) and couldn't even be slain there
     // (see ArenaRescue). Not the players' fault: it counts as slain, and the next rises.
     private static void RPC_Lost(long sender, ZDOID boss)
     {
         if (!IsServer() || !_running || boss.IsNone() || !Bosses.Contains(boss)) return;
-        Plugin.ModLogger.LogWarning($"Ragnarök Rite: {Roster[Picked[_current]].Prefab} was lost out of the bubble; it counts as slain.");
+        Plugin.ModLogger.LogWarning($"Ragnarök Rite: {Roster[Picked[_current]].Prefab} was lost out of the Blood Grounds; it counts as slain.");
         RPC_Down(sender, boss);
         TakeAway(boss);
     }
@@ -490,7 +491,7 @@ internal static class RagnarokRush
         Reward.Clear();
         if (ending == Ending.Survived) RollReward();
         Plugin.ModLogger.LogInfo($"Ragnarök Rite ended ({ending}) with {_current} of {Picked.Count} bosses slain" +
-            (Reward.Count > 0 ? $", treasure {string.Join(", ", Reward.ConvertAll(r => $"{r.amount} {r.item}"))}." : "."));
+            (Reward.Count > 0 ? $", treasure chests: {string.Join(" | ", Reward.ConvertAll(chest => $"{chest.boss}: " + string.Join(", ", chest.loot.ConvertAll(r => $"{r.amount} {r.item}"))))}." : "."));
         ZRoutedRpc.instance?.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.RagnarokEnded, (int)ending, Reward.Count > 0, _center);
         // Its bosses are taken away wherever they are, and what no player's game has; the rest is cleared in the games
         // that have it.
@@ -508,32 +509,40 @@ internal static class RagnarokRush
         }
     }
 
-    // For each boss: a few rolls of the treasure table.
+    // For each boss slain, a chest: its own loot (a few common, uncommon, rare and legendary items, more for each star it
+    // had), more with more players.
     private static void RollReward()
     {
         List<string> problems = [];
-        List<RagnarokLoot.Treasure> table = RagnarokLoot.Parse(PluginConfig.RagnarokTreasure.Value, problems);
-        foreach (string problem in problems)
-            Plugin.ModLogger.LogWarning($"Ragnarök Rite: couldn't read \"{problem}\" in the Treasure setting: use Item: Min-Max.");
-        // All as rich as the strongest boss slain: which bosses came doesn't matter.
-        float strength = RagnarokLoot.Strength(_strongest, Roster.Count);
-        List<float> strengths = [];
-        int rolls = Math.Max(0, PluginConfig.RagnarokTreasureRolls.Value) * Picked.Count;
-        for (int i = 0; i < rolls; i++) strengths.Add(strength);
-        Reward.AddRange(RagnarokLoot.Roll(table, strengths, () => UnityEngine.Random.value));
-        ScaleForPlayers();
+        float party = PartyMultiplier();
+        foreach (int place in Picked)
+        {
+            BossRoster.Boss boss = Roster[place];
+            List<RagnarokLoot.Tier> tiers = [];
+            foreach (string tier in PluginConfig.RagnarokBossLootOf(boss.Prefab))
+            {
+                problems.Clear();
+                tiers.Add(RagnarokLoot.ParseTier(tier, problems));
+                foreach (string problem in problems)
+                    Plugin.ModLogger.LogWarning($"Ragnarök Rite: couldn't read \"{problem}\" in {boss.Prefab}'s Loot settings: use Item: Min-Max.");
+            }
+            float byStars = RagnarokLoot.StarMultiplier(RagnarokPower.Stars(place, _strongest), PluginConfig.RagnarokLootPerStar.Value);
+            // Its loot grows with its stars and the players at once (half items half as much).
+            List<(string item, int amount)> chest = RagnarokLoot.BossLoot(tiers, byStars * party, () => UnityEngine.Random.value);
+            if (chest.Count > 0) Reward.Add((boss.Prefab, chest));
+        }
     }
 
-    // More players, more treasure: each item's amount times the multiplier for the players alive inside as it is won.
-    private static void ScaleForPlayers()
+    // More players, more treasure: the multiplier for the players alive inside as it is won.
+    private static float PartyMultiplier()
     {
         int players = Math.Max(1, PlayersInside().Count);
-        float multiplier = PartyReward.Multiplier(players, PluginConfig.RagnarokRewardPerPlayer.Value);
-        PartyReward.ScaleAll(Reward, multiplier, () => UnityEngine.Random.value);
+        float multiplier = PartyReward.Multiplier(players, PluginConfig.RagnarokRewardPerPlayer.Value, PluginConfig.RagnarokMaxPlayers.Value);
         Plugin.ModLogger.LogInfo($"Ragnarök Rite: {players} players inside, treasure x{multiplier:0.##}.");
+        return multiplier;
     }
 
-    // The game that owns the obliterator puts the treasure inside (see RagnarokArena.Reward). Tried again for a while
+    // The game that owns the obliterator strikes the chests down around it (see TreasureChests). Tried again for a while
     // when nobody owns it right now.
     private static void GiveRewardLater()
     {
@@ -554,14 +563,7 @@ internal static class RagnarokRush
             Reward.Clear();
             return;
         }
-        ZPackage package = new();
-        package.Write(Reward.Count);
-        foreach ((string item, int amount) in Reward)
-        {
-            package.Write(item);
-            package.Write(amount);
-        }
-        ZRoutedRpc.instance.InvokeRoutedRPC(owner, zdo.m_uid, Rpcs.RagnarokReward, package);
+        TreasureChests.Send(zdo, "Ragnarök Rite", [.. Reward]);
         Reward.Clear();
     }
 
@@ -569,7 +571,7 @@ internal static class RagnarokRush
 
     private static float Radius => PluginConfig.Radius(WeatherKind.Ragnarok);
 
-    // The games of the players alive within the bubble (a player's character belongs to their game).
+    // The games of the players alive within the Blood Grounds (a player's character belongs to their game).
     private static List<long> PlayersInside()
     {
         List<long> players = [];

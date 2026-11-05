@@ -11,6 +11,11 @@ namespace JoksterCube.TempestRite.Settings;
 // Bound section by section, in the order Configuration Manager lists them.
 internal static class PluginConfig
 {
+    // A boss's own loot for the Ragnarök Rite's chests (the resources of its lands): common, uncommon and rare; empty for
+    // a boss without any.
+    internal static string[] RagnarokBossLootOf(string boss) =>
+        RagnarokBossLoot.TryGetValue(boss, out ConfigEntry<string>[] tiers) ? Array.ConvertAll(tiers, tier => tier.Value) : [];
+
     // 0 - General, and the group-wide settings of 1 - Atmospheric, 4 - Domain and 5 - Blessings
     internal static ConfigEntry<WeatherPermission> WhoCanChange = null!;
     internal static ConfigEntry<WeatherBiomes> AffectedBiomes = null!;
@@ -51,6 +56,7 @@ internal static class PluginConfig
     internal static ConfigEntry<float> TendrilReturnSpeed = null!;
     internal static ConfigEntry<Toggle> SentrySpareAnimals = null!;
     internal static ConfigEntry<float> UnmakingReturn = null!;
+    internal static ConfigEntry<float> LeySurveyRefusedSeconds = null!;
     internal static ConfigEntry<Toggle> UnmakingUpgradeMaterials = null!;
     internal static ConfigEntry<float> LuminaryRange = null!;
     internal static ConfigEntry<float> DrawRange = null!;
@@ -73,6 +79,7 @@ internal static class PluginConfig
     internal static ConfigEntry<float> DraughtBuffMultiplier = null!;
     internal static ConfigEntry<float> ShroudDryingMultiplier = null!;
     internal static ConfigEntry<float> FoodFloor = null!;
+    internal static ConfigEntry<float> FoodDurationMultiplier = null!;
     internal static ConfigEntry<float> LootMultiplier = null!;
     internal static ConfigEntry<float> OneExtraChance = null!;
     internal static ConfigEntry<float> TwoExtraChance = null!;
@@ -96,14 +103,18 @@ internal static class PluginConfig
     internal static ConfigEntry<string> CrimsonRewardItem = null!;
     internal static ConfigEntry<int> CrimsonRewardPerKill = null!;
     internal static ConfigEntry<float> CrimsonRewardPerPlayer = null!;
+    internal static ConfigEntry<int> CrimsonMaxPlayers = null!;
     internal static ConfigEntry<string> RagnarokBosses = null!;
     internal static ConfigEntry<int> RagnarokBossCount = null!;
     internal static ConfigEntry<float> RagnarokPause = null!;
     internal static ConfigEntry<float> RagnarokHealthMultiplier = null!;
     internal static ConfigEntry<float> RagnarokDamageMultiplier = null!;
-    internal static ConfigEntry<string> RagnarokTreasure = null!;
-    internal static ConfigEntry<int> RagnarokTreasureRolls = null!;
     internal static ConfigEntry<float> RagnarokRewardPerPlayer = null!;
+    internal static ConfigEntry<int> RagnarokMaxPlayers = null!;
+    internal static ConfigEntry<float> RagnarokLootPerStar = null!;
+    // Each boss's own loot, by its prefab name ("gd_king").
+    private static readonly Dictionary<string, ConfigEntry<string>[]> RagnarokBossLoot = new(StringComparer.OrdinalIgnoreCase);
+    internal static ConfigEntry<string> RagnarokChests = null!;
     internal static ConfigEntry<string> RagnarokEnvironment = null!;
     internal static ConfigEntry<string> RagnarokSkyBase = null!;
     internal static ConfigEntry<float> HoardBaneEliteRadius = null!;
@@ -114,6 +125,7 @@ internal static class PluginConfig
     internal static ConfigEntry<string>[] HoardBaneTreasure = [];
     internal static ConfigEntry<int>[] HoardBaneTreasureRolls = [];
     internal static ConfigEntry<float> HoardBaneRewardPerPlayer = null!;
+    internal static ConfigEntry<int> HoardBaneMaxPlayers = null!;
     internal static ConfigEntry<string> HoardBaneIdols = null!;
     internal static ConfigEntry<string> HoardBaneEnvironment = null!;
     internal static ConfigEntry<string> HoardBaneSkyBase = null!;
@@ -158,9 +170,9 @@ internal static class PluginConfig
     internal static ConfigEntry<float> LuminaryStrength = null!;
     internal static ConfigEntry<float> LuminaryBodyLight = null!;
     internal static ConfigEntry<Toggle> LuminaryShadows = null!;
-    internal static ConfigEntry<Toggle> CrimsonBubble = null!;
-    internal static ConfigEntry<Toggle> RagnarokBubble = null!;
-    internal static ConfigEntry<Toggle> HoardBaneBubble = null!;
+    internal static ConfigEntry<Toggle> CrimsonShield = null!;
+    internal static ConfigEntry<Toggle> RagnarokShield = null!;
+    internal static ConfigEntry<Toggle> HoardBaneShield = null!;
 
     internal static void Build(ConfigFile config, ConfigSync configSync)
     {
@@ -234,6 +246,8 @@ internal static class PluginConfig
         Add(WeatherKind.Unmaking, Unmaking);
         UnmakingReturn = ConfigOptions.Config(Constants.Groups.UnmakingReturn);
         UnmakingUpgradeMaterials = ConfigOptions.Config(Constants.Groups.UnmakingUpgradeMaterials);
+        Add(WeatherKind.LeySurvey, Constants.Groups.LeySurvey);
+        LeySurveyRefusedSeconds = ConfigOptions.Config(Constants.Groups.LeySurveyRefusedSeconds);
         Add(WeatherKind.Grounding, Grounding);
         Add(WeatherKind.CryptDelver, CryptDelver);
         LootMultiplier = ConfigOptions.Config(Constants.Groups.LootMultiplier);
@@ -241,6 +255,7 @@ internal static class PluginConfig
         TwoExtraChance = ConfigOptions.Config(Constants.Groups.TwoExtraChance);
         Add(WeatherKind.GlacialSatiety, GlacialSatiety);
         FoodFloor = ConfigOptions.Config(Constants.Groups.FoodFloor);
+        FoodDurationMultiplier = ConfigOptions.Config(Constants.Groups.FoodDurationMultiplier);
         Add(WeatherKind.VeinShatter, VeinShatter);
         VeinSpread = ConfigOptions.Config(Constants.Groups.VeinSpread);
         VeinShatterAt = ConfigOptions.Config(Constants.Groups.VeinShatterAt);
@@ -307,6 +322,7 @@ internal static class PluginConfig
         CrimsonRewardItem = ConfigOptions.Config(Constants.Groups.CrimsonRewardItem);
         CrimsonRewardPerKill = ConfigOptions.Config(Constants.Groups.CrimsonRewardPerKill);
         CrimsonRewardPerPlayer = ConfigOptions.Config(Constants.Groups.CrimsonRewardPerPlayer);
+        CrimsonMaxPlayers = ConfigOptions.Config(Constants.Groups.CrimsonMaxPlayers);
         CrimsonEnvironment = ConfigOptions.Config(Constants.Groups.CrimsonEnvironment);
         BloodmoonBase = ConfigOptions.Config(Constants.Groups.BloodmoonBase);
         Add(WeatherKind.Ragnarok, Ragnarok);
@@ -315,9 +331,13 @@ internal static class PluginConfig
         RagnarokPause = ConfigOptions.Config(Constants.Groups.RagnarokPause);
         RagnarokHealthMultiplier = ConfigOptions.Config(Constants.Groups.RagnarokHealthMultiplier);
         RagnarokDamageMultiplier = ConfigOptions.Config(Constants.Groups.RagnarokDamageMultiplier);
-        RagnarokTreasure = ConfigOptions.Config(Constants.Groups.RagnarokTreasure);
-        RagnarokTreasureRolls = ConfigOptions.Config(Constants.Groups.RagnarokTreasureRolls);
         RagnarokRewardPerPlayer = ConfigOptions.Config(Constants.Groups.RagnarokRewardPerPlayer);
+        RagnarokMaxPlayers = ConfigOptions.Config(Constants.Groups.RagnarokMaxPlayers);
+        RagnarokLootPerStar = ConfigOptions.Config(Constants.Groups.RagnarokLootPerStar);
+        RagnarokBossLoot.Clear();
+        foreach ((string boss, ConfigInfo<string>[] tiers) in Constants.Groups.RagnarokBossLoot)
+            RagnarokBossLoot[boss] = Array.ConvertAll(tiers, tier => ConfigOptions.Config(tier));
+        RagnarokChests = ConfigOptions.Config(Constants.Groups.RagnarokChests);
         RagnarokEnvironment = ConfigOptions.Config(Constants.Groups.RagnarokEnvironment);
         RagnarokSkyBase = ConfigOptions.Config(Constants.Groups.RagnarokSkyBase);
         Add(WeatherKind.HoardBane, HoardBane);
@@ -328,6 +348,7 @@ internal static class PluginConfig
         HoardBaneTreasure = Array.ConvertAll(Constants.Groups.HoardBaneTreasure, ConfigOptions.Config);
         HoardBaneTreasureRolls = Array.ConvertAll(Constants.Groups.HoardBaneTreasureRolls, ConfigOptions.Config);
         HoardBaneRewardPerPlayer = ConfigOptions.Config(Constants.Groups.HoardBaneRewardPerPlayer);
+        HoardBaneMaxPlayers = ConfigOptions.Config(Constants.Groups.HoardBaneMaxPlayers);
         HoardBaneIdols = ConfigOptions.Config(Constants.Groups.HoardBaneIdols);
         HoardBaneEnvironment = ConfigOptions.Config(Constants.Groups.HoardBaneEnvironment);
         HoardBaneSkyBase = ConfigOptions.Config(Constants.Groups.HoardBaneSkyBase);
@@ -373,9 +394,9 @@ internal static class PluginConfig
         LuminaryStrength = ConfigOptions.Config(Display.LuminaryStrength);
         LuminaryBodyLight = ConfigOptions.Config(Display.LuminaryBodyLight);
         LuminaryShadows = ConfigOptions.Config(Display.LuminaryShadows);
-        CrimsonBubble = ConfigOptions.Config(Display.CrimsonBubble);
-        RagnarokBubble = ConfigOptions.Config(Display.RagnarokBubble);
-        HoardBaneBubble = ConfigOptions.Config(Display.HoardBaneBubble);
+        CrimsonShield = ConfigOptions.Config(Display.CrimsonShield);
+        RagnarokShield = ConfigOptions.Config(Display.RagnarokShield);
+        HoardBaneShield = ConfigOptions.Config(Display.HoardBaneShield);
     }
 
     private static void Add(WeatherKind kind, RiteSettings group) => Rites[kind] = new WeatherConfig(group);
@@ -384,9 +405,15 @@ internal static class PluginConfig
 
     internal static bool IsEnabled(WeatherKind kind) => For(kind)?.Enabled.IsOn() == true;
 
-    // A located rite's radius in meters (0 for rites that work everywhere): the Domain rites share one.
+    // A located rite's radius in meters (0 for rites that work everywhere): the Domain rites share one, and the
+    // Ley-Survey Rite shows the widest arena.
     internal static float Radius(WeatherKind kind) =>
-        WeatherKinds.Group(kind) == RiteGroup.Domain ? DomainRadius.Value : For(kind)?.Radius?.Value ?? 0f;
+        kind == WeatherKind.LeySurvey ? ArenaRadius
+        : WeatherKinds.Group(kind) == RiteGroup.Domain ? DomainRadius.Value : For(kind)?.Radius?.Value ?? 0f;
+
+    // The widest of the Crimson, Ragnarök and Hoard-Bane Rites' arenas.
+    internal static float ArenaRadius =>
+        Math.Max(Radius(WeatherKind.Crimson), Math.Max(Radius(WeatherKind.Ragnarok), Radius(WeatherKind.HoardBane)));
 
     private static readonly PrefabList CarrionList = new();
     private static readonly PrefabList PackwardList = new();

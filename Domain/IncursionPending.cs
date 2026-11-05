@@ -7,7 +7,7 @@ using static JoksterCube.TempestRite.Settings.Constants;
 namespace JoksterCube.TempestRite.Domain;
 
 // From the moment the lever is pulled for a Crimson, Ragnarök or Hoard-Bane Rite until the server performs it (the
-// obliterator takes 5 to 7 seconds to burn), its bubble is already sealed: nobody claims a bed in it, nothing carries a
+// obliterator takes 5 to 7 seconds to burn), its Blood Grounds are already sealed: nobody claims a bed in it, nothing carries a
 // player into or out of it, nothing is built there, no boss altar near it answers, no raid starts, and no other such
 // rite can be performed (see IncursionArena.Sealed). So nothing done in those seconds can get it refused, or abuse it.
 // If it is refused all the same, its key items aren't lost: they go back into the obliterator (see Refund, and
@@ -109,7 +109,7 @@ internal static class IncursionPending
         {
             if (!Now(out WeatherKind pending, out Vector3 sealedAt) || Utils.DistanceXZ(sealedAt, at) > IncursionArena.SamePlace) return;
             Keys.Clear();
-            Plugin.ModLogger.LogInfo($"{WeatherKinds.Name(pending)}: not performed after all; its bubble's seal lifts.");
+            Plugin.ModLogger.LogInfo($"{WeatherKinds.Name(pending)}: not performed after all; its Blood Grounds' seal lifts.");
             Tell(WeatherKind.None, at, 0f);
             return;
         }
@@ -123,7 +123,7 @@ internal static class IncursionPending
         // Only its own key items, at most a stack of each.
         foreach ((string item, int amount) in keys)
             if (IsKey(kind, item) && amount > 0) Keys.Add((item, Math.Min(amount, MaxStack(item))));
-        Plugin.ModLogger.LogInfo($"{WeatherKinds.Name(kind)}: lever pulled at ({at.x:0}, {at.z:0}); its bubble is sealed until it is performed.");
+        Plugin.ModLogger.LogInfo($"{WeatherKinds.Name(kind)}: lever pulled at ({at.x:0}, {at.z:0}); its Blood Grounds are sealed until it is performed.");
         Tell(kind, at, Seconds);
     }
 

@@ -116,17 +116,17 @@ public class HoardBaneLootTests
     }
 
     [Fact]
-    public void Bubbles_sit_evenly_on_the_edge_and_the_miniboss_between_them()
+    public void Lairs_sit_evenly_on_the_edge_and_the_miniboss_between_them()
     {
-        Vector2[] posts = HoardBaneLoot.BubblePosts(50f, 10f, 0f, 3);
+        Vector2[] posts = HoardBaneLoot.LairPosts(50f, 10f, 0f, 3);
         Assert.Equal(3, posts.Length);
         foreach (Vector2 post in posts)
         {
-            Assert.Equal(38f, post.magnitude, 3);
-            // Wholly inside the arena.
-            Assert.True(post.magnitude + 10f < 50f);
+            // Near the edge: the pack (at 65% of the lair) stays 2 m inside it.
+            Assert.Equal(41.5f, post.magnitude, 3);
+            Assert.True(post.magnitude + 10f * HoardBaneLoot.PackSpread < 50f);
         }
-        Assert.Equal(38f * Mathf.Sqrt(3f), Vector2.Distance(posts[0], posts[1]), 2);
+        Assert.Equal(41.5f * Mathf.Sqrt(3f), Vector2.Distance(posts[0], posts[1]), 2);
         Vector2 boss = HoardBaneLoot.BossPost(50f, 0f, 3);
         Assert.Equal(44f, boss.magnitude, 3);
         Assert.Equal(Vector2.Distance(boss, posts[0]), Vector2.Distance(boss, posts[1]), 2);
@@ -150,6 +150,28 @@ public class HoardBaneLootTests
         Assert.Equal(["Upgrader4Weapon", "Upgrader4Armor"], Items(HoardBaneLoot.PickIdols(idols, Bosses, 3)));
         Assert.Equal(["Upgrader4Weapon", "Upgrader4Armor"], Items(HoardBaneLoot.PickIdols(idols, Bosses, 6)));
         Assert.Empty(HoardBaneLoot.PickIdols(HoardBaneLoot.ParseIdols("Dragon: Upgrader4Weapon"), Bosses, 1));
+    }
+
+    [Fact]
+    public void Idols_are_rolled_in_windows_of_two_tiers_down_to_none()
+    {
+        List<HoardBaneLoot.Idol> idols = HoardBaneLoot.ParseIdols(
+            "None: Upgrader0Weapon: 1-2, None: Upgrader0Armor: 1-2, Eikthyr: Upgrader1Weapon: 1-2, Eikthyr: Upgrader1Armor: 1-2, " +
+            "gd_king: Upgrader2Weapon: 1-2, gd_king: Upgrader2Armor: 1-2, Bonemass: Upgrader3Weapon: 1-2, Bonemass: Upgrader3Armor: 1-2");
+        static List<string> Items(List<(string item, int amount)> rolled) => rolled.ConvertAll(r => r.item);
+        // Rolls of 0: the higher tier of each window, the battle idol, the least.
+        Assert.Equal([("Upgrader3Weapon", 1), ("Upgrader1Weapon", 1)], HoardBaneLoot.RollIdols(idols, Bosses, 2, () => 0f));
+        // Rolls of 0.99: the lower tier, the protection idol, the most.
+        Assert.Equal([("Upgrader2Armor", 2), ("Upgrader0Armor", 2)], HoardBaneLoot.RollIdols(idols, Bosses, 2, () => 0.99f));
+        // The Elder slain: one from the Elder's or Eikthyr's, and the None tier's alone.
+        Assert.Equal(["Upgrader2Weapon", "Upgrader0Weapon"], Items(HoardBaneLoot.RollIdols(idols, Bosses, 1, () => 0f)));
+        // Eikthyr slain: Eikthyr's or None's. No boss slain: the None tier's.
+        Assert.Equal(["Upgrader0Armor"], Items(HoardBaneLoot.RollIdols(idols, Bosses, 0, () => 0.99f)));
+        Assert.Equal(["Upgrader0Weapon"], Items(HoardBaneLoot.RollIdols(idols, Bosses, -1, () => 0f)));
+        // Moder isn't listed: Bonemass' idols stand in for his tier. Three windows: Moder/Bonemass, Elder/Eikthyr, None.
+        Assert.Equal(["Upgrader3Weapon", "Upgrader2Weapon", "Upgrader0Weapon"], Items(HoardBaneLoot.RollIdols(idols, Bosses, 3, () => 0f)));
+        // The Fader slain: four windows; the same idol from two adds up.
+        Assert.Equal([("Upgrader3Armor", 4), ("Upgrader2Armor", 2), ("Upgrader0Armor", 2)], HoardBaneLoot.RollIdols(idols, Bosses, 6, () => 0.5f));
     }
 
     [Fact]

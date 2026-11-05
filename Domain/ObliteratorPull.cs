@@ -15,7 +15,8 @@ namespace JoksterCube.TempestRite.Domain;
 // At the pull, the player is warned early of a rite that can't be performed, and a Crimson, Ragnarök or Hoard-Bane Rite
 // that can is sealed from then on (see IncursionPending). One refused as it burns doesn't stop the lever: its key items
 // stay in the obliterator (see UnmakingPatch), and the rest burns and performs its rites. A Rally-Horn Rite while
-// another's call still waits for answers is kept the same way (see RallyPending).
+// another's call still waits for answers is kept the same way (see RallyPending). A refused Crimson, Ragnarök or
+// Hoard-Bane Rite shows where it would be fought, and what is in the way (see LeySurvey).
 internal static class ObliteratorPull
 {
     // The owner answers after 5 to 7 seconds of lever animation.
@@ -90,6 +91,7 @@ internal static class ObliteratorPull
             if (Refused(p.Kind, at) is { } why)
             {
                 TellKept(why);
+                LeySurvey.Glimpse(p.Kind, at);
                 continue;
             }
             if (!WeatherKinds.IsIncursion(p.Kind)) continue;
@@ -174,6 +176,7 @@ internal static class ObliteratorPull
                     if (Refused(kind, at) is { } why)
                     {
                         TellKept(why);
+                        LeySurvey.Glimpse(kind, at);
                         continue;
                     }
                     incursion = kind;

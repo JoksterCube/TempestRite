@@ -147,6 +147,7 @@ internal static class WeatherSync
         List<WeatherKind> blessings = [];
         List<WeatherKind> done = [];
         string? refused = null;
+        WeatherKind refusedArena = WeatherKind.None;
         foreach (WeatherKind kind in kinds)
         {
             if (!WeatherKinds.IsKnown(kind) || done.Exists(d => WeatherKinds.Clashes(d, kind))) continue;
@@ -160,6 +161,7 @@ internal static class WeatherSync
                     why += "\n" + Messages.IncursionKeysKept;
                 }
                 refused ??= why;
+                if (WeatherKinds.IsIncursion(kind) && refusedArena == WeatherKind.None) refusedArena = kind;
                 continue;
             }
             if (WeatherKinds.IsIncursion(kind)) IncursionPending.Done(kind, position, refused: false);
@@ -175,7 +177,7 @@ internal static class WeatherSync
             WeatherState.Start(kind, callerName, position);
             if (WeatherKinds.IsIncursion(kind))
             {
-                // What stands within the bubble dies first: here what nobody's game has, in each game its own.
+                // What stands within the Blood Grounds dies first: here what nobody's game has, in each game its own.
                 IncursionArena.SweepOnServer(position, PluginConfig.Radius(kind), WeatherKinds.Name(kind));
                 if (!ZNet.instance.IsDedicated()) IncursionArena.Begun(kind, position);
             }
@@ -187,8 +189,12 @@ internal static class WeatherSync
         }
         if (refused != null)
         {
-            if (byHost) PlayerMessages.Warning(refused);
-            else Refuse(callerId, Refusal.Incursion, refused);
+            if (byHost)
+            {
+                PlayerMessages.Warning(refused);
+                LeySurvey.Glimpse(refusedArena, position);
+            }
+            else Refuse(callerId, Refusal.Incursion, refused, refusedArena, position);
         }
         if (done.Count == 0) return;
 
@@ -220,11 +226,14 @@ internal static class WeatherSync
         RallyPending.Tell(sender);
     }
 
-    private static void Refuse(long target, Refusal refusal, string reason = "")
+    // kind, at: the Crimson, Ragnarök or Hoard-Bane Rite refused, and where: the player is shown its Blood Grounds.
+    private static void Refuse(long target, Refusal refusal, string reason = "", WeatherKind kind = WeatherKind.None, Vector3 at = default)
     {
         ZPackage package = new();
         package.Write((int)refusal);
         package.Write(reason);
+        package.Write((int)kind);
+        package.Write(at);
         ZRoutedRpc.instance.InvokeRoutedRPC(target, Rpcs.Refused, package);
     }
 
@@ -289,12 +298,15 @@ internal static class WeatherSync
         if (!ZNet.instance || ZNet.instance.IsServer() || sender != ZRoutedRpc.instance.GetServerPeerID()) return;
         Refusal refusal = (Refusal)package.ReadInt();
         string reason = package.ReadString();
+        WeatherKind kind = (WeatherKind)package.ReadInt();
+        Vector3 at = package.ReadVector3();
         PlayerMessages.Warning(refusal switch
         {
             Refusal.Disabled => Messages.RefusedDisabled,
             Refusal.Incursion => reason,
             _ => Messages.RefusedAdminsOnly
         });
+        if (refusal == Refusal.Incursion) LeySurvey.Glimpse(kind, at);
     }
 
     // ---- Shared helpers ----

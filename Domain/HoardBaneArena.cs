@@ -8,17 +8,17 @@ using Object = UnityEngine.Object;
 
 namespace JoksterCube.TempestRite.Domain;
 
-// The Hoard-Bane Rite in each player's game (the server runs it, see HoardBaneRush; the bubble, holding players and
+// The Hoard-Bane Rite in each player's game (the server runs it, see HoardBaneRush; the Blood Grounds, holding players and
 // creatures, portals and the map are IncursionArena's):
 // - spawns the fight when the server asks this game to (see HoardBaneLoot for who and where): the elites, with stars
-//   beyond what the game spawns, dormant in their bubbles with their guards; the miniboss shielded and hunting with its
+//   beyond what the game spawns, dormant in their lairs with their guards; the miniboss shielded and hunting with its
 //   followers;
-// - in the game that owns an elite or guard: its pack wakes when a player steps into its bubble or something hits one
+// - in the game that owns an elite or guard: its pack wakes when a player steps into its lair or something hits one
 //   of it (see HoardBanePatches: until then they don't move and take no damage);
 // - in the game that owns a miniboss: its shield comes off when the server says every elite has fallen;
 // - tells the server when an elite or miniboss it owns falls (guards don't count);
 // - spawns one more follower when the server asks, where it says;
-// - draws each sleeping elite's bubble and each shielded miniboss's shield (flashing as the local player hits it), and
+// - draws each sleeping elite's lair and each shielded miniboss's shield (flashing as the local player hits it), and
 //   gives the elites and minibosses a menacing red glow, their own colors and more size, collider and all (their
 //   corpses too);
 // - shows how it goes: lightning strikes the miniboss as each elite falls, and the obliterator as it ends in victory.
@@ -31,7 +31,7 @@ internal static class HoardBaneArena
 
     // Saved on each creature the Hoard-Bane Rite brings: what it is (the roles above).
     internal static readonly int Role = "TempestRite_HoardRole".GetStableHashCode();
-    // An elite or guard still waiting in its bubble: where its bubble is, how big, and which pack it is in.
+    // An elite or guard still waiting in its lair: where its lair is, how big, and which pack it is in.
     internal static readonly int Dormant = "TempestRite_HoardDormant".GetStableHashCode();
     private static readonly int Post = "TempestRite_HoardPost".GetStableHashCode();
     private static readonly int PostRadius = "TempestRite_HoardPostRadius".GetStableHashCode();
@@ -55,8 +55,8 @@ internal static class HoardBaneArena
     // The brothers rise this far apart.
     private const float BrotherGap = 3f;
     private const float NoHit = -1000f;
-    // The elites' bubbles' color (the game's shield gradient, by fuel): nearly empty.
-    private const float BubbleFuel = 0.1f;
+    // The elites' lairs' color (the game's shield gradient, by fuel): nearly empty.
+    private const float LairFuel = 0.1f;
     private const string GlowName = "TempestRite_EliteGlow";
     // How much bigger minibosses are than their level makes them (elites: see HoardBaneLoot.Elite.Size).
     private const float BossScale = 1.15f;
@@ -97,8 +97,8 @@ internal static class HoardBaneArena
 
     private static float Radius => PluginConfig.Radius(WeatherKind.HoardBane);
 
-    // An elite's bubble: never more than a third of the arena, so three fit on its edge.
-    private static float BubbleRadius => Mathf.Clamp(PluginConfig.HoardBaneEliteRadius.Value, 1f, Radius / 3f);
+    // An elite's lair: never more than a third of the arena, so three fit on its edge.
+    internal static float LairRadius => Mathf.Clamp(PluginConfig.HoardBaneEliteRadius.Value, 1f, Radius / 3f);
 
     internal static int RoleOf(Character? character)
     {
@@ -129,17 +129,24 @@ internal static class HoardBaneArena
         if (encounter < 0 || encounter >= HoardBaneLoot.Encounters.Length) return;
         HoardBaneLoot.Encounter fight = HoardBaneLoot.Encounters[encounter];
         float radius = Radius;
+        // Each fight's layout is shaken a little (lairs and miniboss off their even places), from the server's angle, so
+        // it is the same each time it is asked (a miniboss called again rises where it did) but differs from fight to fight.
+        System.Random shake = new(Mathf.RoundToInt(angle * 1000f));
+        // Turned to where its lairs and the miniboss have room, the nearest turn to the server's.
+        ArenaRoom.HoardBaneTurn(center, angle, unknownFits: false, out angle, null);
 
         List<(ZDOID id, string prefab)> elites = [];
         List<ZDOID> guarding = [];
         List<ZDOID> followers = [];
+        // Shaken whether or not the lairs are filled now, so the miniboss's shake comes out the same either way.
+        Vector2[] posts = HoardBaneLoot.LairPosts(radius, LairRadius, angle, fight.Elites.Length);
+        for (int i = 0; i < posts.Length; i++) posts[i] = Shake(posts[i], shake, LairTurn, LairPullIn);
         if (all)
         {
-            Vector2[] posts = HoardBaneLoot.BubblePosts(radius, BubbleRadius, angle, fight.Elites.Length);
             for (int i = 0; i < posts.Length; i++)
             {
                 HoardBaneLoot.Elite elite = fight.Elites[i];
-                Vector3 post = center + new Vector3(posts[i].x, 0f, posts[i].y);
+                Vector3 post = ArenaRoom.Nearby(center + new Vector3(posts[i].x, 0f, posts[i].y), ArenaRoom.Elite, center, radius);
                 int pack = UnityEngine.Random.Range(1, int.MaxValue);
                 Character? waiting = SpawnElite(elite, center, post, pack);
                 if (waiting) elites.Add((waiting!.m_nview.GetZDO().m_uid, elite.Name));
@@ -147,24 +154,32 @@ internal static class HoardBaneArena
                 List<HoardBaneLoot.Guard> guards = [];
                 foreach (HoardBaneLoot.Guard guard in elite.Guards)
                     for (int g = 0; g < guard.Count; g++) guards.Add(guard);
-                Vector2[] spots = HoardBaneLoot.PackPosts(BubbleRadius, UnityEngine.Random.Range(0f, 360f), guards.Count);
+                Vector2[] spots = HoardBaneLoot.PackPosts(LairRadius, UnityEngine.Random.Range(0f, 360f), guards.Count);
                 for (int g = 0; g < guards.Count; g++)
                 {
-                    Vector3 at = post + new Vector3(spots[g].x, 0f, spots[g].y);
+                    Vector2 spot = spots[g] * UnityEngine.Random.Range(1f - PackShake, 1f + PackShake);
+                    Vector3 at = post + new Vector3(spot.x, 0f, spot.y);
+                    // Never past the edge: pulled in toward the obliterator.
+                    Vector3 fromCenter = at - center;
+                    fromCenter.y = 0f;
+                    float most = radius - GuardClearOfEdge;
+                    if (fromCenter.magnitude > most) at = center + fromCenter.normalized * most;
+                    at = ArenaRoom.Nearby(at, ArenaRoom.Elite, center, radius);
                     Character? guard = SpawnGuard(guards[g], center, at, post, pack);
                     if (guard) guarding.Add(guard!.m_nview.GetZDO().m_uid);
                 }
             }
         }
 
-        Vector2 bossPost = HoardBaneLoot.BossPost(radius, angle, fight.Elites.Length);
+        Vector2 bossPost = Shake(HoardBaneLoot.BossPost(radius, angle, fight.Elites.Length), shake, BossTurn, BossPullIn);
         Vector3 bossAt = center + new Vector3(bossPost.x, 0f, bossPost.y);
         Vector3 along = Vector3.Cross(Vector3.up, (bossAt - center).normalized);
         List<(ZDOID id, int place)> risen = [];
         foreach ((int place, float health, float damage) in bosses)
         {
             if (place < 0 || place >= fight.Bosses.Length) continue;
-            Vector3 at = bossAt + along * ((place - (fight.Bosses.Length - 1) * 0.5f) * BrotherGap);
+            Vector3 at = ArenaRoom.Nearby(bossAt + along * ((place - (fight.Bosses.Length - 1) * 0.5f) * BrotherGap),
+                ArenaRoom.Boss, center, radius);
             Character? boss = SpawnBoss(fight.Bosses[place], center, at, health, damage);
             if (boss) risen.Add((boss!.m_nview.GetZDO().m_uid, place));
         }
@@ -173,7 +188,8 @@ internal static class HoardBaneArena
             for (int i = 0; i < HoardBaneLoot.FollowersAtStart; i++)
             {
                 Vector2 offset = UnityEngine.Random.insideUnitCircle * FollowerSpread;
-                Character? follower = SpawnFollower(fight.Follower, center, bossAt + new Vector3(offset.x, 0f, offset.y));
+                Vector3 at = ArenaRoom.Nearby(bossAt + new Vector3(offset.x, 0f, offset.y), ArenaRoom.Elite, center, radius);
+                Character? follower = SpawnFollower(fight.Follower, center, at);
                 if (follower) followers.Add(follower!.m_nview.GetZDO().m_uid);
             }
 
@@ -199,6 +215,23 @@ internal static class HoardBaneArena
         ZRoutedRpc.instance.InvokeRoutedRPC(Rpcs.HoardBaneSpawned, spawned);
     }
 
+    // How far each lair may be turned off its even place (degrees) and pulled in toward the obliterator (meters: none,
+    // the elites stay on the edge); the same for the miniboss; and how much a guard's distance from its elite varies (share).
+    private const float LairTurn = 18f, LairPullIn = 0f, BossTurn = 12f, BossPullIn = 5f, PackShake = 0.2f;
+    // A guard stays this far inside the edge.
+    private const float GuardClearOfEdge = 1.5f;
+
+    // A post turned a little either way around the obliterator and pulled in a little.
+    private static Vector2 Shake(Vector2 post, System.Random shake, float turn, float pullIn)
+    {
+        float distance = post.magnitude;
+        if (distance < 0.01f) return post;
+        float degrees = Mathf.Atan2(post.y, post.x) * Mathf.Rad2Deg + (float)(shake.NextDouble() * 2.0 - 1.0) * turn;
+        distance = Mathf.Max(0f, distance - (float)shake.NextDouble() * pullIn);
+        float radians = degrees * Mathf.Deg2Rad;
+        return new Vector2(Mathf.Cos(radians) * distance, Mathf.Sin(radians) * distance);
+    }
+
     // One more follower, where the server says (the place furthest from the players), hunting at once.
     private static void RPC_Reinforce(long sender, ZPackage package)
     {
@@ -208,6 +241,7 @@ internal static class HoardBaneArena
         Vector3 center = package.ReadVector3();
         Vector3 at = package.ReadVector3();
         if (encounter < 0 || encounter >= HoardBaneLoot.Encounters.Length) return;
+        at = ArenaRoom.Nearby(at, ArenaRoom.Elite, center, Radius);
         Character? follower = SpawnFollower(HoardBaneLoot.Encounters[encounter].Follower, center, at);
         if (!follower) return;
         ZPackage spawned = new();
@@ -216,7 +250,7 @@ internal static class HoardBaneArena
         ZRoutedRpc.instance.InvokeRoutedRPC(Rpcs.HoardBaneReinforced, spawned);
     }
 
-    // Asleep in its bubble, at the level its stars make it: the game's own health and damage for that level.
+    // Asleep in its lair, at the level its stars make it: the game's own health and damage for that level.
     private static Character? SpawnElite(HoardBaneLoot.Elite elite, Vector3 center, Vector3 post, int pack)
     {
         Character? character = Spawn(elite.Prefab, center, OnGround(post));
@@ -233,7 +267,7 @@ internal static class HoardBaneArena
         return character;
     }
 
-    // Asleep at its spot around its elite (post: the bubble's center), woken with it.
+    // Asleep at its spot around its elite (post: the lair's center), woken with it.
     private static Character? SpawnGuard(HoardBaneLoot.Guard guard, Vector3 center, Vector3 at, Vector3 post, int pack)
     {
         Character? character = Spawn(guard.Prefab, center, OnGround(at));
@@ -254,7 +288,7 @@ internal static class HoardBaneArena
         zdo.Set(Role, role);
         zdo.Set(Dormant, true);
         zdo.Set(Post, post);
-        zdo.Set(PostRadius, BubbleRadius);
+        zdo.Set(PostRadius, LairRadius);
         zdo.Set(Pack, pack);
         BaseAI ai = character.GetBaseAI();
         if (ai) ai.SetPatrolPoint();
@@ -336,7 +370,7 @@ internal static class HoardBaneArena
         Character? character = Spawn(prefab, center, OnGround(at));
         if (!character) return null;
         character!.m_nview.GetZDO().Set(Role, FollowerRole);
-        int most = MostLevel(prefab);
+        int most = VanillaStars.MostLevel(prefab);
         float chance = SpawnSystem.GetLevelUpChance(at);
         int level = 1;
         while (level < most && UnityEngine.Random.Range(0f, 100f) <= chance) level++;
@@ -347,36 +381,6 @@ internal static class HoardBaneArena
         }
         Hunt(character, null);
         return character;
-    }
-
-    private static readonly Dictionary<string, int> MostLevels = [];
-
-    // The highest level the game ever spawns this creature at: in the world, from spawners and from spawn areas (nests,
-    // bone piles). 1 when the game doesn't spawn it at all.
-    private static int MostLevel(string prefab)
-    {
-        if (MostLevels.TryGetValue(prefab, out int known)) return known;
-        int most = 1;
-        SpawnSystem? world = ZoneSystem.instance && ZoneSystem.instance.m_zoneCtrlPrefab
-            ? ZoneSystem.instance.m_zoneCtrlPrefab.GetComponent<SpawnSystem>() : null;
-        if (world)
-            foreach (SpawnSystemList list in world!.m_spawnLists)
-                if (list)
-                    foreach (SpawnSystem.SpawnData data in list.m_spawners)
-                        if (data.m_prefab && data.m_prefab.name == prefab) most = Math.Max(most, data.m_maxLevel);
-        if (ZNetScene.instance)
-            foreach (GameObject candidate in ZNetScene.instance.m_prefabs)
-            {
-                if (!candidate) continue;
-                foreach (CreatureSpawner spawner in candidate.GetComponentsInChildren<CreatureSpawner>(true))
-                    if (spawner.m_creaturePrefab && spawner.m_creaturePrefab.name == prefab) most = Math.Max(most, spawner.m_maxLevel);
-                foreach (SpawnArea area in candidate.GetComponentsInChildren<SpawnArea>(true))
-                    foreach (SpawnArea.SpawnData data in area.m_prefabs)
-                        if (data.m_prefab && data.m_prefab.name == prefab) most = Math.Max(most, data.m_maxLevel);
-            }
-        MostLevels[prefab] = most;
-        Plugin.ModLogger.LogInfo($"Hoard-Bane Rite: followers {prefab} rise with up to {most - 1} stars.");
-        return most;
     }
 
     private static Character? Spawn(string prefabName, Vector3 center, Vector3 at)
@@ -403,8 +407,7 @@ internal static class HoardBaneArena
     // A little above the solid ground there (or the point itself, when the ground isn't known).
     internal static Vector3 OnGround(Vector3 point)
     {
-        ZoneSystem zones = ZoneSystem.instance;
-        if (zones && zones.GetSolidHeight(point, out float ground)) point.y = ground + 0.5f;
+        if (IncursionArena.GroundAt(point, out float ground)) point.y = ground + 0.5f;
         return point;
     }
 
@@ -421,7 +424,7 @@ internal static class HoardBaneArena
 
     // ---- Elites waking ----
 
-    // In the game that owns it: something hit it (see HoardBanePatches), or a player stepped into its bubble.
+    // In the game that owns it: something hit it (see HoardBanePatches), or a player stepped into its lair.
     internal static void Wake(Character elite, Character? by)
     {
         ZNetView nview = elite.m_nview;
@@ -439,7 +442,7 @@ internal static class HoardBaneArena
 
     private static readonly HashSet<int> AwakePacks = [];
 
-    // The elites and guards this game owns wake when a living player is within their bubble, or when any of their pack
+    // The elites and guards this game owns wake when a living player is within their lair, or when any of their pack
     // woke (in whichever game owns it: they see it on its saved state).
     private static void WakeNear()
     {
@@ -464,7 +467,7 @@ internal static class HoardBaneArena
                 continue;
             }
             Vector3 post = zdo.GetVec3(Post, character.transform.position);
-            float reach = zdo.GetFloat(PostRadius, BubbleRadius);
+            float reach = zdo.GetFloat(PostRadius, LairRadius);
             foreach (Player player in players)
             {
                 if (!player || player.IsDead() || Utils.DistanceXZ(player.transform.position, post) > reach) continue;
@@ -528,7 +531,7 @@ internal static class HoardBaneArena
                 bool dormant = zdo.GetBool(Dormant);
                 if (dormant)
                 {
-                    Domes.Add(zdo.GetVec3(Post, character.transform.position), zdo.GetFloat(PostRadius, BubbleRadius), BubbleFuel, NoHit);
+                    Domes.Add(zdo.GetVec3(Post, character.transform.position), zdo.GetFloat(PostRadius, LairRadius), LairFuel, NoHit);
                     Sleeping.Add(character);
                 }
                 else if (Sleeping.Remove(character) && IncursionArena.Here(WeatherState.Position(WeatherKind.HoardBane), WeatherKind.HoardBane))
@@ -589,8 +592,8 @@ internal static class HoardBaneArena
         float nearest = PreyRange;
         foreach (Player player in Player.GetAllPlayers())
         {
-            // Only those in the fight: inside the bubble.
-            if (!player || player.IsDead() || player.InGhostMode() || player.InDebugFlyMode() || !IncursionArena.InBubble(player.transform.position)) continue;
+            // Only those in the fight: inside the Blood Grounds.
+            if (!player || player.IsDead() || player.InGhostMode() || player.InDebugFlyMode() || !IncursionArena.InGrounds(player.transform.position)) continue;
             float distance = Vector3.Distance(player.transform.position, character.transform.position);
             if (distance >= nearest) continue;
             nearest = distance;
@@ -798,13 +801,15 @@ internal static class HoardBaneArena
         if (message != null) PlayerMessages.Warning(message);
     }
 
-    // What treasure was won isn't told: it waits in the obliterator. Failed, treasure: the chest burnt waits there instead.
+    // What treasure was won isn't told: it waits in a chest by the obliterator. Failed, treasure: the chest burnt waits in
+    // the obliterator instead.
     private static void RPC_Ended(long sender, int ending, bool treasure, Vector3 center)
     {
         if (!IncursionArena.FromServer(sender)) return;
         IncursionArena.ClearInside(center, Radius, Messages.HoardBaneName);
         HoardBaneRush.Ending how = (HoardBaneRush.Ending)ending;
-        if (how == HoardBaneRush.Ending.Survived && Near(center)) BlessingLightning.Strike(center);
+        // The obliterator is struck as it ends; with treasure, its chest is struck down instead (see TreasureChests).
+        if (how == HoardBaneRush.Ending.Survived && !treasure && Near(center)) BlessingLightning.Strike(center);
         if (!IncursionArena.WasInside(center) && !IncursionArena.Here(center, WeatherKind.HoardBane))
         {
             IncursionArena.TellFar(WeatherKind.HoardBane, how == HoardBaneRush.Ending.Survived);
@@ -867,7 +872,7 @@ internal static class HoardBaneArena
         Localization.instance != null ? Localization.instance.Localize(character.GetHoverName()) : character.GetHoverName();
 }
 
-// Shield domes drawn by the game's shield dome effect, each standing for nothing but itself (as IncursionArena's bubble):
+// Shield domes drawn by the game's shield dome effect, each standing for nothing but itself (as IncursionArena's dome):
 // as many as were added since Begin, the rest taken away at End.
 internal sealed class DomeSet(string name)
 {

@@ -10,7 +10,7 @@ using static JoksterCube.TempestRite.Settings.Constants;
 namespace JoksterCube.TempestRite.Domain;
 
 // Raids live on the server (and in single player or when hosting); players' games only follow them (see CrimsonArena
-// for the players' side: the kill count, the reward; IncursionArena for the bubble, portals and the map).
+// for the players' side: the kill count, the reward; IncursionArena for the Blood Grounds, portals and the map).
 // - The Crimson Rite: while it goes on, the server keeps a raid going at the obliterator: when one ends, the next starts
 //   after a short pause, picked among the raids the players within the radius are ready for (player based raids and
 //   World Advancement Progression's private raids too), with no wait and no base needed, each coming as often as the
@@ -224,7 +224,7 @@ internal static class CrimsonRaids
 
         // The reward grows with the players alive inside as it is given (see PartyReward).
         int players = Mathf.Max(1, PlayersAliveInside());
-        float multiplier = PartyReward.Multiplier(players, PluginConfig.CrimsonRewardPerPlayer.Value);
+        float multiplier = PartyReward.Multiplier(players, PluginConfig.CrimsonRewardPerPlayer.Value, PluginConfig.CrimsonMaxPlayers.Value);
         int reward = ending == Ending.Survived
             ? PartyReward.Scale(_kills * Mathf.Max(0, PluginConfig.CrimsonRewardPerKill.Value), multiplier, UnityEngine.Random.value)
             : 0;
@@ -246,8 +246,8 @@ internal static class CrimsonRaids
         Counted.Clear();
     }
 
-    // The game that owns the obliterator puts the reward inside (see CrimsonArena.Reward). Tried again for a while when
-    // nobody owns it right now.
+    // The game that owns the obliterator strikes the reward down in a chest beside it (see TreasureChests). Tried again
+    // for a while when nobody owns it right now.
     private static void GiveRewardLater()
     {
         if (_rewardAmount <= 0 || Time.time < _nextReward) return;
@@ -267,7 +267,7 @@ internal static class CrimsonRaids
             _rewardAmount = 0;
             return;
         }
-        ZRoutedRpc.instance.InvokeRoutedRPC(owner, zdo.m_uid, Rpcs.CrimsonReward, _rewardAmount);
+        TreasureChests.Send(zdo, "Crimson Rite", [("", [(PluginConfig.CrimsonRewardItem.Value.Trim(), _rewardAmount)])]);
         _rewardAmount = 0;
     }
 
@@ -281,7 +281,7 @@ internal static class CrimsonRaids
         return ZDOID.None;
     }
 
-    // From the game that owns a creature that died within the bubble (see CrimsonArena.CreatureDied).
+    // From the game that owns a creature that died within the Blood Grounds (see CrimsonArena.CreatureDied).
     private static void RPC_Kill(long sender, ZDOID creature, Vector3 position)
     {
         if (!IsServer() || !_running || !Active) return;

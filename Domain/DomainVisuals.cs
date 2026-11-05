@@ -10,7 +10,7 @@ namespace JoksterCube.TempestRite.Domain;
 // is sent):
 // - the area edge of the obliterator the player is in (or for a moment the one they just left, see DomainBorder) is
 //   marked the way the game marks a ward's: a ring of the ward's own glowing dashes on
-//   the ground, slowly turning, around the widest rite going there (a thin line instead, if the ward's marker can't be
+//   the ground and on every built floor over it (see FloorDashes), slowly turning, around the widest rite going there (a thin line instead, if the ward's marker can't be
 //   found);
 // - the obliterator glows and gives off rising motes in the colors of its rites, each rite in its own shape so several
 //   at once can be told apart: Verdant leaves, Vat-Boil bubbles, Pitch-Bellows embers (and now and then a shower of the
@@ -126,7 +126,7 @@ internal static class DomainVisuals
     private sealed class EdgeShown
     {
         internal GameObject Root = null!;
-        internal CircleProjector? Dashes;
+        internal FloorDashes? Dashes;
         internal LineRenderer? Line;
         internal Vector3 At;
         internal float Radius;
@@ -163,6 +163,7 @@ internal static class DomainVisuals
         _sparksLooked = false;
         _wardMarker = null;
         _wardLooked = false;
+        DropTint();
     }
 
     // Every frame.
@@ -235,10 +236,10 @@ internal static class DomainVisuals
 
     // Only the edges of the areas the player stands in, or for a moment the one they just left, unless they switched
     // it off (see DomainBorder); Always Show Domain Border keeps every edge nearby. A player inside a Crimson, Ragnarök
-    // or Hoard-Bane Rite's bubble sees none: no Domain rite reaches in there.
+    // or Hoard-Bane Rite's Blood Grounds sees none: no Domain rite reaches in there.
     private static void KeepOwnEdges(Player? player)
     {
-        bool arena = player && IncursionArena.InBubble(player!.transform.position);
+        bool arena = player && IncursionArena.InGrounds(player!.transform.position);
         bool inside = false;
         if (player && !arena)
             for (int e = EdgeAt.Count - 1; e >= 0; e--)
@@ -362,15 +363,16 @@ internal static class DomainVisuals
         line.endColor = c;
     }
 
-    // A circle on the ground (or the water) around center.
-    private static void Ring(LineRenderer line, Vector3 center, float radius, int count)
+    // A circle on the ground (or the water) around center; onBuilt: on what is built there too.
+    private static void Ring(LineRenderer line, Vector3 center, float radius, int count, bool onBuilt = false)
     {
         float water = ZoneSystem.instance.m_waterLevel;
         for (int k = 0; k < count; k++)
         {
             float angle = k * Mathf.PI * 2f / count;
             Vector3 point = center + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
-            point.y = (ZoneSystem.instance.GetGroundHeight(point, out float height) ? Mathf.Max(height, water) : center.y) + Lift;
+            bool found = onBuilt ? IncursionArena.GroundAt(point, out float height) : ZoneSystem.instance.GetGroundHeight(point, out height);
+            point.y = (found ? Mathf.Max(height, water) : center.y) + Lift;
             Points[k] = point;
         }
         line.positionCount = count;
@@ -426,33 +428,126 @@ internal static class DomainVisuals
         Edges.RemoveAt(index);
     }
 
-    // A ring of the ward's area-marker dashes, following the ground and slowly turning; null when the game's ward marker
-    // can't be found.
-    private static CircleProjector? Dashes(Transform parent, float radius)
+    // A ring of the ward's area-marker dashes, on the ground and every floor built over it, slowly turning; null when the
+    // game's ward marker can't be found.
+    private static FloorDashes? Dashes(Transform parent, float radius, GameObject? dash = null)
     {
         CircleProjector? ward = WardMarker();
         if (!ward) return null;
         GameObject go = new("Dashes");
         go.transform.SetParent(parent, false);
-        CircleProjector dashes = go.AddComponent<CircleProjector>();
-        dashes.m_prefab = ward!.m_prefab;
-        dashes.m_mask = ward.m_mask;
-        dashes.m_turns = 1f;
-        dashes.m_sliceLines = false;
+        FloorDashes dashes = go.AddComponent<FloorDashes>();
+        dashes.Prefab = dash ? dash! : ward!.m_prefab;
         Size(dashes, radius);
         return dashes;
     }
 
     // As many dashes as keep the ward's spacing, moving along the edge as fast as the ward's.
-    private static void Size(CircleProjector dashes, float radius)
+    private static void Size(FloorDashes dashes, float radius)
     {
         CircleProjector? ward = WardMarker();
         float wardRadius = ward && ward!.m_radius > 0f ? ward.m_radius : 10f;
         int wardCount = ward && ward!.m_nrOfSegments > 0 ? ward.m_nrOfSegments : 40;
         float wardSpeed = ward ? ward!.m_speed : 0.1f;
-        dashes.m_radius = radius;
-        dashes.m_nrOfSegments = Mathf.Clamp(Mathf.RoundToInt(wardCount * radius / wardRadius), MinDashes, MaxDashes);
-        dashes.m_speed = wardSpeed * wardRadius / Mathf.Max(1f, radius);
+        dashes.Radius = radius;
+        dashes.Segments = Mathf.Clamp(Mathf.RoundToInt(wardCount * radius / wardRadius), MinDashes, MaxDashes);
+        dashes.Speed = wardSpeed * wardRadius / Mathf.Max(1f, radius);
+    }
+
+    // ---- An edge in another color (see LeySurvey) ----
+
+    internal sealed class ColoredEdge
+    {
+        internal GameObject Root = null!;
+        internal LineRenderer? Line;
+        internal Vector3 At;
+        internal float Radius;
+        internal Color Color;
+        internal float Next;
+    }
+
+    // Color properties a dash's material may have: whichever it has is tinted.
+    private static readonly string[] TintProperties = ["_Color", "_TintColor", "_EmissionColor"];
+    private static GameObject? _tintHolder, _tintedDash;
+    private static Color _tintedFor;
+
+    // The same ring as a Domain rite's edge, in this color: the ward's dashes tinted, or the line if they can't be.
+    internal static ColoredEdge ColorEdge(Vector3 at, float radius, Color color)
+    {
+        GameObject root = new("TempestRite_ColoredEdge");
+        root.transform.position = at;
+        ColoredEdge edge = new() { Root = root, At = at, Radius = radius, Color = color };
+        GameObject? dash = TintedDash(color);
+        FloorDashes? dashes = dash ? Dashes(root.transform, radius, dash) : null;
+        if (!dashes) edge.Line = Line(root.transform, "Line", EdgeWidth);
+        return edge;
+    }
+
+    // Every frame while it shows: the line (if it is one) follows the ground and breathes as the Domain edge does.
+    internal static void Keep(ColoredEdge edge)
+    {
+        if (!edge.Line || !ZoneSystem.instance) return;
+        float t = Time.time;
+        if (t >= edge.Next)
+        {
+            edge.Next = t + EdgeRefresh;
+            Ring(edge.Line!, edge.At, edge.Radius, EdgePoints, onBuilt: true);
+            edge.Line!.enabled = true;
+        }
+        float breath = 0.5f + 0.5f * Mathf.Sin(t * Mathf.PI * 2f / EdgeBreath);
+        Paint(edge.Line!, edge.Color, 0.45f + 0.25f * breath);
+    }
+
+    internal static void Remove(ColoredEdge? edge)
+    {
+        if (edge != null && edge.Root) UnityEngine.Object.Destroy(edge.Root);
+    }
+
+    // A copy of the ward's dash with its materials tinted, kept out of the world; null when it has no color to tint.
+    private static GameObject? TintedDash(Color color)
+    {
+        if (_tintedDash && _tintedFor == color) return _tintedDash;
+        DropTint();
+        CircleProjector? ward = WardMarker();
+        if (!ward) return null;
+        _tintHolder = new GameObject("TempestRite_TintedDash") { hideFlags = HideFlags.HideAndDontSave };
+        _tintHolder.SetActive(false);
+        GameObject copy = UnityEngine.Object.Instantiate(ward!.m_prefab, _tintHolder.transform);
+        bool tinted = false;
+        foreach (Renderer renderer in copy.GetComponentsInChildren<Renderer>(true))
+        {
+            Material[] materials = renderer.sharedMaterials;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                if (!materials[i]) continue;
+                Material material = new(materials[i]) { hideFlags = HideFlags.HideAndDontSave };
+                foreach (string property in TintProperties)
+                {
+                    if (!material.HasProperty(property)) continue;
+                    Color was = material.GetColor(property);
+                    material.SetColor(property, property == "_EmissionColor"
+                        ? color * Mathf.Max(1f, was.maxColorComponent)
+                        : new Color(color.r, color.g, color.b, was.a));
+                    tinted = true;
+                }
+                materials[i] = material;
+            }
+            renderer.sharedMaterials = materials;
+        }
+        if (!tinted)
+        {
+            DropTint();
+            return null;
+        }
+        _tintedFor = color;
+        return _tintedDash = copy;
+    }
+
+    private static void DropTint()
+    {
+        if (_tintHolder) UnityEngine.Object.Destroy(_tintHolder);
+        _tintHolder = null;
+        _tintedDash = null;
     }
 
     // The ward's area marker (the workbench's if that's not found).

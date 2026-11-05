@@ -22,9 +22,9 @@ internal static class CrimsonPatch
 }
 
 // The Crimson Rite: the game's scaling of creature health and damage by the number of players within 100 m counts,
-// within the bubble, only the players inside it (not those running around outside, however near), with the game's own
+// within the Blood Grounds, only the players inside it (not those running around outside, however near), with the game's own
 // limits (at least 1, at most its maximum, a forced player count still wins). Outside it, as usual. The Ragnarök Rite
-// does the same for its bubble (see RagnarokPatches.PlayerCountPatch).
+// does the same for its Blood Grounds (see RagnarokPatches.PlayerCountPatch).
 [HarmonyPatch(typeof(Game), nameof(Game.GetPlayerDifficulty))]
 internal static class CrimsonDifficultyPatch
 {
@@ -48,7 +48,7 @@ internal static class CrimsonDifficultyPatch
     }
 }
 
-// The Crimson Rite's raid reaches the whole bubble, also when its radius is bigger than the raid's own range.
+// The Crimson Rite's raid reaches the whole Blood Grounds, also when its radius is bigger than the raid's own range.
 [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.IsInsideRandomEventArea))]
 internal static class CrimsonRaidAreaPatch
 {
@@ -64,7 +64,7 @@ internal static class CrimsonRaidAreaPatch
 }
 
 // The Crimson Rite's raid creatures spawn only within its radius: around the obliterator rather than around players,
-// still not right next to a player (a little closer than the game's 40 m, so small bubbles get raids too).
+// still not right next to a player (a little closer than the game's 40 m, so small Blood Grounds get raids too).
 internal static class CrimsonSpawnPatches
 {
     private const string Feature = "Crimson Rite spawns";
@@ -98,21 +98,19 @@ internal static class CrimsonSpawnPatches
         return raid != null && Utils.DistanceXZ(raid.m_pos, WeatherState.Position(WeatherKind.Crimson)) < CrimsonRaids.SamePlace ? raid : null;
     }
 
-    // More creatures, more often (Raid Spawn Multiplier), and for a raid below the players more in bigger groups, with
-    // stars (Raid Catch-Up, see RaidCatchUp). Always from the spawner's own values, so a catch-up told late still counts.
+    // More creatures, more often (Raid Spawn Multiplier; 1: the game's own), and for a raid below the players stars
+    // (Raid Catch-Up, see RaidCatchUp). Always from the spawner's own values, so a catch-up told late still counts.
     private static void Give(SpawnSystem.SpawnData spawner, Original original, float more, int steps)
     {
         original.GivenMore = more;
         original.GivenSteps = steps;
         RaidCatchUp.Boost boost = RaidCatchUp.For(steps, PluginConfig.CrimsonCatchUp.Value);
-        float count = more * boost.Count;
-        spawner.m_maxSpawned = original.MaxSpawned > 0 && count > 1f
-            ? Mathf.Max(original.MaxSpawned + 1, Mathf.RoundToInt(original.MaxSpawned * count))
+        spawner.m_maxSpawned = original.MaxSpawned > 0 && more > 1f
+            ? Mathf.Max(original.MaxSpawned + 1, Mathf.RoundToInt(original.MaxSpawned * more))
             : original.MaxSpawned;
-        spawner.m_spawnInterval = count > 1f ? Mathf.Max(1f, original.Interval / count) : original.Interval;
-        spawner.m_groupSizeMax = Mathf.Max(original.GroupMax, Mathf.RoundToInt(original.GroupMax * boost.Count));
-        spawner.m_groupSizeMin = Mathf.Min(spawner.m_groupSizeMax,
-            Mathf.Max(original.GroupMin, Mathf.RoundToInt(original.GroupMin * (1f + (boost.Count - 1f) / 2f))));
+        spawner.m_spawnInterval = more > 1f ? Mathf.Max(1f, original.Interval / more) : original.Interval;
+        spawner.m_groupSizeMin = original.GroupMin;
+        spawner.m_groupSizeMax = original.GroupMax;
         if (!boost.Any)
         {
             spawner.m_minLevel = original.MinLevel;
@@ -121,9 +119,12 @@ internal static class CrimsonSpawnPatches
             spawner.m_levelUpMinCenterDistance = original.LevelUpDistance;
             return;
         }
-        spawner.m_maxLevel = Mathf.Max(original.MaxLevel, boost.MaxLevel);
+        // Never more stars than the game ever gives the creature (no starred ghosts).
+        int most = Mathf.Max(original.MaxLevel, VanillaStars.MostLevel(spawner.m_prefab ? spawner.m_prefab.name : ""));
+        spawner.m_maxLevel = Mathf.Max(original.MaxLevel, Mathf.Min(most, boost.MaxLevel));
         spawner.m_minLevel = Mathf.Min(spawner.m_maxLevel, Mathf.Max(original.MinLevel, boost.MinLevel));
-        spawner.m_overrideLevelupChance = Mathf.Max(original.LevelUpChance, boost.LevelUpChance);
+        spawner.m_overrideLevelupChance = spawner.m_maxLevel > original.MaxLevel
+            ? Mathf.Max(original.LevelUpChance, boost.LevelUpChance) : original.LevelUpChance;
         // Stars even near the world's center.
         spawner.m_levelUpMinCenterDistance = 0f;
     }
@@ -188,20 +189,49 @@ internal static class CrimsonSpawnPatches
         }
     }
 
-    // Each creature of a group too.
+    // Each creature of a group too: the rite's own check instead of the game's. On its Blood Grounds, on the ground there
+    // (the land, or a floor built on it) above the sea, not in lava (unless the creature belongs there), not indoors, and
+    // not right next to a player. Nothing else keeps them away: no workbench, fire or other base, no building over the
+    // spot, no biome, height or slope, and no other mod's check, since the rite calls them.
     [HarmonyPatch(typeof(SpawnSystem), nameof(SpawnSystem.IsSpawnPointGood))]
     private static class GoodPoint
     {
-        private static void Postfix(ref Vector3 spawnPoint, ref bool __result)
+        private static bool _result;
+
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(SpawnSystem.SpawnData spawn, ref Vector3 spawnPoint, ref bool __result)
         {
-            if (!_confining || !__result) return;
-            if (Utils.DistanceXZ(spawnPoint, WeatherState.Position(WeatherKind.Crimson)) > PluginConfig.Radius(WeatherKind.Crimson))
-                __result = false;
+            if (!_confining) return true;
+            try { _result = OnGrounds(spawn, ref spawnPoint); }
+            catch (Exception exception)
+            {
+                PatchGuard.Fail(Feature, exception);
+                return true;
+            }
+            __result = _result;
+            return false;
         }
+
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(ref bool __result)
+        {
+            if (_confining && !PatchGuard.IsDisabled(Feature)) __result = _result;
+        }
+    }
+
+    private static bool OnGrounds(SpawnSystem.SpawnData spawn, ref Vector3 point)
+    {
+        if (Utils.DistanceXZ(point, WeatherState.Position(WeatherKind.Crimson)) > PluginConfig.Radius(WeatherKind.Crimson)) return false;
+        // Dry ground with room for it, not indoors (see ArenaRoom).
+        if (!ArenaRoom.Fits(point, ArenaRoom.Raider, out Vector3 at, lavaFits: spawn.m_inLava)) return false;
+        point = at;
+        if (!spawn.m_outsideLava && !ZoneSystem.instance.IsLava(point)) return false;
+        float near = spawn.m_spawnRadiusMin > 0f ? spawn.m_spawnRadiusMin : 40f;
+        return spawn.m_canSpawnCloseToPlayer || !Player.IsPlayerInRange(point, near);
     }
 }
 
-// The Crimson and Ragnarök Rites: portals within the bubble, used by a player inside it, or leading into it, don't work.
+// The Crimson and Ragnarök Rites: portals within the Blood Grounds, used by a player inside it, or leading into it, don't work.
 [HarmonyPatch(typeof(TeleportWorld), nameof(TeleportWorld.Teleport))]
 internal static class IncursionPortalPatch
 {
@@ -229,7 +259,7 @@ internal static class IncursionPortalPatch
     }
 }
 
-// The Crimson Rite counts creatures dying within its bubble, the Ragnarök Rite its bosses falling and the Hoard-Bane Rite
+// The Crimson Rite counts creatures dying within its Blood Grounds, the Ragnarök Rite its bosses falling and the Hoard-Bane Rite
 // its elites and minibosses, told by the game that owns them.
 [HarmonyPatch(typeof(Character), nameof(Character.OnDeath))]
 internal static class CrimsonKillPatch
@@ -249,8 +279,8 @@ internal static class CrimsonKillPatch
     }
 }
 
-// The obliterator takes the Crimson Rite's reward and the Ragnarök and Hoard-Bane Rites' treasure from the server, in the
-// game that owns it.
+// The obliterator's owner takes the Crimson, Ragnarök and Hoard-Bane Rites' treasure chests from the server (see
+// TreasureChests), and what goes back inside: a refused rite's key items, a failed Hoard-Bane Rite's chest.
 [HarmonyPatch(typeof(Incinerator), nameof(Incinerator.Awake))]
 internal static class CrimsonRewardPatch
 {
@@ -258,30 +288,25 @@ internal static class CrimsonRewardPatch
     {
         ZNetView nview = __instance.m_nview;
         if (!nview || nview.GetZDO() == null) return;
-        nview.Register<int>(Rpcs.CrimsonReward, (sender, amount) =>
+        nview.Register<ZPackage>(Rpcs.TreasureChests, (sender, treasure) =>
         {
-            try { CrimsonArena.Reward(__instance, sender, amount); }
-            catch (Exception exception) { Plugin.ModLogger.LogError($"Crimson Rite reward failed: {exception}"); }
-        });
-        nview.Register<ZPackage>(Rpcs.RagnarokReward, (sender, treasure) =>
-        {
-            try { RagnarokArena.Reward(__instance, sender, treasure, Messages.RagnarokName); }
-            catch (Exception exception) { Plugin.ModLogger.LogError($"Ragnarök Rite treasure failed: {exception}"); }
+            try { TreasureChests.Give(__instance, sender, treasure); }
+            catch (Exception exception) { Plugin.ModLogger.LogError($"Treasure chests failed: {exception}"); }
         });
         nview.Register<ZPackage>(Rpcs.ObliteratorRefund, (sender, keys) =>
         {
             try { RagnarokArena.Reward(__instance, sender, keys, "Refused rite"); }
             catch (Exception exception) { Plugin.ModLogger.LogError($"Refused rite's key items failed: {exception}"); }
         });
-        nview.Register<ZPackage>(Rpcs.HoardBaneReward, (sender, treasure) =>
+        nview.Register<ZPackage>(Rpcs.HoardBaneReward, (sender, chest) =>
         {
-            try { RagnarokArena.Reward(__instance, sender, treasure, Messages.HoardBaneName); }
-            catch (Exception exception) { Plugin.ModLogger.LogError($"Hoard-Bane Rite treasure failed: {exception}"); }
+            try { RagnarokArena.Reward(__instance, sender, chest, Messages.HoardBaneName); }
+            catch (Exception exception) { Plugin.ModLogger.LogError($"Hoard-Bane Rite chest back failed: {exception}"); }
         });
     }
 }
 
-// Inside a Crimson, Ragnarök or Hoard-Bane Rite's bubble, fight music plays when the game has no raid or boss music of
+// Inside a Crimson, Ragnarök or Hoard-Bane Rite's Blood Grounds, fight music plays when the game has no raid or boss music of
 // its own (see ArenaMusic). Only the music player asks this.
 [HarmonyPatch(typeof(RandEventSystem), nameof(RandEventSystem.GetMusicOverride))]
 internal static class IncursionMusicPatch
@@ -310,7 +335,7 @@ internal static class IncursionPinPatch
     }
 }
 
-// The Crimson, Ragnarök and Hoard-Bane Rites: within the bubble nothing can be built, repaired or torn down with the
+// The Crimson, Ragnarök and Hoard-Bane Rites: within the Blood Grounds nothing can be built, repaired or torn down with the
 // hammer (hitting pieces with weapons and tools still works). Checked in the game of the player doing it.
 internal static class IncursionBuildPatches
 {

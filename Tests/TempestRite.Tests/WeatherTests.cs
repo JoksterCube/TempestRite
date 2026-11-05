@@ -331,7 +331,7 @@ public class WeatherKindTests
         }
         Assert.True(WeatherKinds.Ends(WeatherKind.SunFall, WeatherKind.PolarNight));
         Assert.True(WeatherKinds.Ends(WeatherKind.NaturesRebound, WeatherKind.Sootfall));
-        Assert.False(WeatherKinds.IsKnown((WeatherKind)63));
+        Assert.False(WeatherKinds.IsKnown((WeatherKind)64));
         Assert.False(WeatherKinds.Lasts(WeatherKind.Unmaking));
         Assert.True(WeatherKinds.Personal(WeatherKind.Luminary));
         Assert.True(WeatherKinds.Personal(WeatherKind.AbyssalDraw));
@@ -849,6 +849,40 @@ public class RiteOrderTests
         Assert.False(WeatherKinds.ForEveryone(kind));
         Assert.False(WeatherKinds.InstantBlessing(kind));
         Assert.False(WeatherKinds.Clashes(kind, WeatherKind.TundraShroud));
+        Assert.Contains(kind, WeatherKinds.All);
+    }
+
+    // The Ley-Survey Rite: a Reckoning rite in its own slot around its obliterator, ended by any other Reckoning rite but
+    // by nothing else, and never ending anything itself.
+    [Fact]
+    public void Ley_survey_is_a_located_reckoning_rite_ended_by_other_reckonings()
+    {
+        WeatherKind kind = WeatherKind.LeySurvey;
+        Assert.Equal(63, (int)kind);
+        Assert.Equal(23, (int)EffectSlot.Survey);
+        Assert.Equal(EffectSlot.Survey, WeatherKinds.Slot(kind));
+        Assert.Equal(23, System.Array.IndexOf(WeatherKinds.Slots, EffectSlot.Survey));
+        Assert.Equal(RiteGroup.Reckoning, WeatherKinds.Group(kind));
+        Assert.True(WeatherKinds.HasSlot(kind));
+        Assert.True(WeatherKinds.Located(kind));
+        Assert.True(WeatherKinds.Lasts(kind));
+        Assert.False(WeatherKinds.Untimed(kind));
+        Assert.False(WeatherKinds.IsIncursion(kind));
+        Assert.False(WeatherKinds.IsDomainSlot(EffectSlot.Survey));
+        Assert.True(WeatherKinds.EndsWithObliterator(EffectSlot.Survey));
+        Assert.False(WeatherKinds.Personal(kind));
+        Assert.False(WeatherKinds.ForEveryone(kind));
+        foreach (WeatherKind ender in new[] { WeatherKind.Crimson, WeatherKind.Ragnarok, WeatherKind.HoardBane, WeatherKind.Sanctuary, WeatherKind.Unmaking })
+        {
+            Assert.True(WeatherKinds.EndsSurvey(ender), ender.ToString());
+            Assert.True(WeatherKinds.Ends(ender, kind), ender.ToString());
+            Assert.True(WeatherKinds.Clashes(ender, kind), ender.ToString());
+        }
+        Assert.False(WeatherKinds.EndsSurvey(kind));
+        Assert.False(WeatherKinds.Ends(WeatherKind.Grounding, kind));
+        Assert.False(WeatherKinds.Ends(WeatherKind.Reset, kind));
+        Assert.False(WeatherKinds.Clashes(kind, WeatherKind.Verdant));
+        foreach (WeatherKind other in WeatherKinds.All) Assert.False(WeatherKinds.Ends(kind, other), other.ToString());
         Assert.Contains(kind, WeatherKinds.All);
     }
 

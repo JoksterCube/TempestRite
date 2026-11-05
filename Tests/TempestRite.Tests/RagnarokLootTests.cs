@@ -148,4 +148,142 @@ public class RagnarokLootTests
         Assert.Equal([0, 0, 1], RagnarokLoot.PickBosses([0], [1], 3, _ => 0).OrderBy(p => p));
         Assert.Empty(RagnarokLoot.PickBosses([], [1, 2], 3, _ => 0));
     }
+
+    // ---- Each boss's chest ----
+
+    [Theory]
+    [InlineData(0, 1f, 1f)]
+    [InlineData(2, 1f, 3f)]
+    [InlineData(6, 1f, 7f)]
+    [InlineData(2, 0.5f, 2f)]
+    [InlineData(3, 0f, 1f)]
+    public void Each_star_adds_the_loot_again(int stars, float perStar, float multiplier) =>
+        Assert.Equal(multiplier, RagnarokLoot.StarMultiplier(stars, perStar), 3);
+
+    private static readonly List<RagnarokLoot.Tier> Tiers =
+    [
+        RagnarokLoot.ParseTier("2 of TinOre: 10-15, RoundLog: 20-30, Blueberries: 10-20"),
+        RagnarokLoot.ParseTier("1 of CopperOre: 15-25, Thistle: 10-15"),
+        RagnarokLoot.ParseTier("SurtlingCore: 4-8, AncientSeed: 3-5")
+    ];
+
+    [Fact]
+    public void Reads_a_tier()
+    {
+        RagnarokLoot.Tier tier = RagnarokLoot.ParseTier(" 3 of Wood: 10-20, Stone: 5");
+        Assert.Equal(3, tier.Picks);
+        Assert.Equal(["Wood", "Stone"], tier.Items.Select(t => t.Item));
+        // Without "N of": one picked.
+        Assert.Equal(1, RagnarokLoot.ParseTier("Wood: 10-20").Picks);
+        Assert.Empty(RagnarokLoot.ParseTier("").Items);
+        Assert.Empty(RagnarokLoot.ParseTier(null).Items);
+    }
+
+    [Fact]
+    public void Boss_loot_picks_from_each_tier_times_its_stars()
+    {
+        // Lowest rolls: the first left of each tier, Min each, times 3.
+        List<(string item, int amount)> low = RagnarokLoot.BossLoot(Tiers, 3f, () => 0f);
+        Assert.Equal([("TinOre", 30), ("RoundLog", 60), ("CopperOre", 45), ("SurtlingCore", 12)], low);
+        // Highest rolls: the last left of each tier, Max each.
+        List<(string item, int amount)> high = RagnarokLoot.BossLoot(Tiers, 1f, () => 1f);
+        Assert.Equal([("Blueberries", 20), ("RoundLog", 30), ("Thistle", 15), ("AncientSeed", 5)], high);
+    }
+
+    [Fact]
+    public void Picks_never_the_same_item_twice()
+    {
+        System.Random random = new(7);
+        for (int run = 0; run < 200; run++)
+            Assert.Equal(4, RagnarokLoot.BossLoot(Tiers, 1f, () => (float)random.NextDouble()).Count);
+        // More picks than items: all of them; none: nothing from that tier.
+        Assert.Equal(["Wood", "Stone"], RagnarokLoot.BossLoot([RagnarokLoot.ParseTier("9 of Wood: 1, Stone: 1")], 1f, () => 0f).Select(e => e.item));
+        Assert.Empty(RagnarokLoot.BossLoot([RagnarokLoot.ParseTier("0 of Wood: 1, Stone: 1")], 1f, () => 0f));
+    }
+
+    // The defaults: every tier has at least one item more than is picked (nothing certain), and every item reads.
+    [Fact]
+    public void Default_boss_loot_is_never_certain()
+    {
+        foreach ((string boss, var tiers) in Settings.Constants.Groups.RagnarokBossLoot)
+        {
+            Assert.Equal(4, tiers.Length);
+            foreach (var setting in tiers)
+            {
+                List<string> problems = [];
+                RagnarokLoot.Tier tier = RagnarokLoot.ParseTier(setting.DefaultValue, problems);
+                Assert.Empty(problems);
+                if (tier.Items.Count == 0) continue;
+                Assert.True(tier.Items.Count > tier.Picks, $"{boss} {setting.Name}: {tier.Picks} of {tier.Items.Count}");
+                Assert.Equal(tier.Items.Count, tier.Items.Select(t => t.Item).Distinct().Count());
+                // No trophies: they come only from slaying the boss or creature yourself.
+                Assert.DoesNotContain(tier.Items, t => t.Item.StartsWith("Trophy"));
+            }
+        }
+    }
+
+    [Fact]
+    public void Reads_half_items()
+    {
+        List<string> problems = [];
+        List<RagnarokLoot.Treasure> table = RagnarokLoot.Parse("QueenBee: 1-2 half, DragonEgg: 1 HALF, Honey: 10-20", problems);
+        Assert.Empty(problems);
+        Assert.Equal([true, true, false], table.Select(t => t.Half));
+        Assert.Equal((1, 2), (table[0].Min, table[0].Max));
+        Assert.Equal((1, 1), (table[1].Min, table[1].Max));
+    }
+
+    [Theory]
+    [InlineData(4f, 2f)]
+    [InlineData(2.5f, 1.25f)]
+    [InlineData(1.5f, 1f)]
+    [InlineData(1f, 1f)]
+    public void Half_items_grow_half_as_much_never_less(float multiplier, float half) =>
+        Assert.Equal(half, RagnarokLoot.HalfMultiplier(multiplier), 3);
+
+    [Fact]
+    public void Half_items_in_boss_loot()
+    {
+        // 6 star Eikthyr (x4): 1-2 queen bees become 2-4.
+        List<RagnarokLoot.Tier> bees = [RagnarokLoot.ParseTier("1 of QueenBee: 1-2 half")];
+        Assert.Equal([("QueenBee", 2)], RagnarokLoot.BossLoot(bees, 4f, () => 0f));
+        Assert.Equal([("QueenBee", 4)], RagnarokLoot.BossLoot(bees, 4f, () => 1f));
+        // 3 star Moder (x2.5): one dragon egg becomes 1 or 2.
+        List<RagnarokLoot.Tier> egg = [RagnarokLoot.ParseTier("1 of DragonEgg: 1 half")];
+        Assert.Equal([("DragonEgg", 1)], RagnarokLoot.BossLoot(egg, 2.5f, () => 0f));
+        Assert.Equal([("DragonEgg", 2)], RagnarokLoot.BossLoot(egg, 2.5f, () => 1f));
+    }
+
+    [Fact]
+    public void The_same_item_adds_up()
+    {
+        List<(string item, int amount)> loot = [("Amber", 2)];
+        RagnarokLoot.Add(loot, "Ruby", 1);
+        RagnarokLoot.Add(loot, "amber", 3);
+        RagnarokLoot.Add(loot, "Coins", 0);
+        Assert.Equal([("Amber", 5), ("Ruby", 1)], loot);
+    }
+
+    [Fact]
+    public void Treasure_is_split_into_several_containers()
+    {
+        // 20 stacks of wood: containers of 2 to 5 stacks each (6 with a last single one), nothing lost.
+        System.Random random = new(3);
+        for (int run = 0; run < 200; run++)
+        {
+            var split = RagnarokLoot.Split([("Wood", 1000)], 32, _ => 50, (min, max) => random.Next(min, max));
+            Assert.Equal(1000, split.Sum(c => c.Sum(s => s.count)));
+            Assert.All(split, c => Assert.InRange(c.Count, 2, 6));
+            Assert.True(split.Count >= 4);
+        }
+        // A typical boss treasure of 8 stacks: always at least two containers.
+        for (int run = 0; run < 200; run++)
+            Assert.True(RagnarokLoot.Split([("Wood", 400)], 32, _ => 50, (min, max) => random.Next(min, max)).Count >= 2);
+        // A small treasure: one container.
+        Assert.Single(RagnarokLoot.Split([("Wood", 100), ("Stone", 30)], 32, _ => 50, (min, _) => min));
+        // Always the most: 5, 5, 5, 5.
+        Assert.Equal([5, 5, 5, 5], RagnarokLoot.Split([("Wood", 1000)], 32, _ => 50, (_, max) => max - 1).Select(c => c.Count));
+        // A last single stack goes in the one before: 2, 2, 3 for 7 stacks.
+        Assert.Equal([2, 2, 3], RagnarokLoot.Split([("Wood", 350)], 32, _ => 50, (min, _) => min).Select(c => c.Count));
+    }
 }

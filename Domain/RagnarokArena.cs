@@ -6,20 +6,20 @@ using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Domain;
 
-// The Ragnarök Rite in each player's game (the server runs it, see RagnarokRush; the bubble, holding players and
+// The Ragnarök Rite in each player's game (the server runs it, see RagnarokRush; the Blood Grounds, holding players and
 // creatures, portals and the map are IncursionArena's):
 // - says which of the bosses asked about the local player has slain;
-// - spawns a boss when the server asks this game to, within the bubble, struck by lightning, hunting
+// - spawns a boss when the server asks this game to, within the Blood Grounds, struck by lightning, hunting
 //   the players, as strong as the server says (see RagnarokPower, and RagnarokPatches for their damage and drops);
 // - tells the server when a boss it owns falls;
 // - shows the bosses rising and falling (lightning strikes the obliterator as each falls), and how it ended, never
 //   which bosses are to come nor what treasure was won; clears out what it brought, dropping nothing;
-// - the game that owns the obliterator puts the treasure in it.
+// - the game that owns the obliterator strikes the treasure chests down around it (see TreasureChests).
 internal static class RagnarokArena
 {
-    // How far beyond the bubble its lightning is seen.
+    // How far beyond the Blood Grounds its lightning is seen.
     private const float StrikeSeenFrom = 50f;
-    private const int SpawnTries = 40;
+    private const int SpawnTries = 80;
     // Bosses rise no nearer the obliterator than this (or a third of the radius, if smaller).
     private const float SpawnClearOfCenter = 15f;
     // Bosses rise within this share of the radius, clear of the edge.
@@ -61,7 +61,7 @@ internal static class RagnarokArena
         ZRoutedRpc.instance.InvokeRoutedRPC(Rpcs.RagnarokAnswer, answer);
     }
 
-    // Spawns the bosses within the bubble, away from the obliterator, on dry ground.
+    // Spawns the bosses within the Blood Grounds, away from the obliterator, on dry ground.
     private static void RPC_Spawn(long sender, ZPackage package)
     {
         if (!IncursionArena.FromServer(sender) || !ZNetScene.instance) return;
@@ -128,24 +128,33 @@ internal static class RagnarokArena
         return zdo.m_uid;
     }
 
-    private static Vector3 SpawnPoint(Vector3 center)
+    // Between these distances from the obliterator the bosses rise.
+    internal static (float Clear, float Reach) SpawnRing()
     {
         float radius = Radius;
-        float reach = Mathf.Max(5f, radius * SpawnShare);
-        float clear = Mathf.Min(SpawnClearOfCenter, radius / 3f);
-        ZoneSystem zones = ZoneSystem.instance;
+        return (Mathf.Min(SpawnClearOfCenter, radius / 3f), Mathf.Max(5f, radius * SpawnShare));
+    }
+
+    // A spot with room for a boss (see ArenaRoom).
+    private static Vector3 SpawnPoint(Vector3 center)
+    {
+        (float clear, float reach) = SpawnRing();
         for (int i = 0; i < SpawnTries; i++)
         {
             Vector2 offset = Random.insideUnitCircle * reach;
             if (offset.magnitude < clear) continue;
             Vector3 point = center + new Vector3(offset.x, 0f, offset.y);
-            if (!zones || !zones.GetSolidHeight(point, out float ground) || ground < zones.m_waterLevel) continue;
-            point.y = ground + 1f;
-            return point;
+            if (!ArenaRoom.Fits(point, ArenaRoom.Boss, out Vector3 at)) continue;
+            at.y += 1f;
+            return at;
         }
-        // Nowhere better: beside the obliterator.
-        Vector3 beside = center + Vector3.forward * clear;
-        beside.y = (zones && zones.GetSolidHeight(beside, out float height) ? Mathf.Max(height, center.y) : center.y) + 1f;
+        // Nowhere better: beside the obliterator on a random side, or the nearest room to it.
+        Vector2 side = Random.insideUnitCircle.normalized;
+        if (side.sqrMagnitude < 0.5f) side = Vector2.up;
+        Vector3 beside = center + new Vector3(side.x, 0f, side.y) * clear;
+        beside.y = (IncursionArena.GroundAt(beside, out float height) ? Mathf.Max(height, center.y) : center.y);
+        beside = ArenaRoom.Nearby(beside, ArenaRoom.Boss, center, Radius);
+        beside.y += 1f;
         return beside;
     }
 
@@ -192,8 +201,8 @@ internal static class RagnarokArena
         // However it ended, nothing it brought is left behind, and nothing cleared out drops anything.
         IncursionArena.ClearInside(center, Radius, Messages.RagnarokName);
         RagnarokRush.Ending how = (RagnarokRush.Ending)ending;
-        // The obliterator is struck as the last boss falls and the treasure goes in.
-        if (how == RagnarokRush.Ending.Survived && Near(center)) BlessingLightning.Strike(center);
+        // The obliterator is struck as the last boss falls; with treasure, the chests are struck down instead (see TreasureChests).
+        if (how == RagnarokRush.Ending.Survived && !treasure && Near(center)) BlessingLightning.Strike(center);
         if (!IncursionArena.WasInside(center) && !IncursionArena.Here(center, WeatherKind.Ragnarok))
         {
             IncursionArena.TellFar(WeatherKind.Ragnarok, how == RagnarokRush.Ending.Survived);
@@ -229,7 +238,8 @@ internal static class RagnarokArena
 
     // ---- Treasure ----
 
-    // In the game that owns the obliterator, when the server says the rite was survived (the Hoard-Bane Rite's too).
+    // In the game that owns the obliterator, when the server gives a refused rite's key items or a failed Hoard-Bane Rite's
+    // chest back.
     internal static void Reward(Incinerator incinerator, long sender, ZPackage treasure, string rite)
     {
         if (!incinerator || !incinerator.m_nview || !incinerator.m_nview.IsOwner() || !ObjectDB.instance) return;

@@ -6,7 +6,7 @@ using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Domain;
 
-// The Crimson Rite in each player's game (the server runs its raids, see CrimsonRaids; the bubble, holding players and
+// The Crimson Rite in each player's game (the server runs its raids, see CrimsonRaids; the Blood Grounds, holding players and
 // creatures, portals and the map are IncursionArena's):
 // - a creature that dies inside, in the game that owns it, is told to the server, which counts it; everyone inside sees
 //   the count after each kill, and how it ended (not what the reward is: it waits in the obliterator);
@@ -16,7 +16,7 @@ namespace JoksterCube.TempestRite.Domain;
 // Raid creatures only spawn inside (see CrimsonSpawnPatches).
 internal static class CrimsonArena
 {
-    // How far beyond the bubble the obliterator's lightning is seen.
+    // How far beyond the Blood Grounds the obliterator's lightning is seen.
     private const float StrikeSeenFrom = 50f;
 
     internal static void Register(ZRoutedRpc rpc)
@@ -89,8 +89,8 @@ internal static class CrimsonArena
         ClearSession();
         // However it ended, nothing it brought is left behind, and nothing cleared out drops anything.
         IncursionArena.ClearInside(center, Radius, Messages.CrimsonName);
-        // The obliterator is struck once more as the reward goes in.
-        if ((CrimsonRaids.Ending)ending == CrimsonRaids.Ending.Survived && reward > 0 && Near(center)) BlessingLightning.Strike(center);
+        // The obliterator is struck once more as it ends; with a reward, its chest is struck down instead (see TreasureChests).
+        if ((CrimsonRaids.Ending)ending == CrimsonRaids.Ending.Survived && reward == 0 && Near(center)) BlessingLightning.Strike(center);
         if (!IncursionArena.WasInside(center) && !IncursionArena.Here(center, WeatherKind.Crimson))
         {
             IncursionArena.TellFar(WeatherKind.Crimson, (CrimsonRaids.Ending)ending == CrimsonRaids.Ending.Survived);
@@ -108,21 +108,6 @@ internal static class CrimsonArena
     }
 
     // ---- Reward ----
-
-    // In the game that owns the obliterator, when the server says the rite was survived.
-    internal static void Reward(Incinerator incinerator, long sender, int amount)
-    {
-        if (amount <= 0 || !incinerator || !incinerator.m_nview || !incinerator.m_nview.IsOwner()) return;
-        if (ZRoutedRpc.instance == null || (sender != ZRoutedRpc.instance.GetServerPeerID() && sender != ZRoutedRpc.instance.m_id)) return;
-        GameObject? prefab = RewardPrefab();
-        if (!prefab || !prefab!.GetComponent<ItemDrop>())
-        {
-            Plugin.ModLogger.LogWarning($"Crimson Rite: reward item \"{PluginConfig.CrimsonRewardItem.Value}\" is not an item the game knows.");
-            return;
-        }
-        PutIn(incinerator, prefab, amount);
-        Plugin.ModLogger.LogInfo($"Crimson Rite: put {amount} {prefab.name} in the obliterator.");
-    }
 
     // Puts items in the obliterator; what doesn't fit falls out on top.
     internal static void PutIn(Incinerator incinerator, GameObject prefab, int amount)
@@ -144,11 +129,5 @@ internal static class CrimsonArena
             ItemDrop.DropItem(drop.m_itemData, count, top, Quaternion.identity);
             left -= count;
         }
-    }
-
-    private static GameObject? RewardPrefab()
-    {
-        if (!ObjectDB.instance) return null;
-        return ObjectDB.instance.GetItemPrefab(PluginConfig.CrimsonRewardItem.Value.Trim());
     }
 }

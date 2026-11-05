@@ -270,7 +270,7 @@ internal static class RiteSpeedup
     {
         if (!RiteHistory.Reaches(work.Kind, position)) return null;
         double from = SpedTo(zdo, work);
-        // Within a Crimson, Ragnarök or Hoard-Bane Rite's bubble the rite does nothing: that time isn't owed.
+        // Within a Crimson, Ragnarök or Hoard-Bane Rite's Blood Grounds the rite does nothing: that time isn't owed.
         if (WeatherState.Suspended(work.Kind, position))
         {
             if (now - from >= IdleMarkSeconds) Mark(zdo, now);

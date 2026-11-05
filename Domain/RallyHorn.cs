@@ -18,7 +18,7 @@ namespace JoksterCube.TempestRite.Domain;
 //   Power (see AbilityKit) with its key under it, pulsing as the call comes, and a crossed-out Refuse slot beside it.
 //   Letting it fade or refusing costs nothing. Only one call waits for answers at a time (see RallyPending).
 // - Pressing the Rally Call Shortcut answers it, unless something stands in the way (the call then stays open): as at
-//   a portal, carrying anything that can't go through one, or portals being off in the world; an arena bubble; or
+//   a portal, carrying anything that can't go through one, or portals being off in the world; a rite's Blood Grounds; or
 //   being in a fight (an enemy onto the player, or the player attacking just now). The portal checks run again until
 //   the player vanishes, so picking up a non-teleportable item while kneeling stops it.
 // - While the call waits for an answer, horns fly up from the player and the horn sounds again every 10 seconds.

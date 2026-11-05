@@ -45,7 +45,7 @@ internal static class AetherClearing
     {
         WeatherKind kind = WeatherKind.AetherClear;
         Vector3 at = WeatherState.Position(kind);
-        // Within a Crimson, Ragnarök or Hoard-Bane Rite's bubble the Domain rites do nothing.
+        // Within a Crimson, Ragnarök or Hoard-Bane Rite's Blood Grounds the Domain rites do nothing.
         if (!WeatherState.IsActive(kind) || WeatherState.Suspended(kind, at))
         {
             Remove();

@@ -7,13 +7,13 @@ using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Domain;
 
-// The bubble of the Crimson, Ragnarök and Hoard-Bane Rites in each player's game (the server runs the fights, see
+// The Blood Grounds of the Crimson, Ragnarök and Hoard-Bane Rites in each player's game (the server runs the fights, see
 // CrimsonRaids, RagnarokRush and HoardBaneRush):
-// - a shield bubble over its radius, drawn by the game's own shield dome effect;
+// - a shield dome over its radius, drawn by the game's own shield dome effect;
 // - from when it starts, the local player stays on the side they were on: held inside, or kept out. A player who dies
 //   inside comes back outside and is kept out. A player who logs in or comes back to life within it later is put
 //   outside, on firm ground, unless they were inside as it began (disconnected during the fight: see IncursionWatch).
-//   No portal into or out of the bubble works;
+//   No portal into or out of the Blood Grounds works;
 // - creatures (tamed ones too) stay on the side they were on when it started, or where they spawned: none inside can
 //   get out, none outside can get in, and flying ones inside stay under the dome. Each is held by the game that owns it;
 // - its edge holds them as a wall would: each physics step, whatever would carry one through it is taken out of its
@@ -26,7 +26,7 @@ namespace JoksterCube.TempestRite.Domain;
 // - when it ends, the creatures it brought are cleared out, dropping nothing (see ClearInside).
 internal static class IncursionArena
 {
-    private const string Feature = "Incursion bubble";
+    private const string Feature = "Blood Grounds";
     // How far inside (or outside) the edge players are put back.
     private const float EdgeMargin = 1.5f;
     // Farther out than this, a player held inside was moved away (an admin's teleport): they are let go.
@@ -42,7 +42,7 @@ internal static class IncursionArena
     // Close enough to count as the same obliterator.
     internal const float SamePlace = 2f;
     private const float PinInterval = 1f;
-    // Found this far within the bubble while kept out (came back to life or logged in there): put outside on firm ground.
+    // Found this far within the Blood Grounds while kept out (came back to life or logged in there): put outside on firm ground.
     private const float DeepInside = 5f;
     // Where a player put outside may stand: this far beyond the edge, at most.
     private static readonly float[] OutsideAt = [3f, 6f, 10f, 16f];
@@ -80,9 +80,9 @@ internal static class IncursionArena
     private static Side _side;
     private static Player? _sidePlayer;
     private static float _nextHeldMessage;
-    // The last bubble the local player was held in, until its ended message comes.
+    // The last Blood Grounds the local player was held in, until its ended message comes.
     private static Vector3? _heldAt;
-    // The ended message for the bubble held in now has come already (before the rite's end reached this game).
+    // The ended message for the Blood Grounds held in now has come already (before the rite's end reached this game).
     private static bool _told;
 
     // Each creature seen while it goes on: whether it is held inside (or outside).
@@ -126,7 +126,7 @@ internal static class IncursionArena
     // The rite going on in the Incursion slot (Crimson, Ragnarök or Hoard-Bane), or None.
     internal static WeatherKind Kind => WeatherState.Active(EffectSlot.Incursion);
 
-    // For a point within the Crimson Rite's bubble, how many players are inside it (the game's player scaling counts only
+    // For a point within the Crimson Rite's Blood Grounds, how many players are inside it (the game's player scaling counts only
     // them there, see CrimsonDifficultyPatch; the Ragnarök Rite has its own); null outside it.
     internal static int? CrimsonPlayersInside(Vector3 point)
     {
@@ -142,7 +142,7 @@ internal static class IncursionArena
 
     private static bool Active => Kind != WeatherKind.None;
 
-    // The rite whose bubble is sealed now, and where: the one going on, or the one whose lever was just pulled (see
+    // The rite whose Blood Grounds are sealed now, and where: the one going on, or the one whose lever was just pulled (see
     // IncursionPending). Beds, building, teleports, portals and boss altars are refused from the lever on.
     internal static bool Sealed(out WeatherKind kind, out Vector3 center)
     {
@@ -155,7 +155,7 @@ internal static class IncursionArena
         return IncursionPending.Now(out kind, out center);
     }
 
-    // Whether a point is within the sealed bubble, this much beyond its edge too.
+    // Whether a point is within the sealed Blood Grounds, this much beyond its edge too.
     private static bool SealedReaches(WeatherKind kind, Vector3 center, Vector3 point, float extra = 0f) =>
         Utils.DistanceXZ(point, center) <= PluginConfig.Radius(kind) + extra;
     private static Vector3 Center => WeatherState.Position(Kind);
@@ -263,7 +263,7 @@ internal static class IncursionArena
         else if (pressed) Tell(player, Messages.IncursionKeptOut, kind);
     }
 
-    // Puts the local player outside the bubble on firm ground (solid, above water, not lava), nearest the way they are
+    // Puts the local player outside the Blood Grounds on firm ground (solid, above water, not lava), nearest the way they are
     // from its middle. False when no such ground is loaded there yet.
     private static bool MoveOut(Player player, Vector3 center, float radius, WeatherKind kind)
     {
@@ -300,15 +300,35 @@ internal static class IncursionArena
         return false;
     }
 
-    // Whether a point is within the bubble of the Crimson, Ragnarök or Hoard-Bane Rite going on (not down in a dungeon
+    // Whether a point is within the Blood Grounds of the Crimson, Ragnarök or Hoard-Bane Rite going on (not down in a dungeon
     // below it): what is inside fights only what is inside (see IncursionFightPatches).
-    internal static bool InBubble(Vector3 point)
+    internal static bool InGrounds(Vector3 point)
     {
         WeatherKind kind = Kind;
         return kind != WeatherKind.None && !Character.InInterior(point) && Utils.DistanceXZ(point, WeatherState.Position(kind)) <= PluginConfig.Radius(kind);
     }
 
-    // Why a bed can't be used here now, or null: nobody claims or sleeps in a bed within the bubble.
+    private static int _groundMask;
+
+    // The Blood Grounds' ground at a point, looked at from above: the land, or something built on it (a stone floor over
+    // the sea counts), not trees nor rocks. Where creatures rise and its edge is drawn. False where nothing is loaded.
+    internal static bool GroundAt(Vector3 point, out float height)
+    {
+        if (_groundMask == 0) _groundMask = LayerMask.GetMask("terrain", "piece");
+        if (Physics.Raycast(point + Vector3.up * 1000f, Vector3.down, out RaycastHit hit, 2000f, _groundMask) && !hit.collider.attachedRigidbody)
+        {
+            height = hit.point.y;
+            return true;
+        }
+        height = 0f;
+        return false;
+    }
+
+    // The ground there, if it is above the sea.
+    internal static bool DryGroundAt(Vector3 point, out float height) =>
+        GroundAt(point, out height) && ZoneSystem.instance && height >= ZoneSystem.instance.m_waterLevel;
+
+    // Why a bed can't be used here now, or null: nobody claims or sleeps in a bed within the Blood Grounds.
     internal static string? BedRefused(Vector3 at)
     {
         if (!Sealed(out WeatherKind kind, out Vector3 center) || !SealedReaches(kind, center, at, EdgeMargin)) return null;
@@ -501,7 +521,7 @@ internal static class IncursionArena
 
     // ---- Portals ----
 
-    // Why a portal can't be used now, or null: within the bubble, used by a player inside it, or leading into it.
+    // Why a portal can't be used now, or null: within the Blood Grounds, used by a player inside it, or leading into it.
     internal static string? PortalBlocked(Vector3 portal, Vector3 player, Vector3? exit)
     {
         if (!Sealed(out WeatherKind kind, out Vector3 center)) return null;
@@ -516,7 +536,7 @@ internal static class IncursionArena
     // ---- Being carried away ----
 
     // Why the local player can't be carried from one point to another now, or null: nothing carries anyone into, out of
-    // or within the bubble (portals, dungeon doors, other mods), but they can still come up out of a dungeon below it.
+    // or within the Blood Grounds (portals, dungeon doors, other mods), but they can still come up out of a dungeon below it.
     internal static string? TeleportBlocked(Vector3 from, Vector3 to)
     {
         if (!Sealed(out WeatherKind kind, out Vector3 center)) return null;
@@ -532,7 +552,7 @@ internal static class IncursionArena
     // ---- What can't be done while it goes on ----
 
     // Why a rite can't be performed at an obliterator here now, or null. Only one Crimson or Ragnarök Rite goes on at a
-    // time, anywhere in the world; within its bubble only the Sanctuary Rite can be performed, and only at the rite's own
+    // time, anywhere in the world; within its Blood Grounds only the Sanctuary Rite can be performed, and only at the rite's own
     // obliterator (to bail out, the iron has to be at hand, or someone outside has to perform it).
     // Checked by the player pulling the lever, before anything burns, and by the server.
     internal static string? RiteRefused(WeatherKind kind, Vector3 obliterator)
@@ -560,7 +580,7 @@ internal static class IncursionArena
         return null;
     }
 
-    // Why an obliterator can't be used at all now, or null: within the sealed bubble only the rite's own obliterator
+    // Why an obliterator can't be used at all now, or null: within the sealed Blood Grounds only the rite's own obliterator
     // works. Any other there burns nothing, not even for the Sanctuary Rite (checked at the lever, see LeverPulled).
     internal static string? OtherObliterator(Vector3 at)
     {
@@ -573,7 +593,7 @@ internal static class IncursionArena
     internal static string? RiteRefusedHere(WeatherKind kind, Vector3 obliterator) =>
         RiteRefused(kind, obliterator) ?? (WeatherKinds.IsIncursion(kind) ? IncursionSite.Refused(kind, obliterator) : null);
 
-    // Why nothing can be built, repaired or torn down here now, or null: not within the bubble while it goes on.
+    // Why nothing can be built, repaired or torn down here now, or null: not within the Blood Grounds while it goes on.
     internal static string? BuildRefused(Vector3 at)
     {
         if (!Sealed(out WeatherKind kind, out Vector3 center) || !SealedReaches(kind, center, at, EdgeMargin)) return null;
@@ -707,7 +727,7 @@ internal static class IncursionArena
 
     // ---- Starting ----
 
-    // As it starts, in each game (the server sweeps too, see SweepOnServer): the creatures already within the bubble die,
+    // As it starts, in each game (the server sweeps too, see SweepOnServer): the creatures already within the Blood Grounds die,
     // dropping nothing, so the fight is only what the rite brings: no free kills of a spawner's creatures, nor a rite
     // made to slay what the players couldn't. Spawners within it stay still until it ends (see IncursionSpawnPatches).
     internal static void Begun(WeatherKind kind, Vector3 center)
@@ -789,18 +809,18 @@ internal static class IncursionArena
         _ => new Color(1f, 0.15f, 0.12f)
     };
 
-    // ---- The bubble ----
+    // ---- The shield dome ----
 
     // The game's shield dome effect draws a dome for each shield generator it is given. This one is never switched on,
-    // so it only stands for the bubble there: no fuel, no blocking, no sound.
+    // so it only stands for the Blood Grounds there: no fuel, no blocking, no sound.
     private static void UpdateDome()
     {
         WeatherKind kind = Kind;
         bool shown = kind switch
         {
-            WeatherKind.Crimson => PluginConfig.CrimsonBubble.IsOn(),
-            WeatherKind.Ragnarok => PluginConfig.RagnarokBubble.IsOn(),
-            WeatherKind.HoardBane => PluginConfig.HoardBaneBubble.IsOn(),
+            WeatherKind.Crimson => PluginConfig.CrimsonShield.IsOn(),
+            WeatherKind.Ragnarok => PluginConfig.RagnarokShield.IsOn(),
+            WeatherKind.HoardBane => PluginConfig.HoardBaneShield.IsOn(),
             _ => false
         };
         if (!shown || !Camera.main)
@@ -824,7 +844,7 @@ internal static class IncursionArena
         }
         if (!_domeKey)
         {
-            _domeKeyObject = new GameObject("TempestRite_IncursionBubble");
+            _domeKeyObject = new GameObject("TempestRite_IncursionDome");
             _domeKeyObject.SetActive(false);
             UnityEngine.Object.DontDestroyOnLoad(_domeKeyObject);
             _domeKey = _domeKeyObject.AddComponent<ShieldGenerator>();
@@ -861,7 +881,7 @@ internal static class IncursionArena
     internal static void TellFar(WeatherKind kind, bool won) =>
         PlayerMessages.Warning(string.Format(won ? Messages.IncursionWonFar : Messages.IncursionLostFar, WeatherKinds.Colored(kind)));
 
-    // Whether the local player is within this rite's bubble.
+    // Whether the local player is within this rite's Blood Grounds.
     internal static bool Here(Vector3 center, WeatherKind kind) =>
         Player.m_localPlayer && Utils.DistanceXZ(Player.m_localPlayer.transform.position, center) <= PluginConfig.Radius(kind) + SamePlace;
 

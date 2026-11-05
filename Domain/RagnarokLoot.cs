@@ -9,19 +9,25 @@ namespace JoksterCube.TempestRite.Domain;
 // each boss has a strength from 0 (the weakest in the Bosses setting) to 1 (the strongest). A boss most likely gives
 // the treasure at its own place in the table, less likely those near it: Eikthyr mostly amber, Yagluth and the Queen
 // mostly rubies and silver necklaces. Stronger bosses also roll toward the treasure's Max.
+// Each boss slain gives treasure containers (see TreasureChests): the resources of its own lands (its Loot setting), more for each
+// star it had, and its rolls of the treasure table.
 internal static class RagnarokLoot
 {
     // How far from a boss's own place in the table its chances fall off (in the 0 to 1 span of the table).
     private const float Spread = 0.3f;
 
-    internal readonly struct Treasure(string item, int min, int max)
+    // Half: a one-of-a-kind item (a queen bee, a dragon egg) that grows only half as much with a boss's stars and the
+    // players ("QueenBee: 1-2 half").
+    internal readonly struct Treasure(string item, int min, int max, bool half = false)
     {
         internal string Item { get; } = item;
         internal int Min { get; } = min;
         internal int Max { get; } = max;
+        internal bool Half { get; } = half;
     }
 
     private static readonly char[] Separators = [',', ';'];
+    private const string HalfMark = "half";
 
     // "Amber: 3-6, Ruby: 2" -> [Amber 3-6, Ruby 2-2]. Entries that can't be read go to problems.
     internal static List<Treasure> Parse(string? text, List<string>? problems = null)
@@ -35,10 +41,16 @@ internal static class RagnarokLoot
             int colon = entry.IndexOf(':');
             string item = (colon < 0 ? entry : entry.Substring(0, colon)).Trim();
             int min = 1, max = 1;
+            bool half = false;
             bool read = item.Length > 0;
             if (read && colon >= 0)
             {
                 string range = entry.Substring(colon + 1).Trim();
+                if (range.EndsWith(HalfMark, StringComparison.OrdinalIgnoreCase))
+                {
+                    half = true;
+                    range = range.Substring(0, range.Length - HalfMark.Length).Trim();
+                }
                 int dash = range.IndexOf('-');
                 read = dash < 0
                     ? int.TryParse(range, out min) && (max = min) >= 0
@@ -49,7 +61,7 @@ internal static class RagnarokLoot
                 problems?.Add(entry);
                 continue;
             }
-            table.Add(new Treasure(item, Math.Min(min, max), Math.Max(min, max)));
+            table.Add(new Treasure(item, Math.Min(min, max), Math.Max(min, max), half));
         }
         return table;
     }
@@ -109,6 +121,96 @@ internal static class RagnarokLoot
         for (int i = 0; i < table.Count; i++)
             if (amounts[i] > 0) rolled.Add((table[i].Item, amounts[i]));
         return rolled;
+    }
+
+    // ---- Each boss's chest ----
+
+    // How many times a boss's own loot its chest holds: once, and once more times perStar for each star.
+    internal static float StarMultiplier(int stars, float perStar) => 1f + Math.Max(0, stars) * Math.Max(0f, perStar);
+
+    // What a "half" item is multiplied by: half as much, never less than once (x4: x2; x2.5: x1.25; x1.5: x1).
+    internal static float HalfMultiplier(float multiplier) => Math.Max(1f, multiplier * 0.5f);
+
+    // One tier of a boss's own loot (common, uncommon or rare): how many different items are picked from it, and its items.
+    internal readonly struct Tier(int picks, List<Treasure> items)
+    {
+        internal int Picks { get; } = picks;
+        internal List<Treasure> Items { get; } = items;
+    }
+
+    // "2 of DeerHide: 10-20, Flint: 20-30" -> 2 picked of [DeerHide 10-20, Flint 20-30]. Without "N of", one is picked.
+    internal static Tier ParseTier(string? text, List<string>? problems = null)
+    {
+        string rest = (text ?? "").Trim();
+        int picks = 1;
+        int of = rest.IndexOf(" of ", StringComparison.OrdinalIgnoreCase);
+        if (of > 0 && int.TryParse(rest.Substring(0, of).Trim(), out int count))
+        {
+            picks = Math.Max(0, count);
+            rest = rest.Substring(of + 4);
+        }
+        return new Tier(picks, Parse(rest, problems));
+    }
+
+    // A boss's own loot (the resources of its lands), from its tiers (common, uncommon, rare): from each, its Picks
+    // different items at random (all of them when it has fewer), Min-Max each, times the multiplier (its stars' and the
+    // players'; half of it for "half" items), rounded at random so it is right on average. random: 0 to 1.
+    internal static List<(string item, int amount)> BossLoot(IList<Tier> tiers, float multiplier, Func<float> random)
+    {
+        List<(string item, int amount)> loot = [];
+        foreach (Tier tier in tiers)
+        {
+            List<Treasure> left = [.. tier.Items];
+            int count = Math.Min(left.Count, Math.Max(0, tier.Picks));
+            for (int i = 0; i < count; i++)
+            {
+                int at = Math.Min(left.Count - 1, (int)Math.Floor(Mathf.Clamp(random(), 0f, 0.9999f) * left.Count));
+                Treasure treasure = left[at];
+                left.RemoveAt(at);
+                int span = treasure.Max - treasure.Min;
+                int amount = Math.Min(treasure.Max, treasure.Min + (int)Math.Floor(Mathf.Clamp(random(), 0f, 0.9999f) * (span + 1)));
+                Add(loot, treasure.Item, PartyReward.Scale(amount, treasure.Half ? HalfMultiplier(multiplier) : multiplier, random()));
+            }
+        }
+        return loot;
+    }
+
+    // The same item added together, in the order they first came.
+    internal static void Add(List<(string item, int amount)> loot, string item, int amount)
+    {
+        if (amount <= 0) return;
+        int at = loot.FindIndex(entry => string.Equals(entry.item, item, StringComparison.OrdinalIgnoreCase));
+        if (at < 0) loot.Add((item, amount));
+        else loot[at] = (loot[at].item, loot[at].amount + amount);
+    }
+
+    // Splits a treasure into several containers on purpose, as stacks (item, count up to its stack size): each holds
+    // between leastSplit and mostSplit stacks at random (never more than maxSlots), and a last one left with a single stack
+    // goes in the one before when it fits. random(min, max): min to max - 1.
+    internal static List<List<(string item, int count)>> Split(List<(string item, int amount)> loot, int maxSlots,
+        Func<string, int> stackSize, Func<int, int, int> random, int leastSplit = 2, int mostSplit = 5)
+    {
+        List<(string item, int count)> stacks = [];
+        foreach ((string item, int amount) in loot)
+        {
+            int stack = Math.Max(1, stackSize(item));
+            for (int left = amount; left > 0; left -= stack) stacks.Add((item, Math.Min(left, stack)));
+        }
+        List<List<(string item, int count)>> containers = [];
+        maxSlots = Math.Max(1, maxSlots);
+        leastSplit = Math.Max(1, Math.Min(leastSplit, maxSlots));
+        mostSplit = Math.Max(leastSplit, Math.Min(mostSplit, maxSlots));
+        int taken = 0;
+        while (taken < stacks.Count)
+        {
+            int left = stacks.Count - taken;
+            int size = Math.Min(left, random(leastSplit, mostSplit + 1));
+            // Not a container with a single stack: it goes in this one when it fits.
+            if (left - size == 1 && size + 1 <= maxSlots) size++;
+            containers.Add(stacks.GetRange(taken, size));
+            taken += size;
+        }
+        return containers;
     }
 
     // Picks count bosses (by their place in the Bosses setting): different ones from the eligible while there are

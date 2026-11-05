@@ -6,7 +6,7 @@ using static JoksterCube.TempestRite.Settings.Constants;
 namespace JoksterCube.TempestRite.Domain;
 
 // What only the server sees, told to every game every few seconds:
-// - who was inside the Crimson, Ragnarök or Hoard-Bane Rite's bubble as it began (the players inside in its first
+// - who was inside the Crimson, Ragnarök or Hoard-Bane Rite's Blood Grounds as it began (the players inside in its first
 //   seconds): one of them disconnected during the fight may log back in inside it; anyone else logging in there is put
 //   outside (see IncursionArena.Hold);
 // - whether a boss fight goes on anywhere in the world (a boss near a player): no such rite can be performed then (see

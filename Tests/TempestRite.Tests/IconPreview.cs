@@ -65,6 +65,7 @@ public class IconPreview
         Write(Path.Combine(output, "RitesBook.rgba"), WeatherIcons.RenderRitesBook());
         Write(Path.Combine(output, "Hourglass.rgba"), WeatherIcons.RenderHourglass());
         Write(Path.Combine(output, "Bounds.rgba"), WeatherIcons.RenderBounds());
+        Write(Path.Combine(output, "BloodGrounds.rgba"), WeatherIcons.RenderBloodGrounds());
     }
 
     // The Packward and Carrion icons over creatures, white (the game tints them): only TEMPESTRITE_ICON_OUT is needed.

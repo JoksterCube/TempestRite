@@ -109,7 +109,7 @@ internal static class RagnarokPatches
         }
     }
 
-    // The game's per-player scaling counts the players within 100 m; within a Ragnarök or Hoard-Bane Rite's bubble only
+    // The game's per-player scaling counts the players within 100 m; within a Ragnarök or Hoard-Bane Rite's Blood Grounds only
     // the players inside it count, not those standing near it outside.
     [HarmonyPatch(typeof(Game), nameof(Game.GetPlayerDifficulty))]
     internal static class PlayerCountPatch
@@ -131,6 +131,39 @@ internal static class RagnarokPatches
                     if (player && Utils.DistanceXZ(player.transform.position, center) <= radius) inside++;
                 __result = Mathf.Clamp(inside, 1, Mathf.Max(1, __instance.m_difficultyScaleMaxPlayers));
             }
+            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        }
+    }
+
+    // The Reckoning rites' treasure chests, as each game wakes one: they vanish once emptied, give no materials and shine
+    // until first opened (see TreasureChests.Mark).
+    [HarmonyPatch(typeof(Container), "Awake")]
+    internal static class ChestPatch
+    {
+        private const string Feature = "Treasure chests";
+
+        private static void Postfix(Container __instance)
+        {
+            if (PatchGuard.IsDisabled(Feature)) return;
+            try
+            {
+                ZNetView nview = __instance.m_nview;
+                if (TreasureChests.IsChest(nview)) TreasureChests.Mark(nview.gameObject);
+            }
+            catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        }
+    }
+
+    // A treasure chest opened for the first time: its beam goes (see TreasureChests.Opened).
+    [HarmonyPatch(typeof(Container), "RPC_OpenResponse")]
+    internal static class ChestOpenedPatch
+    {
+        private const string Feature = "Treasure chest beams";
+
+        private static void Postfix(Container __instance, bool granted)
+        {
+            if (!granted || PatchGuard.IsDisabled(Feature)) return;
+            try { TreasureChests.Opened(__instance.m_nview); }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
     }

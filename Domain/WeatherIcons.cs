@@ -49,9 +49,13 @@ namespace JoksterCube.TempestRite.Domain;
 // - Reckoning: Crimson: a blood moon over a horde with red eyes. Ragnarök: Surtr's flaming sword under a black sun
 //   Hoard-Bane: a horned helm with burning eyes looming as lightning strikes Hildir's chest (all three fading out toward
 //   their edges).
+//   Ley-Survey: glowing ley lines running out from a standing stone to a dashed red ring on the ground, the sea inside
+//   it washed red, a red beam rising over one spot.
 //   Sanctuary: a shield shattering a raid's red ring. Unmaking: a sword breaking apart
 //   over an iron bar. Elder-Sprout: a sapling glowing green, rising out of the rings of an old cut stump.
 // - The Bounds ability: a longhouse on a grassy mound inside a ring of the ward's glowing dashes.
+// - The Blood Grounds status: an altar stone burning with a red rune on blood-dark ground, in a ring of red dashes, red
+//   eyes watching from inside.
 // No picture shows a rite's key item: those can be changed in the settings.
 // If one of the game's sprites can't be found (renamed in an update), a plain painted shape stands in or it is left out.
 internal static class WeatherIcons
@@ -191,8 +195,78 @@ internal static class WeatherIcons
         return canvas;
     }
 
-    // Half the ring of dashes lying on the ground, the far half dimmer.
-    private static void BoundsRing(Canvas canvas, bool far) =>
+    // ---- The Blood Grounds status (see ArenaPreview) ----
+    // Blood-dark ground in a ring of red dashes, an altar stone in its middle burning with a red rune, red eyes watching
+    // from inside: where a Reckoning rite would be fought, and what has to be cleared first. Dark, fading out to its edges.
+
+    private static Sprite? _bloodGrounds;
+
+    internal static Sprite BloodGrounds() =>
+        _bloodGrounds ? _bloodGrounds! : _bloodGrounds = BloodGroundsPicture().ToSprite("TempestRite_BloodGrounds");
+
+    // The picture's 64 x 64 colors, row 0 at the top (previews).
+    internal static Color[] RenderBloodGrounds() => BloodGroundsPicture().Colors;
+
+    private static Canvas BloodGroundsPicture()
+    {
+        Canvas canvas = new();
+        Color blood = new(1f, 0.12f, 0.08f);
+        // A dark red sky, deepest at the top.
+        canvas.Paint((x, y) =>
+        {
+            float t = Mathf.Clamp01(y / 60f);
+            return new Color(Mathf.Lerp(0.06f, 0.32f, t), Mathf.Lerp(0.01f, 0.03f, t), Mathf.Lerp(0.02f, 0.03f, t), 1f);
+        });
+        Glow(canvas, 32f, 44f, 30f, blood, 0.35f);
+
+        // The ground: trampled, blood-dark, lit red from the ring.
+        canvas.Paint((x, y) =>
+        {
+            float d = Ellipse(x, y, BoundsX, 47f, 31f, 13f);
+            float alpha = Mathf.Clamp01(-d / 4f);
+            float light = Mathf.Lerp(1f, 0.55f, Mathf.Clamp01((y - 37f) / 22f));
+            float stain = Mathf.Clamp01(0.5f - Ellipse(x, y, 24f, 49f, 7f, 2.2f)) + Mathf.Clamp01(0.5f - Ellipse(x, y, 42f, 51f, 5f, 1.6f));
+            Color dirt = new(0.2f * light, 0.09f * light, 0.06f * light, alpha);
+            return Color.Lerp(dirt, new Color(0.42f, 0.04f, 0.03f, alpha), Mathf.Clamp01(stain) * 0.7f);
+        });
+
+        Color halo = new(1f, 0.08f, 0.04f), core = new(1f, 0.3f, 0.22f);
+        BoundsRing(canvas, far: true, halo, core);
+
+        // Red eyes watching from inside the ring.
+        foreach ((float ex, float ey) in new[] { (17f, 43.5f), (47f, 43f) })
+            canvas.Paint((x, y) =>
+            {
+                float d = Mathf.Min(Circle(x, y, ex - 1.4f, ey, 0.7f), Circle(x, y, ex + 1.4f, ey, 0.7f));
+                float glow = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Max(d, 0f) / 2.5f), 2f) * 0.8f;
+                return Canvas.Over(new Color(1f, 0.1f, 0.05f, glow), new Color(1f, 0.5f, 0.35f, Mathf.Clamp01(0.5f - d)));
+            });
+
+        // The altar stone, standing in the middle, a little rounded at the top.
+        Shape(canvas, (x, y) => Mathf.Min(
+                Polygon(x, y, [new(25.5f, 46f), new(26.5f, 22f), new(29f, 17.5f), new(35f, 17.5f), new(37.5f, 22f), new(38.5f, 46f)]),
+                Box(x, y, 22f, 43f, 42f, 48f, 1.2f)),
+            (x, y, depth) =>
+            {
+                float light = Mathf.Lerp(1.1f, 0.55f, Mathf.Clamp01((x - 24f) / 16f)) * (0.75f + 0.25f * Mathf.Clamp01(depth / 1.5f));
+                return new Color(0.3f * light, 0.27f * light, 0.27f * light, 1f);
+            });
+        // Its rune (Tiwaz, the war god's arrow) burning red.
+        canvas.Paint((x, y) =>
+        {
+            float d = Mathf.Min(Capsule(x, y, 32f, 23f, 32f, 38f, 0.8f),
+                Polyline(x, y, [new(27.8f, 27.5f), new(32f, 23f), new(36.2f, 27.5f)], 0.8f));
+            float glow = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Max(d, 0f) / 4f), 2f) * 0.75f;
+            return Canvas.Over(new Color(1f, 0.12f, 0.06f, glow), new Color(1f, 0.55f, 0.4f, Mathf.Clamp01(0.5f - d)));
+        });
+
+        BoundsRing(canvas, far: false, halo, core);
+        canvas.Fade(10f);
+        return canvas;
+    }
+
+    // Half the ring of dashes lying on the ground, the far half dimmer; the ward's warm glow unless told otherwise.
+    private static void BoundsRing(Canvas canvas, bool far, Color? haloColor = null, Color? coreColor = null) =>
         canvas.Paint((x, y) =>
         {
             if (far != y < BoundsY) return Color.clear;
@@ -207,7 +281,8 @@ internal static class WeatherIcons
             float d = Mathf.Max(across, (along - 0.27f) * arc);
             float strength = far ? 0.55f : 1f;
             float halo = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Max(d, 0f) / 3f), 2f) * 0.6f * strength;
-            return Canvas.Over(new Color(1f, 0.55f, 0.15f, halo), new Color(1f, 0.85f, 0.5f, Mathf.Clamp01(0.5f - d) * strength));
+            Color h = haloColor ?? new Color(1f, 0.55f, 0.15f), c = coreColor ?? new Color(1f, 0.85f, 0.5f);
+            return Canvas.Over(new Color(h.r, h.g, h.b, halo), new Color(c.r, c.g, c.b, Mathf.Clamp01(0.5f - d) * strength));
         });
 
     // ---- The active rites page's button ----
@@ -698,6 +773,9 @@ internal static class WeatherIcons
                 break;
             case WeatherKind.Unmaking:
                 UnmakingPicture(canvas);
+                break;
+            case WeatherKind.LeySurvey:
+                LeySurveyPicture(canvas);
                 break;
             case WeatherKind.ElderSprout:
                 ElderSproutPicture(canvas);
@@ -2570,6 +2648,61 @@ internal static class WeatherIcons
             float glow = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Max(d, 0f) / 3f), 2f) * 0.6f;
             return Canvas.Over(new Color(color.r, color.g, color.b, glow), new Color(0.85f, 1f, 0.7f, Mathf.Clamp01(0.5f - d)));
         });
+
+    // Ley-Survey: the land read for a Reckoning. A dashed red ring lies on the ground, seen from above at a slant; ley lines
+    // glow from a standing stone at its middle out to the ring; the sea in one side of it is washed red, and a red beam
+    // rises over something in the way.
+    private static void LeySurveyPicture(Canvas canvas)
+    {
+        const float cx = 32f, cy = 40f, rx = 27f, ry = 14f;
+        Glow(canvas, cx, cy, 30f, new Color(0.45f, 0.85f, 1f), 0.35f);
+        canvas.Paint((x, y) =>
+        {
+            float dx = (x - cx) / rx, dy = (y - cy) / ry;
+            float r = Mathf.Sqrt(dx * dx + dy * dy);
+            float angle = Mathf.Atan2(dy, dx);
+            Color color = new(0f, 0f, 0f, 0f);
+            // Ground inside the ring, dark and earthy; the sea on its left side, washed red.
+            if (r < 1f)
+            {
+                float sea = Mathf.Clamp01((cx - 6f - x - Mathf.Sin(y * 0.5f) * 2f) / 4f);
+                Color ground = new(0.24f, 0.2f, 0.14f, 0.85f * Mathf.Clamp01((1f - r) * 6f));
+                Color water = new(0.75f, 0.2f, 0.2f, ground.a);
+                color = Color.Lerp(ground, water, sea);
+            }
+            // Ley lines: six thin glowing spokes out to the ring.
+            float spoke = Mathf.Abs(Mathf.Repeat(angle / (Mathf.PI * 2f) * 6f + 0.25f, 1f) - 0.5f) * 2f;
+            float line = Mathf.Clamp01(1f - (1f - spoke) * r * 14f) * Mathf.Clamp01((1f - r) * 8f) * Mathf.Clamp01(r * 5f);
+            color = Canvas.Over(color, new Color(0.55f, 0.95f, 1f, line * 0.9f));
+            // The ring, dashed.
+            float d = Mathf.Abs(r - 1f) * ry - 1.2f;
+            float dash = Mathf.Repeat(angle / (Mathf.PI * 2f) * 16f, 1f) < 0.62f ? 1f : 0f;
+            float glow = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Max(d, 0f) / 3f), 2f) * 0.5f;
+            return Canvas.Over(color, new Color(1f, 0.22f, 0.18f, Mathf.Max(Mathf.Clamp01(0.5f - d) * dash, glow)));
+        });
+        // A red beam rising over something in the way.
+        canvas.Paint((x, y) =>
+        {
+            float across = Mathf.Abs(x - 47f);
+            float up = Mathf.Clamp01((44f - y) / 40f);
+            float a = Mathf.Clamp01(2.2f - across) * (y <= 44f ? 1f - up * 0.85f : 0f);
+            float halo = Mathf.Clamp01(1f - across / 5f) * 0.3f * (y <= 44f ? 1f - up : 0f);
+            return new Color(1f, 0.3f, 0.25f, Mathf.Max(a, halo));
+        });
+        // The standing stone at the middle, its rune lit.
+        Shape(canvas, (x, y) => Mathf.Min(Box(x, y, 28f, 22f, 36f, 42f, 2.5f), Circle(x, y, 32f, 23f, 4f)), (x, y, depth) =>
+        {
+            float light = Mathf.Lerp(1.05f, 0.7f, Mathf.Clamp01((x - 27f) / 10f)) * (0.8f + 0.2f * Mathf.Clamp01(depth / 1.5f));
+            return new Color(0.55f * light, 0.57f * light, 0.6f * light, 1f);
+        });
+        Glow(canvas, 32f, 31f, 6f, new Color(0.55f, 0.95f, 1f), 0.8f);
+        canvas.Paint((x, y) =>
+        {
+            float rune = Mathf.Min(Capsule(x, y, 32f, 26f, 32f, 37f, 0.7f), Mathf.Min(Capsule(x, y, 32f, 29f, 35f, 26f, 0.6f), Capsule(x, y, 32f, 32f, 35f, 29f, 0.6f)));
+            return new Color(0.7f, 1f, 1f, Mathf.Clamp01(0.5f - rune));
+        });
+        Sparkle(canvas, 47f, 6f, 3f, new Color(1f, 0.5f, 0.4f));
+    }
 
     // Sanctuary: a shield before the red bubble of a raid, shattering it.
     private static void SanctuaryPicture(Canvas canvas)

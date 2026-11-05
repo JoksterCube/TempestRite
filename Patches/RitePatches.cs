@@ -329,7 +329,7 @@ internal static class CreaturePatches
     }
 
     // Packward: whether a creature leaves a structure alone: the structure, or the creature, is in or near the area.
-    // Not within a Crimson or Ragnarök Rite's bubble, or while a raid reaches the area.
+    // Not within a Crimson or Ragnarök Rite's Blood Grounds, or while a raid reaches the area.
     private static bool Spares(BaseAI ai, StaticTarget target)
     {
         if (!WeatherState.IsActive(WeatherKind.Packward) || !Owned(ai)) return false;
@@ -501,7 +501,7 @@ internal static class CreaturePatches
         Vector3 center = WeatherState.Position(WeatherKind.Packward);
         float radius = PluginConfig.Radius(WeatherKind.Packward);
         Vector3 position = character.transform.position;
-        // Within a Crimson or Ragnarök Rite's bubble, or while a raid reaches the area, creatures don't shun it.
+        // Within a Crimson or Ragnarök Rite's Blood Grounds, or while a raid reaches the area, creatures don't shun it.
         if (WeatherState.Suspended(WeatherKind.Packward, position))
         {
             CreatureRites.SetMood(zdo, CreatureRites.Mood.None);

@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace JoksterCube.TempestRite.Patches;
 
-// While a Crimson, Ragnarök or Hoard-Bane Rite goes on, its bubble walls the fight off:
+// While a Crimson, Ragnarök or Hoard-Bane Rite goes on, its Blood Grounds wall the fight off:
 // - no projectile gets through it, in or out: one crossing it hits the wall there and is gone, as at a shield
 //   generator's dome (in the game that owns it, which moves it);
 // - what is inside fights only what is inside, and what is outside only what is outside: creatures inside don't go
@@ -38,7 +38,7 @@ internal static class IncursionFightPatches
                 ZNetView nview = __instance.m_nview;
                 if (!nview || !nview.IsValid() || !nview.IsOwner()) return;
                 Prune();
-                bool inside = IncursionArena.InBubble(__instance.transform.position);
+                bool inside = IncursionArena.InGrounds(__instance.transform.position);
                 if (!Sides.TryGetValue(__instance, out bool started))
                 {
                     Sides[__instance] = inside;
@@ -72,7 +72,7 @@ internal static class IncursionFightPatches
         try
         {
             return a && b && IncursionArena.Kind != WeatherKind.None &&
-                IncursionArena.InBubble(a.transform.position) != IncursionArena.InBubble(b.transform.position);
+                IncursionArena.InGrounds(a.transform.position) != IncursionArena.InGrounds(b.transform.position);
         }
         catch (Exception exception)
         {
@@ -102,13 +102,13 @@ internal static class IncursionFightPatches
         {
             if (!__result || !__instance.m_character || !Apart(__instance.m_character, __result)) return;
             Vector3 from = __instance.transform.position;
-            bool inside = IncursionArena.InBubble(from);
+            bool inside = IncursionArena.InGrounds(from);
             Player? nearest = null;
             float best = HuntRange;
             foreach (Player player in Player.GetAllPlayers())
             {
                 if (!player || player.IsDead() || player.InGhostMode() || player.InDebugFlyMode()) continue;
-                if (IncursionArena.InBubble(player.transform.position) != inside) continue;
+                if (IncursionArena.InGrounds(player.transform.position) != inside) continue;
                 float distance = Vector3.Distance(player.transform.position, from);
                 if (distance >= best) continue;
                 best = distance;

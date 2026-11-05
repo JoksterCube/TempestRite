@@ -27,6 +27,7 @@ internal static class SessionState
         RiteSpeedup.ClearSession();
         RiteEffects.ClearSession();
         DomainVisuals.ClearSession();
+        LeySurvey.ClearSession();
         AetherClearing.ClearSession();
         DomainAnchors.ClearSession();
         CreatureIcons.ClearSession();

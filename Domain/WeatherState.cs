@@ -9,8 +9,8 @@ namespace JoksterCube.TempestRite.Domain;
 // The rites going on in this game: at most one per slot, each with its own time. Rites that work around an obliterator
 // (the Domain rites, Crimson) also keep where it is. Blessings are kept apart, by each player (see Blessings).
 // While a Crimson, Ragnarök or Hoard-Bane Rite goes on (they share the Incursion slot), no Domain rite works within its
-// bubble: one performed at an obliterator inside it is cancelled as it starts, and one whose area only overlaps it keeps
-// working everywhere outside the bubble, doing nothing inside until it ends.
+// Blood Grounds: one performed at an obliterator inside it is cancelled as it starts, and one whose area only overlaps it keeps
+// working everywhere outside the Blood Grounds, doing nothing inside until it ends.
 //
 // Time is counted with the game clock (Time.time), not world time: sleeping skips world time, and a rite performed
 // for 30 minutes should last 30 minutes of play. Over the network only the time left is sent, so each game counts
@@ -81,7 +81,7 @@ internal static class WeatherState
         IsActive(kind) && WeatherKinds.HasSlot(kind) ? Of(WeatherKinds.Slot(kind)).Position : Vector3.zero;
 
     // Whether a point is within a located rite's reach. Rites that aren't located reach everywhere. A Domain rite
-    // doesn't reach into a Crimson, Ragnarök or Hoard-Bane Rite's bubble.
+    // doesn't reach into a Crimson, Ragnarök or Hoard-Bane Rite's Blood Grounds.
     internal static bool Reaches(WeatherKind kind, Vector3 point, float extra = 0f)
     {
         if (!IsActive(kind)) return false;
@@ -90,7 +90,7 @@ internal static class WeatherState
         return Utils.DistanceXZ(point, Position(kind)) <= radius && !Suspended(kind, point);
     }
 
-    // Whether a Domain rite does nothing at this point: it is within a Crimson, Ragnarök or Hoard-Bane Rite's bubble.
+    // Whether a Domain rite does nothing at this point: it is within a Crimson, Ragnarök or Hoard-Bane Rite's Blood Grounds.
     internal static bool Suspended(WeatherKind kind, Vector3 point)
     {
         if (!IsDomain(kind)) return false;
@@ -158,7 +158,7 @@ internal static class WeatherState
         foreach (Slot s in Slots) Reset(s);
         foreach (Entry entry in entries) Set(entry);
         foreach ((WeatherKind kind, Vector3 position) in domains)
-            if (!IsActive(kind) && InBubble(position)) TellCancelled(kind, position);
+            if (!IsActive(kind) && InGrounds(position)) TellCancelled(kind, position);
     }
 
     // A rite the server has but this game doesn't, with less than this left, ran out here a moment before it did there:
@@ -182,22 +182,22 @@ internal static class WeatherState
         }
     }
 
-    // When a Crimson, Ragnarök or Hoard-Bane Rite starts: the Domain rites performed at an obliterator within its bubble
-    // are cancelled. Ones whose obliterator is outside it go on, doing nothing only inside the bubble (see Suspended).
+    // When a Crimson, Ragnarök or Hoard-Bane Rite starts: the Domain rites performed at an obliterator within its Blood Grounds
+    // are cancelled. Ones whose obliterator is outside it go on, doing nothing only inside the Blood Grounds (see Suspended).
     private static void CancelDomains()
     {
         foreach (Slot s in Slots)
         {
-            if (s.Kind == WeatherKind.None || !IsDomain(s.Kind) || !InBubble(s.Position)) continue;
+            if (s.Kind == WeatherKind.None || !IsDomain(s.Kind) || !InGrounds(s.Position)) continue;
             WeatherKind kind = s.Kind;
             Vector3 position = s.Position;
             Reset(s);
-            Plugin.ModLogger.LogInfo($"The {WeatherKinds.Name(kind)} is cancelled: its obliterator is within the {WeatherKinds.Name(Active(EffectSlot.Incursion))}'s bubble.");
+            Plugin.ModLogger.LogInfo($"The {WeatherKinds.Name(kind)} is cancelled: its obliterator is within the {WeatherKinds.Name(Active(EffectSlot.Incursion))}'s Blood Grounds.");
             TellCancelled(kind, position);
         }
     }
 
-    private static bool InBubble(Vector3 point)
+    private static bool InGrounds(Vector3 point)
     {
         WeatherKind incursion = Active(EffectSlot.Incursion);
         return incursion != WeatherKind.None && Utils.DistanceXZ(point, Of(EffectSlot.Incursion).Position) <= PluginConfig.Radius(incursion);
@@ -221,6 +221,9 @@ internal static class WeatherState
     // Hoard-Bane Rites (and the server ends the raid and the bosses, see CrimsonRaids and RagnarokRush).
     internal static void Start(WeatherKind kind, string calledBy, Vector3 position)
     {
+        // Any other Reckoning rite ends the Ley-Survey Rite, and the glimpse a refused arena gave.
+        if (WeatherKinds.EndsSurvey(kind)) End(WeatherKind.LeySurvey);
+        LeySurvey.Performed(kind);
         if (kind is WeatherKind.Reset or WeatherKind.SunFall or WeatherKind.NaturesRebound or WeatherKind.Grounding or WeatherKind.Sanctuary)
         {
             foreach (Slot s in Slots)
@@ -286,6 +289,7 @@ internal static class WeatherState
         EffectSlot.Anchoring => Messages.EndedMantleAnchor,
         EffectSlot.Lures => Messages.EndedPrimalHearth,
         EffectSlot.Resting => Messages.EndedHearthKindle,
+        EffectSlot.Survey => Messages.EndedLeySurvey,
         // The Crimson, Ragnarök and Hoard-Bane Rites' end is told by the server, with how it went (see CrimsonArena,
         // RagnarokArena, HoardBaneArena).
         EffectSlot.Incursion => string.Empty,
@@ -300,7 +304,7 @@ internal static class WeatherState
     {
         if (WeatherKinds.Lasts(kind) && !IsActive(kind)) return;
         // The Crimson, Ragnarök and Hoard-Bane Rites are heard of across the world, whatever Show Messages is set to:
-        // those within the bubble are told to get ready, the rest that something stirs far off.
+        // those within the Blood Grounds are told to get ready, the rest that something stirs far off.
         if (WeatherKinds.IsIncursion(kind))
         {
             string line = byLocalPlayer || ShowsHere(kind) ? WeatherKinds.Performed(kind) : Messages.IncursionBegunFar;

@@ -18,7 +18,7 @@ internal static class Constants
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "1.0.2";
+        internal const string ModVersion = "1.1.0";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
         internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
@@ -49,7 +49,7 @@ internal static class Constants
         internal const string RallyPending = $"{Plugin.ModName}_RallyPending";
         // Client -> server: my player is done with the Rally-Horn call (passed by, answered, refused or let it fade).
         internal const string RallyDone = $"{Plugin.ModName}_RallyDone";
-        // Creature owner -> server: a creature died within the Crimson Rite's bubble.
+        // Creature owner -> server: a creature died on the Crimson Rite's Blood Grounds.
         internal const string CrimsonKill = $"{Plugin.ModName}_CrimsonKill";
         // Server -> everyone: the Crimson Rite's kill count is now this.
         internal const string CrimsonKills = $"{Plugin.ModName}_CrimsonKills";
@@ -61,9 +61,12 @@ internal static class Constants
         internal const string CrimsonWave = $"{Plugin.ModName}_CrimsonWave";
         // Server -> everyone: the Crimson Rite's raid (name) is caught up this many steps (center).
         internal const string CrimsonCatchUp = $"{Plugin.ModName}_CrimsonCatchUp";
-        // Server -> the obliterator's owner (a ZNetView RPC): put the Crimson Rite's reward inside.
-        internal const string CrimsonReward = $"{Plugin.ModName}_CrimsonReward";
-        // Server -> each player within the Ragnarök Rite's bubble: which of these boss keys do you have?
+        // Server -> the obliterator's owner (a ZNetView RPC): strike the Crimson, Ragnarök or Hoard-Bane Rite's treasure
+        // chests down around it (see TreasureChests).
+        internal const string TreasureChests = $"{Plugin.ModName}_TreasureChests";
+        // A treasure chest struck down: everyone near sees the lightning.
+        internal const string TreasureChest = $"{Plugin.ModName}_TreasureChest";
+        // Server -> each player on the Ragnarök Rite's Blood Grounds: which of these boss keys do you have?
         internal const string RagnarokAsk = $"{Plugin.ModName}_RagnarokAsk";
         // Player -> server: the boss keys I have, of those asked.
         internal const string RagnarokAnswer = $"{Plugin.ModName}_RagnarokAnswer";
@@ -79,9 +82,7 @@ internal static class Constants
         internal const string RagnarokBoss = $"{Plugin.ModName}_RagnarokBoss";
         // Server -> everyone: the Ragnarök Rite ended (how, whether treasure was won, center).
         internal const string RagnarokEnded = $"{Plugin.ModName}_RagnarokEnded";
-        // Server -> the obliterator's owner (a ZNetView RPC): put the Ragnarök Rite's treasure inside.
-        internal const string RagnarokReward = $"{Plugin.ModName}_RagnarokReward";
-        // Boss owner -> server: a Ragnarök Rite boss fell out of the bubble (through the ground) and couldn't be put back.
+        // Boss owner -> server: a Ragnarök Rite boss fell out of the Blood Grounds (through the ground) and couldn't be put back.
         internal const string RagnarokLost = $"{Plugin.ModName}_RagnarokLost";
         // Player -> server, right before asking for the rite: the chest burnt for the Hoard-Bane Rite (prefab, where).
         internal const string HoardBaneChest = $"{Plugin.ModName}_HoardBaneChest";
@@ -95,7 +96,7 @@ internal static class Constants
         internal const string HoardBaneReinforced = $"{Plugin.ModName}_HoardBaneReinforced";
         // Creature owner -> server: one of the Hoard-Bane Rite's elites or minibosses died.
         internal const string HoardBaneDown = $"{Plugin.ModName}_HoardBaneDown";
-        // Creature owner -> server: an elite or miniboss fell out of the bubble and couldn't be put back.
+        // Creature owner -> server: an elite or miniboss fell out of the Blood Grounds and couldn't be put back.
         internal const string HoardBaneLost = $"{Plugin.ModName}_HoardBaneLost";
         // Server -> everyone: the Hoard-Bane Rite's fight begins (the minibosses, how many elites, center).
         internal const string HoardBaneBegun = $"{Plugin.ModName}_HoardBaneBegun";
@@ -105,7 +106,7 @@ internal static class Constants
         internal const string HoardBaneUnshield = $"{Plugin.ModName}_HoardBaneUnshield";
         // Server -> everyone: the Hoard-Bane Rite ended (how, whether treasure was won, center).
         internal const string HoardBaneEnded = $"{Plugin.ModName}_HoardBaneEnded";
-        // Server -> the obliterator's owner (a ZNetView RPC): put the Hoard-Bane Rite's treasure inside.
+        // Server -> the obliterator's owner (a ZNetView RPC): put the Hoard-Bane Rite's burnt chest back inside, when it failed.
         internal const string HoardBaneReward = $"{Plugin.ModName}_HoardBaneReward";
         // Server -> the player who burnt the chest: the Hoard-Bane Rite failed with no obliterator left to hold the
         // chest; it goes back to them (the chest's prefab).
@@ -113,10 +114,10 @@ internal static class Constants
         // Server -> everyone, every few seconds: whether a boss fight goes on, and who was inside the Crimson, Ragnarök or
         // Hoard-Bane Rite going on as it began (see IncursionWatch).
         internal const string IncursionWatch = $"{Plugin.ModName}_IncursionWatch";
-        // Player -> server, as the lever is pulled for a Crimson, Ragnarök or Hoard-Bane Rite: seal its bubble (kind,
+        // Player -> server, as the lever is pulled for a Crimson, Ragnarök or Hoard-Bane Rite: seal its Blood Grounds (kind,
         // where, its key items).
         internal const string IncursionPull = $"{Plugin.ModName}_IncursionPull";
-        // Server -> everyone: that rite's bubble is sealed until it is performed (kind, where, seconds; None: no more).
+        // Server -> everyone: that rite's Blood Grounds are sealed until it is performed (kind, where, seconds; None: no more).
         internal const string IncursionPending = $"{Plugin.ModName}_IncursionPending";
         // Server -> the obliterator's owner (a ZNetView RPC): a rite refused after its lever was pulled; put its key items back.
         internal const string ObliteratorRefund = $"{Plugin.ModName}_ObliteratorRefund";
@@ -166,6 +167,7 @@ internal static class Constants
         internal static string SanctuaryName => Text.Get("sanctuary_name");
         internal static string RagnarokName => Text.Get("ragnarok_name");
         internal static string HoardBaneName => Text.Get("hoard_bane_name");
+        internal static string LeySurveyName => Text.Get("ley_survey_name");
         internal static string ResetName => Text.Get("reset_name");
         internal static string SunFallName => Text.Get("sun_fall_name");
         internal static string NaturesReboundName => Text.Get("natures_rebound_name");
@@ -256,6 +258,7 @@ internal static class Constants
         internal static string SunFallPlain => Text.Get("sun_fall_plain");
         internal static string NaturesReboundPlain => Text.Get("natures_rebound_plain");
         internal static string UnmakingPlain => Text.Get("unmaking_plain");
+        internal static string LeySurveyPlain => Text.Get("ley_survey_plain");
         internal static string ElderSproutPlain => Text.Get("elder_sprout_plain");
         internal static string PlumeWardPlain => Text.Get("plume_ward_plain");
         internal static string SentrySightPlain => Text.Get("sentry_sight_plain");
@@ -320,6 +323,7 @@ internal static class Constants
         internal static string SunFallFlavour => Text.Get("sun_fall_flavour");
         internal static string NaturesReboundFlavour => Text.Get("natures_rebound_flavour");
         internal static string UnmakingFlavour => Text.Get("unmaking_flavour");
+        internal static string LeySurveyFlavour => Text.Get("ley_survey_flavour");
         internal static string ElderSproutFlavour => Text.Get("elder_sprout_flavour");
         internal static string PlumeWardFlavour => Text.Get("plume_ward_flavour");
         internal static string SentrySightFlavour => Text.Get("sentry_sight_flavour");
@@ -341,6 +345,8 @@ internal static class Constants
         internal static string GroupReckoning => Text.Get("group_reckoning");
         internal static string GroupBlessings => Text.Get("group_blessings");
         internal static string GroupKinship => Text.Get("group_kinship");
+        // StatusGroups: the atmospheric, celestial and biome mastery rites in one group.
+        internal static string GroupWorldRites => Text.Get("group_world_rites");
 
         // A rite performed, as each player hears of it (see RiteNews): one message per burn.
         // {0}: the rite's name, colored; {1}: what happens (one of the ...Performed below, or a kinship rite's line).
@@ -406,12 +412,21 @@ internal static class Constants
         internal static string DraughtFlushPerformed => Text.Get("draught_flush_performed");
         internal static string SoulTetherPerformed => Text.Get("soul_tether_performed");
         internal static string TundraShroudPerformed => Text.Get("tundra_shroud_performed");
-        // Told to the players within the bubble (the rest hear IncursionBegunFar).
+        // Told to the players on the Blood Grounds (the rest hear IncursionBegunFar).
         internal static string CrimsonPerformed => Text.Get("crimson_performed");
         internal static string RagnarokPerformed => Text.Get("ragnarok_performed");
         internal static string HoardBanePerformed => Text.Get("hoard_bane_performed");
         internal static string SanctuaryPerformed => Text.Get("sanctuary_performed");
         internal static string UnmakingPerformed => Text.Get("unmaking_performed");
+        internal static string LeySurveyPerformed => Text.Get("ley_survey_performed");
+        internal static string EndedLeySurvey => Text.Get("ended_ley_survey");
+        // Under the Ley-Survey's statuses: everything in the way, or that nothing is. {0}: what is, separated by commas.
+        internal static string LeySurveyBlocked => Text.Get("ley_survey_blocked");
+        internal static string LeySurveyClear => Text.Get("ley_survey_clear");
+        // {0}: how many.
+        internal static string LeySurveyHostiles => Text.Get("ley_survey_hostiles");
+        internal static string LeySurveyWater => Text.Get("ley_survey_water");
+        internal static string LeySurveyBossFight => Text.Get("ley_survey_boss_fight");
         internal static string EndedWeather => Text.Get("ended_weather");
         internal static string EndedDaylight => Text.Get("ended_daylight");
         internal static string EndedGaleBreath => Text.Get("ended_gale_breath");
@@ -476,6 +491,8 @@ internal static class Constants
         internal static string RallyRefuseName => Text.Get("rally_refuse_name");
         // The Bounds switch beside the Guardian Power: its name (slot, Controls row), and On or Off under it.
         internal static string DomainBorderName => Text.Get("domain_border_name");
+        // The status showing where a refused Crimson, Ragnarök or Hoard-Bane Rite would be fought.
+        internal static string ArenaPreviewName => Text.Get("arena_preview_name");
         internal static string AbilityOn => Text.Get("ability_on");
         internal static string AbilityOff => Text.Get("ability_off");
         internal static string RallyCallRefused => Text.Get("rally_call_refused");
@@ -486,14 +503,14 @@ internal static class Constants
         internal static string RallyCallInCombat => Text.Get("rally_call_in_combat");
         internal static string RallyCallCannot => Text.Get("rally_call_cannot");
         internal static string CryptDelverFound => Text.Get("crypt_delver_found");
-        // {0}: how many creatures died within the bubble so far.
+        // {0}: how many creatures died on the Blood Grounds so far.
         internal static string CrimsonKillCount => Text.Get("crimson_kill_count");
         internal static string CrimsonSurvived => Text.Get("crimson_survived");
         internal static string CrimsonSurvivedNoReward => Text.Get("crimson_survived_no_reward");
         internal static string CrimsonFailedObliterator => Text.Get("crimson_failed_obliterator");
         internal static string CrimsonFailedFallen => Text.Get("crimson_failed_fallen");
         internal static string CrimsonFailedEnded => Text.Get("crimson_failed_ended");
-        // The bubble of the Crimson or Ragnarök Rite. {0}: the rite's name.
+        // The Blood Grounds of the Crimson or Ragnarök Rite. {0}: the rite's name.
         internal static string IncursionNoPortal => Text.Get("incursion_no_portal");
         internal static string IncursionNoPortalIn => Text.Get("incursion_no_portal_in");
         internal static string IncursionHeld => Text.Get("incursion_held");
@@ -516,7 +533,7 @@ internal static class Constants
         internal static string IncursionNoSummon => Text.Get("incursion_no_summon");
         internal static string IncursionWonFar => Text.Get("incursion_won_far");
         internal static string IncursionLostFar => Text.Get("incursion_lost_far");
-        // Told to the players outside the bubble, after the rite's name.
+        // Told to the players outside the Blood Grounds, after the rite's name.
         internal static string IncursionBegunFar => Text.Get("incursion_begun_far");
         // {0}: the rite's name, {1}: what is in the way (one of the IncursionSite... below).
         internal static string IncursionSiteRefused => Text.Get("incursion_site_refused");
@@ -534,6 +551,16 @@ internal static class Constants
         internal static string IncursionRefusedBossFight => Text.Get("incursion_refused_boss_fight");
         // {0}: the rite's name.
         internal static string IncursionRefusedHostile => Text.Get("incursion_refused_hostile");
+        // {0}: the rite's name.
+        internal static string IncursionRefusedWater => Text.Get("incursion_refused_water");
+        // {0}: the rite's name.
+        // {0}: the rite's name, {1}: what has no room (one of the Room... below).
+        internal static string IncursionRefusedRoom => Text.Get("incursion_refused_room");
+        internal static string RoomRaiders => Text.Get("room_raiders");
+        internal static string RoomBosses => Text.Get("room_bosses");
+        internal static string RoomElites => Text.Get("room_elites");
+        // Under the Ley-Survey status: the rites without room for their creatures. {0}: their names.
+        internal static string LeySurveyCramped => Text.Get("ley_survey_cramped");
         internal static string IncursionMovedOut => Text.Get("incursion_moved_out");
         internal static string IncursionNoBed => Text.Get("incursion_no_bed");
         internal static string IncursionKeysKept => Text.Get("incursion_keys_kept");
@@ -604,7 +631,7 @@ internal static class Constants
         internal static string StatusTooltipSootfall => Text.Get("status_tooltip_sootfall");
         internal static string StatusTooltipNoMist => Text.Get("status_tooltip_no_mist");
         internal static string StatusTooltipCryptDelver => Text.Get("status_tooltip_crypt_delver");
-        // {1}: the food floor in percent.
+        // {1}: the food floor in percent, {2}: how much longer food lasts, in percent.
         internal static string StatusTooltipGlacialSatiety => Text.Get("status_tooltip_glacial_satiety");
         // {1}: how much of a hit spreads, {2}: at how much health left the vein shatters, both in percent.
         internal static string StatusTooltipVeinShatter => Text.Get("status_tooltip_vein_shatter");
@@ -677,6 +704,10 @@ internal static class Constants
         internal static string StatusTooltipRallyHorn => Text.Get("status_tooltip_rally_horn");
         // {0}: who called, {1}: the Rally Call key, {2}: the wait after answering.
         internal static string StatusTooltipRallyCall => Text.Get("status_tooltip_rally_call");
+        // {0}: the rite's name.
+        internal static string StatusTooltipArenaPreview => Text.Get("status_tooltip_arena_preview");
+        // {0}: who performed it, {1}: the arena's radius.
+        internal static string StatusTooltipLeySurvey => Text.Get("status_tooltip_ley_survey");
         internal static string StatusTooltipSkyCall => Text.Get("status_tooltip_sky_call");
         // {1}: the radius in meters.
         internal static string StatusTooltipCrimson => Text.Get("status_tooltip_crimson");
@@ -861,7 +892,7 @@ internal static class Constants
         internal static string Grounding => Text.Get("compendium_grounding");
         // {0}: loot multiplier, {1}: chance of one more item, {2}: of two more, both in percent.
         internal static string CryptDelver => Text.Get("compendium_crypt_delver");
-        // {0}: the food floor, in percent.
+        // {0}: the food floor, {1}: how much longer food lasts, both in percent.
         internal static string GlacialSatiety => Text.Get("compendium_glacial_satiety");
         // {0}: how much of a hit spreads, {1}: at how much health the rest breaks, both in percent.
         internal static string VeinShatter => Text.Get("compendium_vein_shatter");
@@ -900,9 +931,11 @@ internal static class Constants
         internal static string CrimsonEnd => Text.Get("compendium_crimson_end");
         // {0}: how many bosses, {1}: pause between bosses, {2}: radius in meters.
         internal static string Ragnarok => Text.Get("compendium_ragnarok");
-        // {0}: radius in meters, {1}: the elites' bubbles' radius.
+        // {0}: radius in meters, {1}: the elites' lairs' radius.
         internal static string HoardBane => Text.Get("compendium_hoard_bane");
         internal static string Sanctuary => Text.Get("compendium_sanctuary");
+        // {0}: the arena's radius, {1}: how long a refused arena's glimpse lasts.
+        internal static string LeySurvey => Text.Get("compendium_ley_survey");
         internal static string Reset => Text.Get("compendium_reset");
         internal static string SunFall => Text.Get("compendium_sun_fall");
         internal static string NaturesRebound => Text.Get("compendium_natures_rebound");
@@ -1646,7 +1679,7 @@ internal static class Constants
             "the Glacial Satiety Rite (food fades slower)",
             "FreezeGland",
             "freeze glands",
-            "Eaten food fades only down to the Food Floor Multiplier of what it gives, instead of half, until it runs out." + BlessingNote,
+            "Eaten food lasts longer (Food Duration Multiplier) and fades only down to the Food Floor Multiplier of what it gives, instead of half, until it runs out." + BlessingNote,
             true,
             amount: 3,
             minutes: 45f);
@@ -1656,6 +1689,13 @@ internal static class Constants
             "Food Floor Multiplier",
             new ConfigDescription("The least health, stamina and eitr a food gives while it lasts, times its full value: 0.75 is 75% (the game's own floor is about 0.5).", new AcceptableValueRange<float>(0.5f, 1f)),
             0.75f,
+            true);
+
+        internal static readonly ConfigInfo<float> FoodDurationMultiplier = new(
+            GlacialSatiety.Enabled.Group,
+            "Food Duration Multiplier",
+            new ConfigDescription("How much longer eaten food lasts while the blessing holds: 1.25 is 25% longer (a 20-minute food shows 25 minutes). 1: as usual.", new AcceptableValueRange<float>(1f, 3f)),
+            1.25f,
             true);
 
         internal static readonly RiteSettings VeinShatter = new(
@@ -2253,8 +2293,8 @@ internal static class Constants
             "Raids keep coming to the obliterator, one after another, picked among those the players within the radius are ready " +
             "for (player based raids and World Advancement Progression's private raids too), with no wait and no base needed; " +
             "lightning strikes the obliterator as each new raid comes. No other raid starts anywhere meanwhile, and raid " +
-            "creatures only spawn within the radius. A shield bubble covers " +
-            "the radius: from when it starts, players inside can't get out and players outside can't get in, and no portal " +
+            "creatures only spawn within the radius. A shield dome closes over " +
+            "these Blood Grounds: from when it starts, players inside can't get out and players outside can't get in, and no portal " +
             "into or out of it works, until it ends. No creature inside can get out, and none outside can get in. Nothing can " +
             "be built, repaired or torn down inside, and no rite but the Sanctuary Rite performed there. " +
             "The next raid comes almost at once; the creatures of the last " +
@@ -2263,7 +2303,7 @@ internal static class Constants
             "alone). The obliterator can't be destroyed while it goes on and no creature goes after it; a beam of light rises from it. " +
             "It breaks off early if everyone inside falls or leaves, or the Sanctuary " +
             "Rite ends it. Only one Crimson or Ragnarök Rite can go on at a time, and no Domain rite works " +
-            "within its bubble: one at an obliterator inside is cancelled. Its status and messages only " +
+            "on its Blood Grounds: one at an obliterator inside is cancelled. Its status and messages only " +
             "show near the obliterator; its area is marked on everyone's map.",
             true,
             amount: 5,
@@ -2280,7 +2320,7 @@ internal static class Constants
         internal static readonly ConfigInfo<int> CrimsonRewardPerKill = new(
             Crimson.Enabled.Group,
             "Reward Per Kill",
-            new ConfigDescription("How many of the reward item each creature slain within the bubble gives, when the Crimson Rite is survived.",
+            new ConfigDescription("How many of the reward item each creature slain on the Blood Grounds gives, when the Crimson Rite is survived.",
                 new AcceptableValueRange<int>(0, 100)),
             1,
             true);
@@ -2292,6 +2332,15 @@ internal static class Constants
                 "(the players alive inside as it is won count). 0.5: two players get 1.5 times as much, three twice, four " +
                 "2.5 times. 0: the same however many fight.", new AcceptableValueRange<float>(0f, 5f)),
             0.5f,
+            true);
+
+        internal static readonly ConfigInfo<int> CrimsonMaxPlayers = new(
+            Crimson.Enabled.Group,
+            "Max Rewarded Players",
+            new ConfigDescription("Above this many players alive inside as it is won, the reward stops growing (see Reward Per " +
+                "Extra Player): 4 means five or more players are rewarded as four would be. The fight itself still gets harder " +
+                "with more players, as the game does it.", new AcceptableValueRange<int>(1, 10)),
+            4,
             true);
 
         internal static readonly ConfigInfo<float> CrimsonPause = new(
@@ -2315,10 +2364,10 @@ internal static class Constants
             "Raid Catch-Up",
             new ConfigDescription("How much raids below the players inside are brought up to them. A raid's tier is the strongest " +
                 "boss it needs slain (Ragnarök Rite's Bosses setting); the players' is the lowest, among them, of the strongest raid " +
-                "each is ready for. For each step between them, times this: about a third more creatures in bigger groups, more " +
-                "often stars, up to two stars from three steps (from four, every creature has one). 0: raids as the game " +
-                "makes them.", new AcceptableValueRange<float>(0f, 3f)),
-            1f,
+                "each is ready for. For each step between them, times this: more " +
+                "often stars, up to two stars from three steps (from four, every creature has one), never more than the game itself gives that creature. The number of creatures stays the game's own. 0: raids as the game " +
+                "makes them (the default: an early raid is a lucky, easy one).", new AcceptableValueRange<float>(0f, 3f)),
+            0f,
             true);
 
         internal static readonly ConfigInfo<string> CrimsonEnvironment = new(
@@ -2349,17 +2398,17 @@ internal static class Constants
             "(its resistances counted) and damage are raised to match, and so are those of what it summons. With none slain, " +
             "nothing rises and everyone there is told why. A player who has slain the third boss of the Bosses setting (Bonemass) " +
             "or a stronger one counts the first two (Eikthyr, the Elder) as slain too; if nobody inside has, nothing rises " +
-            "and the key items go back into the obliterator. The sky burns, and a shield bubble covers the radius: " +
+            "and the key items go back into the obliterator. The sky burns, and a shield dome closes over its Blood Grounds: " +
             "from when it starts, players inside can't get out and players outside can't get in, and no portal into or out of " +
             "it works; no creature gets in or out. Nothing can be built, repaired or torn down inside, and no rite but the " +
             "Sanctuary Rite performed there. Lightning strikes the obliterator as each boss falls. The bosses drop what they " +
-            "usually do but their trophies. There is no time limit: slay them all and the obliterator, struck by lightning, " +
-            "holds treasure: rolls of the treasure table (valuables) for each boss, the stronger the strongest boss slain the " +
-            "more precious and plentiful. However it ends, the bosses and hostile creatures still inside vanish and drop nothing. " +
+            "usually do but their trophies. There is no time limit: slay them all and lightning strikes down a chest around the " +
+            "obliterator for each boss, one after another: resources of that boss's own lands (a few of its common, uncommon, rare and " +
+            "legendary loot, picked at random), more for each star it had, split among a few chests and barrels. However it ends, the bosses and hostile creatures still inside vanish and drop nothing. " +
             "The obliterator can't be destroyed while it goes on and no creature goes after it; a beam of light rises from it. " +
             "It breaks off with no reward if everyone inside falls or leaves, or the " +
             "Sanctuary Rite ends it. Only one Crimson or Ragnarök Rite can go on at a time, and no Domain rite " +
-            "works within its bubble: one at an obliterator inside is cancelled. Its status and " +
+            "works on its Blood Grounds: one at an obliterator inside is cancelled. Its status and " +
             "messages only show near the obliterator; its area is marked on everyone's map.",
             true,
             lasts: false,
@@ -2371,7 +2420,7 @@ internal static class Constants
             Ragnarok.Enabled.Group,
             "Bosses",
             "Prefab names of the bosses the Ragnarök Rite can call, weakest first: their place in this list is how strong they " +
-            "count for the treasure. A player has slain a boss when they have " +
+            "count (a boss raised past others gets a star for each). A player has slain a boss when they have " +
             "the key it sets as it dies (Eikthyr: defeated_eikthyr...). Modded bosses work too when they set such a key.",
             "Eikthyr, gd_king, Bonemass, Dragon, GoblinKing, SeekerQueen, Fader",
             true);
@@ -2408,29 +2457,118 @@ internal static class Constants
             1f,
             true);
 
-        internal static readonly ConfigInfo<string> RagnarokTreasure = new(
-            Ragnarok.Enabled.Group,
-            "Treasure",
-            "The treasure table, as Item: Min-Max pairs, from the least to the most precious. It is rolled Treasure Rolls Per " +
-            "Boss times for each boss, whichever bosses came: the weaker the strongest boss everyone inside has slain, the " +
-            "more likely the first; the stronger, the more likely the last, rolling toward Max.",
-            "Amber: 6-10, AmberPearl: 4-6, Ruby: 2-5, SilverNecklace: 2-4",
-            true);
-
-        internal static readonly ConfigInfo<int> RagnarokTreasureRolls = new(
-            Ragnarok.Enabled.Group,
-            "Treasure Rolls Per Boss",
-            new ConfigDescription("How many times the Treasure table is rolled for each boss.", new AcceptableValueRange<int>(1, 10)),
-            4,
-            true);
-
         internal static readonly ConfigInfo<float> RagnarokRewardPerPlayer = new(
             Ragnarok.Enabled.Group,
             "Reward Per Extra Player",
-            new ConfigDescription("How much more treasure each player beyond the first brings, as a share of one player's " +
+            new ConfigDescription("How much more loot each player beyond the first brings, as a share of one player's " +
                 "(the players alive inside as it is won count). 0.5: two players get 1.5 times as much, three twice, four " +
                 "2.5 times. 0: the same however many fight.", new AcceptableValueRange<float>(0f, 5f)),
             0.5f,
+            true);
+
+        internal static readonly ConfigInfo<int> RagnarokMaxPlayers = new(
+            Ragnarok.Enabled.Group,
+            "Max Rewarded Players",
+            new ConfigDescription("Above this many players alive inside as it is won, the reward stops growing (see Reward Per " +
+                "Extra Player): 4 means five or more players are rewarded as four would be. The fight itself still gets harder " +
+                "with more players, as the game does it.", new AcceptableValueRange<int>(1, 10)),
+            4,
+            true);
+
+        internal static readonly ConfigInfo<string> RagnarokChests = new(
+            Ragnarok.Enabled.Group,
+            "Treasure Chests",
+            "The containers of each biome the treasure comes in, struck down by lightning around the obliterator " +
+            "(Biome: chest / chest / ..., ...): each boss slain in the Ragnarök Rite gives the containers of its own lands, and the " +
+            "Crimson and Hoard-Bane Rites' rewards come in those of the biome the obliterator stands in (a biome not listed gets " +
+            "the Meadows'). Each treasure is split into a few of them: the first listed (the biome's own chest), then any of " +
+            "them, each made as big as its share needs, up to a blackmetal chest's size. Wardrobes and gift boxes are never " +
+            "used. A beam of light rises from each until it is first opened. They vanish once emptied and give no materials when broken.",
+            "Meadows: TreasureChest_meadows / piece_chest_wood / piece_chest_barrel, " +
+            "BlackForest: TreasureChest_blackforest / piece_chest_wood / piece_chest_barrel, " +
+            "Swamp: TreasureChest_swamp / piece_chest / piece_chest_barrel, " +
+            "Mountain: TreasureChest_mountains / piece_chest / piece_chest_barrel, " +
+            "Plains: TreasureChest_plains_stone / piece_chest_blackmetal / piece_chest_barrel, " +
+            "Mistlands: TreasureChest_dvergrtower / piece_chest_blackmetal / piece_chest_barrel, " +
+            "AshLands: TreasureChest_ashland_stone / piece_chest_grausten / piece_chest_blackmetal / piece_chest_barrel, " +
+            "DeepNorth: TreasureChest_mountains / piece_chest / piece_chest_barrel, " +
+            "Ocean: TreasureChest_meadows / piece_chest_wood / piece_chest_barrel",
+            true)
+        { IsAdvanced = true };
+
+        internal static readonly ConfigInfo<float> RagnarokLootPerStar = new(
+            Ragnarok.Enabled.Group,
+            "Boss Loot Per Star",
+            new ConfigDescription("How much more of its own loot a boss's chest holds for each star it had, as a share of the " +
+                "loot (0.5: a 2 star boss gives twice as much of each item, a 6 star one 4 times; 0: the same whatever its stars). " +
+                "Items marked \"half\" in the Loot settings grow half as much.",
+                new AcceptableValueRange<float>(0f, 5f)),
+            0.5f,
+            true);
+
+        // Each vanilla boss's own loot, the resources of its lands, in up to four tiers: common, uncommon, rare and
+        // legendary (the Meadows', the Mistlands' and the Ashlands'). Each tier has at least one item more than is picked from it,
+        // so nothing is certain, only likely. Early bosses give fewer kinds in bigger amounts, later ones more kinds in
+        // smaller amounts. Players are usually past a boss's lands: what is still used later (metals, building
+        // materials, food and potion makings) is plentiful and higher up, armor makings (hides, pelts, scraps) few and
+        // common. Drops of creatures that come back are never above uncommon (unless the biome's metal or a
+        // building material from a creature seldom met: black metal, tar, chains): rare and legendary are what the world
+        // holds only so much of (ores, dungeon finds), or is long to get. One-of-a-kind items (queen bees, dragon eggs, black
+        // cores, gemstones) are "half": they grow only half as much with stars and players.
+        // A boss without any (a modded boss) gives only treasure.
+        internal static readonly (string boss, ConfigInfo<string>[] tiers)[] RagnarokBossLoot =
+        [
+            ("Eikthyr", BossLoot("Eikthyr", "the Meadows",
+                "2 of Wood: 50-80, Stone: 50-80, Raspberry: 20-30, Flint: 5-8, LeatherScraps: 5-8, DeerHide: 4-6, Dandelion: 3-5",
+                "1 of Resin: 20-30, Feathers: 25-40, RawMeat: 10-15, DeerMeat: 10-15",
+                "1 of FineWood: 30-50, Mushroom: 15-20",
+                "1 of Honey: 15-25, QueenBee: 1-2 half")),
+            ("gd_king", BossLoot("The Elder", "the Black Forest",
+                "2 of RoundLog: 40-60, Blueberries: 25-35, MushroomYellow: 15-25, TrollHide: 3-5, BjornHide: 2-3, BjornPaw: 2-3",
+                "1 of TinOre: 25-38, Thistle: 20-30, BjornMeat: 8-12, AncientSeed: 3-5",
+                "1 of CopperOre: 40-60, SurtlingCore: 6-10, Ectoplasm: 5-10")),
+            ("Bonemass", BossLoot("Bonemass", "the Swamp",
+                "2 of ElderBark: 30-50, Entrails: 15-25, Ooze: 10-15, Root: 3-5",
+                "2 of Bloodbag: 15-25, Guck: 10-15, WrithanRoots: 3-5, WitheredBone: 3-5",
+                "1 of IronScrap: 50-80, Chain: 6-10")),
+            ("Dragon", BossLoot("Moder", "the Mountains",
+                "2 of Obsidian: 20-30, WolfMeat: 10-15, WolfPelt: 4-6, WolfFang: 3-5",
+                "2 of FreezeGland: 15-20, Crystal: 30-45, JuteRed: 6-10, WolfHairBundle: 2-4, DragonEgg: 1 half",
+                "1 of SilverOre: 50-80, WolfClaw: 4-8")),
+            ("GoblinKing", BossLoot("Yagluth", "the Plains",
+                "2 of LoxMeat: 15-25, Cloudberry: 30-40, LoxPelt: 4-6",
+                "2 of Needle: 20-30, GoblinTotem: 3-5, UndeadBjornRibcage: 3-5",
+                "1 of BlackMetalScrap: 50-70, Tar: 60-90")),
+            ("SeekerQueen", BossLoot("The Queen", "the Mistlands",
+                "2 of BlackMarble: 60-90, YggdrasilWood: 60-90, ScaleHide: 8-12, HareMeat: 15-25, JuteBlue: 10-15, BugMeat: 15-25",
+                "2 of Carapace: 25-40, Sap: 40-60, Bilebag: 10-15, Mandible: 6-10, GiantBloodSack: 15-20, BronzeScrap: 40-60",
+                "1 of Softtissue: 50-80, RoyalJelly: 30-45, Lantern: 1-2 half, DvergrKeyFragment: 5-8",
+                "1 of BlackCore: 1-2 half, DvergrNeedle: 1 half")),
+            ("Fader", BossLoot("Fader", "the Ashlands",
+                "2 of CharredBone: 25-40, Blackwood: 80-120, Grausten: 80-120, AskHide: 8-12, AskBladder: 6-10, VoltureMeat: 10-15, AsksvinMeat: 10-15",
+                "2 of SulfurStone: 15-25, ProustitePowder: 10-20, MorgenSinew: 4-6, MorgenHeart: 1-2, CelestialFeather: 3-5",
+                "1 of FlametalOreNew: 80-120, CharredCogwheel: 6-10, BellFragment: 3-4",
+                "1 of MoltenCore: 3-5, GemstoneRed: 1 half, GemstoneGreen: 1 half, GemstoneBlue: 1 half"))
+        ];
+
+        private static ConfigInfo<string>[] BossLoot(string boss, string lands, string common, string uncommon, string rare,
+            string legendary = "") =>
+        [
+            BossLootTier(boss, lands, "Common", common),
+            BossLootTier(boss, lands, "Uncommon", uncommon),
+            BossLootTier(boss, lands, "Rare", rare),
+            BossLootTier(boss, lands, "Legendary", legendary)
+        ];
+
+        private static ConfigInfo<string> BossLootTier(string boss, string lands, string tier, string loot) => new(
+            Ragnarok.Enabled.Group,
+            $"{boss} {tier} Loot",
+            $"{tier} resources of {lands} {boss}'s chest can hold, as \"N of Item: Min-Max, Item: Min-Max...\": N different " +
+            "ones are picked at random (keep at least one more item than N, so none is certain), more of each for every star it " +
+            "had (see Boss Loot Per Star) and for each player (Reward Per Extra Player). An item marked \"half\" (\"QueenBee: 1-2 " +
+            "half\") grows only half as much, never less than its amount. Empty: none of this tier. Its rolls of the treasure " +
+            "table come on top.",
+            loot,
             true);
 
         internal static readonly ConfigInfo<string> RagnarokEnvironment = new(
@@ -2459,14 +2597,14 @@ internal static class Constants
             "edge of the arena with four followers (every 30 seconds, while fewer than two stand, one more comes in furthest from the players), under a shield that takes no damage. Three elites, each with a name of its own " +
             "and a pack (Brenna: a 3 star troll with a log, a 1 star abomination, a 1 star wraith; Geirrhafa: a 1 star stone golem, " +
             "a 2 star fenring, a 1 star cultist; Zil and Thungr: a 3 star fuling berserker, a 1 star vile and lox), never fleeing, each " +
-            "wait with their pack in a small bubble of their own on the edge: they don't move and take no damage until a player " +
-            "steps into their bubble or hits one of them (from afar too, which only wakes them: no sneak attack), and then the " +
+            "wait with their pack in a small lair of their own on the edge: they don't move and take no damage until a player " +
+            "steps into their lair or hits one of them (from afar too, which only wakes them: no sneak attack), and then the " +
             "whole pack wakes. Lightning strikes the miniboss as each elite falls; with the last its shield breaks, and until " +
             "then the miniboss only walks, slowly. Nothing the rite brings attacks the " +
             "rest of it. The miniboss is stronger than usual, the stronger the strongest boss " +
             "everyone inside has slain (the Ragnarök Rite's Bosses setting), never as strong as that boss, and drops no chest " +
             "nor trophy. Slay it and the obliterator, struck by lightning, holds treasure: coins and valuables (each chest its own, the bronze " +
-            "richest, then the silver, then the brass), and the battle and protection idols of the age everyone inside has reached. A shield bubble covers the radius as for the Ragnarök Rite: " +
+            "richest, then the silver, then the brass), and the battle and protection idols of the age everyone inside has reached. A shield dome closes over its Blood Grounds as for the Ragnarök Rite: " +
             "nobody gets in or out, no portal works, nothing can be built inside, and only the Sanctuary Rite performed there. " +
             "There is no time limit. The obliterator can't be destroyed while it goes on and no creature goes after it; a beam " +
             "of light rises from it. It breaks off with no reward if everyone inside falls or " +
@@ -2480,9 +2618,9 @@ internal static class Constants
 
         internal static readonly ConfigInfo<float> HoardBaneEliteRadius = new(
             HoardBane.Enabled.Group,
-            "Elite Bubble Radius",
-            new ConfigDescription("How big each elite's bubble is, in meters: a player stepping into it wakes the elite. The " +
-                "bubbles sit evenly around the edge of the arena.", new AcceptableValueRange<float>(3f, 30f)),
+            "Elite Lair Radius",
+            new ConfigDescription("How big each elite's lair is, in meters: a player stepping into it wakes the elite. The " +
+                "lairs sit evenly around the edge of the Blood Grounds.", new AcceptableValueRange<float>(3f, 30f)),
             10f,
             true);
 
@@ -2562,14 +2700,24 @@ internal static class Constants
             0.5f,
             true);
 
+        internal static readonly ConfigInfo<int> HoardBaneMaxPlayers = new(
+            HoardBane.Enabled.Group,
+            "Max Rewarded Players",
+            new ConfigDescription("Above this many players alive inside as it is won, the reward stops growing (see Reward Per " +
+                "Extra Player): 4 means five or more players are rewarded as four would be. The fight itself still gets harder " +
+                "with more players, as the game does it.", new AcceptableValueRange<int>(1, 10)),
+            4,
+            true);
+
         internal static readonly ConfigInfo<string> HoardBaneIdols = new(
             HoardBane.Enabled.Group,
             "Idols",
-            "The idols in the treasure, as Boss: Item: Min-Max, by the strongest boss everyone inside has slain (prefab names " +
-            "of the Ragnarök Rite's Bosses setting; None: no boss slain). List a boss more than once for several idols. A boss " +
-            "not listed takes the entries of the nearest weaker one listed. The defaults are the battle (UpgraderNWeapon) and " +
-            "protection (UpgraderNArmor) idols of the age the players are in: wooden with no boss slain, black metal once " +
-            "everyone has slain Moder (however far some of them went), bloodgold after the Fader.",
+            "The idols in the treasure, as Boss: Item: Min-Max: each boss's tier of idols (prefab names of the Ragnarök Rite's " +
+            "Bosses setting; None: no boss slain), weakest first. A boss not listed takes the tier of the nearest weaker one " +
+            "listed. Idols come from every tier up to the strongest boss everyone inside has slain, two tiers at a time from " +
+            "the top: one idol from the top two tiers, one from the two below, and so on down to None (Bonemass slain: one of " +
+            "Bonemass' or the Elder's, one of Eikthyr's or None's). Each picks one of its two tiers, then one of that tier's " +
+            "idols, then how many. The defaults are the battle (UpgraderNWeapon) and protection (UpgraderNArmor) idols of each age.",
             "None: Upgrader0Weapon: 1-2, None: Upgrader0Armor: 1-2, " +
             "Eikthyr: Upgrader1Weapon: 1-2, Eikthyr: Upgrader1Armor: 1-2, " +
             "gd_king: Upgrader2Weapon: 1-2, gd_king: Upgrader2Armor: 1-2, " +
@@ -2596,13 +2744,41 @@ internal static class Constants
             true)
         { IsAdvanced = true };
 
+        internal static readonly RiteSettings LeySurvey = new(
+            "7 - Reckoning - Ley-Survey",
+            "the Ley-Survey Rite (checks an arena's site)",
+            "Coal",
+            "coal",
+            "Shows, around the obliterator, whether a Crimson, Ragnarök or Hoard-Bane Rite could be fought there: a red ring " +
+            "where the widest arena's edge would be, a red sheet at sea level wherever the ground is under the sea (build " +
+            "a floor over it), a red beam over everything that keeps the arena away (claimed beds, dungeon entrances, the " +
+            "world's spawn, traders, boss altars, bosses, wards, shield generators), and, with PingMark installed, the hostile " +
+            "creatures inside outlined, and circles where creatures could rise for a rite without room enough (orange where they could, red where they can't). Its " +
+            "status lists what is in the way and which rites lack room. Each player sees it while within the ring, until " +
+            "5 seconds after going more than 10 m beyond it. It ends when its time runs out, its obliterator is destroyed, or any other " +
+            "Reckoning rite is performed. Nothing is blocked: building goes on as usual.",
+            true,
+            amount: 5,
+            minutes: 10f);
+
+        internal static readonly ConfigInfo<float> LeySurveyRefusedSeconds = new(
+            LeySurvey.Enabled.Group,
+            "Refused Arena Seconds",
+            new ConfigDescription(
+                "When a Crimson, Ragnarök or Hoard-Bane Rite is refused, the player who pulled the lever sees the Ley-Survey around " +
+                "that obliterator for this many seconds (ending 5 seconds after they go more than 10 m beyond the ring, or when a Reckoning " +
+                "rite is performed). 0: never.",
+                new AcceptableValueRange<float>(0f, 600f)),
+            30f,
+            true);
+
         internal static readonly RiteSettings Sanctuary = new(
             "7 - Reckoning - Sanctuary",
             "the Sanctuary Rite (ends the raid)",
             "IronScrap",
             "scrap iron",
             "Ends the raid going on in the world at once, and any Crimson, Ragnarök or Hoard-Bane Rite (without its reward). The only rite " +
-            "that can be performed within their bubble.",
+            "that can be performed on their Blood Grounds.",
             true,
             lasts: false,
             amount: 3);
@@ -2611,7 +2787,7 @@ internal static class Constants
             Sanctuary.Enabled.Group,
             "Ends Fights Only From Inside",
             "On: a Crimson, Ragnarök or Hoard-Bane Rite can only be ended by the Sanctuary Rite performed at its own " +
-            "obliterator, inside the bubble. Performed anywhere else while one goes on, it is refused and keeps its key " +
+            "obliterator, on its Blood Grounds. Performed anywhere else while one goes on, it is refused and keeps its key " +
             "items, so nobody outside can end someone else's fight. Off: performed anywhere, it ends the fight.",
             Toggle.Off);
 
@@ -2896,25 +3072,25 @@ internal static class Constants
                 Toggle.On,
                 false);
 
-            internal static readonly ConfigInfo<Toggle> CrimsonBubble = new(
+            internal static readonly ConfigInfo<Toggle> CrimsonShield = new(
                 EffectsGroup,
-                "Show Crimson Bubble",
-                "Show the shield bubble over the Crimson Rite's radius. Players are held inside (or kept out) either way.",
+                "Show Crimson Shield",
+                "Show the shield dome over the Crimson Rite's Blood Grounds. Players are held inside (or kept out) either way.",
                 Toggle.On,
                 false);
 
-            internal static readonly ConfigInfo<Toggle> RagnarokBubble = new(
+            internal static readonly ConfigInfo<Toggle> RagnarokShield = new(
                 EffectsGroup,
-                "Show Ragnarok Bubble",
-                "Show the shield bubble over the Ragnarök Rite's radius. Players are held inside (or kept out) either way.",
+                "Show Ragnarok Shield",
+                "Show the shield dome over the Ragnarök Rite's Blood Grounds. Players are held inside (or kept out) either way.",
                 Toggle.On,
                 false);
 
-            internal static readonly ConfigInfo<Toggle> HoardBaneBubble = new(
+            internal static readonly ConfigInfo<Toggle> HoardBaneShield = new(
                 EffectsGroup,
-                "Show Hoard-Bane Bubble",
-                "Show the shield bubble over the Hoard-Bane Rite's radius. Players are held inside (or kept out) either way; the " +
-                "elites' bubbles and the miniboss's shield always show.",
+                "Show Hoard-Bane Shield",
+                "Show the shield dome over the Hoard-Bane Rite's Blood Grounds. Players are held inside (or kept out) either way; the " +
+                "elites' lairs and the miniboss's shield always show.",
                 Toggle.On,
                 false);
         }

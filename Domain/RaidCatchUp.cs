@@ -6,14 +6,12 @@ namespace JoksterCube.TempestRite.Domain;
 // The Crimson Rite's raids, picked and helped along (the game's parts are in CrimsonRaids and CrimsonSpawnPatches):
 // - Turns: every raid the players are ready for comes as often as the others: those that came least so far go first,
 //   never the same one twice in a row (when there is another), those fitting the biome first among equals.
-// - Catch-up: a raid well below the players brings more, stronger creatures. A raid's tier is the strongest boss it
+// - Catch-up: a raid well below the players brings stronger creatures (as many as the game's own). A raid's tier is the strongest boss it
 //   needs slain (its place in the Ragnarök Rite's Bosses setting, plus one; 0: it needs none). The party's tier is the
 //   lowest among the players inside of the strongest raid each is ready for. Each step the party is past the raid
-//   (times the Raid Catch-Up setting) brings more creatures in bigger groups, more often stars, and higher stars.
+//   (times the Raid Catch-Up setting) brings more often stars, and higher stars.
 internal static class RaidCatchUp
 {
-    // Each step: this many more creatures (a share of the raid's own).
-    private const float CountPerStep = 0.35f;
     // The chance (in percent) of each star up, at the first step and each further step; never above the most.
     private const float FirstChance = 20f;
     private const float ChancePerStep = 10f;
@@ -23,19 +21,17 @@ internal static class RaidCatchUp
     private const int MostLevel = 3;
     private const float StarredFrom = 4f;
 
-    internal readonly struct Boost(float count, float levelUpChance, int minLevel, int maxLevel)
+    internal readonly struct Boost(float levelUpChance, int minLevel, int maxLevel)
     {
-        // How many times as many creatures, and as big groups.
-        internal float Count { get; } = count;
         // The chance of each star up, in percent (0: the game's own).
         internal float LevelUpChance { get; } = levelUpChance;
         // The level (1: no star) creatures spawn at least at, and may rise to.
         internal int MinLevel { get; } = minLevel;
         internal int MaxLevel { get; } = maxLevel;
-        internal bool Any => Count > 1f || LevelUpChance > 0f || MinLevel > 1 || MaxLevel > 1;
+        internal bool Any => LevelUpChance > 0f || MinLevel > 1 || MaxLevel > 1;
     }
 
-    internal static readonly Boost None = new(1f, 0f, 1, 1);
+    internal static readonly Boost None = new(0f, 1, 1);
 
     // How many steps the party is past the raid; 0 when it isn't, or either is unknown (below 0).
     internal static int Steps(int raidTier, int partyTier) =>
@@ -48,7 +44,7 @@ internal static class RaidCatchUp
         float chance = Math.Min(MostChance, FirstChance + ChancePerStep * (s - 1f));
         int maxLevel = Math.Min(MostLevel, 1 + (int)Math.Ceiling(s / StepsPerStar));
         int minLevel = s >= StarredFrom ? 2 : 1;
-        return new Boost(1f + CountPerStep * s, Math.Max(0f, chance), Math.Min(minLevel, maxLevel), maxLevel);
+        return new Boost(Math.Max(0f, chance), Math.Min(minLevel, maxLevel), maxLevel);
     }
 
     // A raid's tier from what it needs: keys (the world's, or players' own) and items known. bossKeys: each boss's key,

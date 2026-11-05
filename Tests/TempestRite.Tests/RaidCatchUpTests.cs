@@ -109,7 +109,7 @@ public class RaidCatchUpTests
         Assert.Equal(1, one.MinLevel);
         Assert.Equal(3, six.MaxLevel);
         Assert.Equal(2, six.MinLevel);
-        Assert.True(six.Count > one.Count && six.LevelUpChance > one.LevelUpChance);
+        Assert.True(six.LevelUpChance > one.LevelUpChance);
         Assert.Equal(70f, RaidCatchUp.For(20, 1f).LevelUpChance);
     }
 }

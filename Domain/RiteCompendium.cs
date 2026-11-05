@@ -253,7 +253,7 @@ internal static class RiteCompendium
         WeatherKind.Grounding => CompendiumTexts.Grounding,
         WeatherKind.CryptDelver => string.Format(CompendiumTexts.CryptDelver, Num(PluginConfig.LootMultiplier.Value),
             Percent(PluginConfig.OneExtraChance.Value), Percent(PluginConfig.TwoExtraChance.Value)),
-        WeatherKind.GlacialSatiety => string.Format(CompendiumTexts.GlacialSatiety, Percent(PluginConfig.FoodFloor.Value)),
+        WeatherKind.GlacialSatiety => string.Format(CompendiumTexts.GlacialSatiety, Percent(PluginConfig.FoodFloor.Value), Percent(PluginConfig.FoodDurationMultiplier.Value - 1f)),
         WeatherKind.VeinShatter => PluginConfig.VeinShatterAt.Value > 0f
             ? string.Format(CompendiumTexts.VeinShatter, Percent(PluginConfig.VeinSpread.Value), Percent(PluginConfig.VeinShatterAt.Value))
             : string.Format(CompendiumTexts.VeinShatterNoBreak, Percent(PluginConfig.VeinSpread.Value)),
@@ -302,6 +302,8 @@ internal static class RiteCompendium
         WeatherKind.HoardBane => string.Format(CompendiumTexts.HoardBane, Num(PluginConfig.Radius(kind)),
             Num(PluginConfig.HoardBaneEliteRadius.Value)),
         WeatherKind.Sanctuary => CompendiumTexts.Sanctuary,
+        WeatherKind.LeySurvey => string.Format(CompendiumTexts.LeySurvey, Num(PluginConfig.Radius(kind)),
+            Num(PluginConfig.LeySurveyRefusedSeconds.Value)),
         WeatherKind.Reset => CompendiumTexts.Reset,
         WeatherKind.SunFall => CompendiumTexts.SunFall,
         WeatherKind.NaturesRebound => CompendiumTexts.NaturesRebound,

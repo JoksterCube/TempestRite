@@ -6,13 +6,13 @@ namespace JoksterCube.TempestRite.Domain;
 
 // The Hoard-Bane Rite's fights and treasure, worked out without the game (see HoardBaneRush):
 // - which of Hildir's minibosses comes for which chest, with its followers and the three elites guarding its shield;
-// - where the elites' bubbles and the miniboss stand on the edge of the arena;
+// - where the elites' lairs and the miniboss stand on the edge of the arena;
 // - the idols in the treasure (the battle and protection idols the Forge of Potential takes), by the strongest boss
 //   everyone inside has slain: players who have all slain Moder get black metal ones, the Plains' tier, however far some
 //   of them went.
 internal static class HoardBaneLoot
 {
-    // Creatures guarding an elite in its bubble: count of them, each with these stars. archers: only ones that carry a
+    // Creatures guarding an elite in its lair: count of them, each with these stars. archers: only ones that carry a
     // bow (skeletons pick their weapon at random).
     internal readonly struct Guard(string prefab, int stars, int count, bool archers = false)
     {
@@ -36,7 +36,7 @@ internal static class HoardBaneLoot
         internal int Level => Stars + 1;
         // Its own name, shown over it and in the messages.
         internal string Name { get; } = name;
-        // Asleep with it in its bubble, and woken with it. Only the elite has to fall.
+        // Asleep with it in its lair, and woken with it. Only the elite has to fall.
         internal Guard[] Guards { get; } = guards;
         internal Vector3 Tint { get; } = tint ?? DefaultTint;
         internal Vector3 Color { get; } = color ?? Vector3.one;
@@ -140,39 +140,39 @@ internal static class HoardBaneLoot
 
     // ---- Where they stand ----
 
-    // How far inside the arena's edge the elites' bubbles stay.
-    private const float BubbleClearOfEdge = 2f;
+    // How far inside the arena's edge an elite's pack stays (the lair itself may reach a little past it).
+    private const float LairClearOfEdge = 2f;
     // How far inside the edge the miniboss rises.
     private const float BossClearOfEdge = 6f;
     // How far inside the edge followers come in.
     internal const float FollowerClearOfEdge = BossClearOfEdge;
 
-    // The centers of the elites' bubbles, as offsets from the obliterator: evenly around, as near the edge as fits.
+    // The centers of the elites' lairs, as offsets from the obliterator: evenly around, as near the edge as their packs fit.
     // angle: where the first one is, in degrees.
-    internal static Vector2[] BubblePosts(float radius, float bubbleRadius, float angle, int count)
+    internal static Vector2[] LairPosts(float radius, float lairRadius, float angle, int count)
     {
-        float distance = BubbleDistance(radius, bubbleRadius);
+        float distance = LairDistance(radius, lairRadius);
         Vector2[] posts = new Vector2[Math.Max(0, count)];
         for (int i = 0; i < posts.Length; i++) posts[i] = Around(angle + i * 360f / posts.Length, distance);
         return posts;
     }
 
-    internal static float BubbleDistance(float radius, float bubbleRadius) =>
-        Mathf.Max(0f, radius - bubbleRadius - BubbleClearOfEdge);
+    internal static float LairDistance(float radius, float lairRadius) =>
+        Mathf.Max(0f, radius - lairRadius * PackSpread - LairClearOfEdge);
 
-    // Where the miniboss rises: on the edge, halfway between the first two bubbles.
-    internal static Vector2 BossPost(float radius, float angle, int bubbles) =>
-        Around(angle + 180f / Math.Max(1, bubbles), Mathf.Max(0f, radius - BossClearOfEdge));
+    // Where the miniboss rises: on the edge, halfway between the first two lairs.
+    internal static Vector2 BossPost(float radius, float angle, int lairs) =>
+        Around(angle + 180f / Math.Max(1, lairs), Mathf.Max(0f, radius - BossClearOfEdge));
 
-    // How far from its elite a pack stands, as a share of its bubble.
+    // How far from its elite a pack stands, as a share of its lair.
     internal const float PackSpread = 0.65f;
 
-    // Where an elite's guards stand, as offsets from it (the bubble's center): evenly around it, far enough apart that big
+    // Where an elite's guards stand, as offsets from it (the lair's center): evenly around it, far enough apart that big
     // creatures don't stand on each other. angle: where the first one is, in degrees.
-    internal static Vector2[] PackPosts(float bubbleRadius, float angle, int count)
+    internal static Vector2[] PackPosts(float lairRadius, float angle, int count)
     {
         Vector2[] posts = new Vector2[Math.Max(0, count)];
-        for (int i = 0; i < posts.Length; i++) posts[i] = Around(angle + i * 360f / posts.Length, bubbleRadius * PackSpread);
+        for (int i = 0; i < posts.Length; i++) posts[i] = Around(angle + i * 360f / posts.Length, lairRadius * PackSpread);
         return posts;
     }
 
@@ -230,6 +230,33 @@ internal static class HoardBaneLoot
         }
         return For(idols, NoBoss);
     }
+
+    // The idols won, from every tier up to the strongest boss everyone inside has slain (its place, weakest first; -1:
+    // none), in windows of two tiers from the top down: one idol from the top two, one from the two below, and so on to
+    // the None tier. Each window picks one of its tiers, that tier one of its idols (battle or protection), and then how
+    // many. Bonemass slain: one from Bonemass' or the Elder's, one from Eikthyr's or the None tier's.
+    internal static List<(string item, int amount)> RollIdols(List<Idol> idols, IReadOnlyList<string> bosses, int strongest, Func<float> random)
+    {
+        List<(string item, int amount)> rolled = [];
+        int top = Math.Max(-1, Math.Min(strongest, bosses.Count - 1));
+        for (int high = top; high >= -1; high -= 2)
+        {
+            int tiers = high - 1 >= -1 ? 2 : 1;
+            int place = high - Pick(tiers, random());
+            List<RagnarokLoot.Treasure> tier = PickIdols(idols, bosses, place);
+            if (tier.Count == 0) continue;
+            RagnarokLoot.Treasure idol = tier[Pick(tier.Count, random())];
+            int amount = Amount(idol, random());
+            if (amount <= 0) continue;
+            int at = rolled.FindIndex(r => r.item == idol.Item);
+            if (at < 0) rolled.Add((idol.Item, amount));
+            else rolled[at] = (idol.Item, rolled[at].amount + amount);
+        }
+        return rolled;
+    }
+
+    // One of count, evenly: roll from 0 to 1.
+    private static int Pick(int count, float roll) => Math.Min(count - 1, Mathf.FloorToInt(Mathf.Clamp01(roll) * count));
 
     private static List<RagnarokLoot.Treasure> For(List<Idol> idols, string boss) =>
         idols.FindAll(idol => string.Equals(idol.Boss, boss, StringComparison.OrdinalIgnoreCase)).ConvertAll(idol => idol.Treasure);

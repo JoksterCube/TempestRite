@@ -20,6 +20,9 @@ namespace JoksterCube.TempestRite;
 [BepInPlugin(ModGUID, ModName, ModVersion)]
 // Loaded after AzuHoverStats when it's installed, to show rite times in its hover text (see AzuHoverStatsPatches).
 [BepInDependency("Azumatt.AzuHoverStats", BepInDependency.DependencyFlags.SoftDependency)]
+// Loaded after StatusGroups when it's installed, to give the rites' statuses their own groups there (see StatusGroupsLink).
+[BepInDependency(Domain.StatusGroupsLink.StatusGroupsGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(Domain.PingMarkLink.PingMarkGuid, BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin
 {
     internal static readonly ManualLogSource ModLogger = BepInEx.Logging.Logger.CreateLogSource(ModName);
@@ -64,6 +67,9 @@ public class Plugin : BaseUnityPlugin
         ControlsMenu.Add("TempestRite_DomainBorder", () => Messages.DomainBorderName, () => PluginConfig.DomainBorderShortcut);
         // The Morgen-Pouch Rite's key, also in the game's Settings > Controls.
         ControlsMenu.Add("TempestRite_MorgenPouch", () => Messages.MorgenPouchAbility, () => PluginConfig.MorgenPouchShortcut);
+
+        // The rites' statuses in groups of their own, when StatusGroups is installed.
+        Domain.StatusGroupsLink.Register();
 
         var assembly = Assembly.GetExecutingAssembly();
         _harmony.PatchAll(assembly);
@@ -119,6 +125,7 @@ public class Plugin : BaseUnityPlugin
         (nameof(HushedToil), HushedToil.Update),
         (nameof(RiteEffects), RiteEffects.Update),
         (nameof(DomainVisuals), DomainVisuals.Update),
+        (nameof(LeySurvey), LeySurvey.Update),
         (nameof(AetherClearing), AetherClearing.Update),
         (nameof(WeatherStatus), WeatherStatus.Update),
     ];

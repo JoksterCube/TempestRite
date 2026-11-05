@@ -19,6 +19,15 @@ public class PartyRewardTests
     }
 
     [Fact]
+    public void Players_beyond_the_cap_add_nothing()
+    {
+        Assert.Equal(2.5f, PartyReward.Multiplier(4, 0.5f, 4));
+        Assert.Equal(2.5f, PartyReward.Multiplier(6, 0.5f, 4));
+        Assert.Equal(2f, PartyReward.Multiplier(3, 0.5f, 4));
+        Assert.Equal(1f, PartyReward.Multiplier(5, 0.5f, 1));
+    }
+
+    [Fact]
     public void Crimson_defaults_give_one_more_coin_per_kill_for_each_player()
     {
         // 2 coins per kill, 10 kills: (1 + players) per kill.

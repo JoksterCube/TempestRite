@@ -8,8 +8,8 @@ using UnityEngine;
 namespace JoksterCube.TempestRite.Patches;
 
 // The Hoard-Bane Rite's elites and minibosses (see HoardBaneArena):
-// - an elite asleep in its bubble doesn't move nor take damage: the first hit, from anything and from anywhere, only
-//   wakes it (so no sneak attack). A player stepping into its bubble wakes it too;
+// - an elite asleep in its lair doesn't move nor take damage: the first hit, from anything and from anywhere, only
+//   wakes it (so no sneak attack). A player stepping into its lair wakes it too;
 // - a shielded miniboss takes no damage, and its shield shows the hit in the game of the player hitting it;
 // - everything the rite brings fights on one side: none of it attacks the rest;
 // - elites go by their own names, and look their strength: beyond the levels the game draws, the highest it draws,

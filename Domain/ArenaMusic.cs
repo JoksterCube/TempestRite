@@ -3,12 +3,12 @@ using UnityEngine;
 
 namespace JoksterCube.TempestRite.Domain;
 
-// Fight music for the players inside a Crimson, Ragnarök or Hoard-Bane Rite's bubble, in their game only. The game plays
+// Fight music for the players inside a Crimson, Ragnarök or Hoard-Bane Rite's Blood Grounds, in their game only. The game plays
 // a raid's or a boss's music while one is on (its event music, see MusicMan.HandleEventMusic); between raids, or between
-// bosses, it would fall back to calm biome music. Inside the bubble this fills those gaps:
+// bosses, it would fall back to calm biome music. Inside the Blood Grounds this fills those gaps:
 // - Ragnarök: the music of the boss fighting there (the nearest Ragnarök boss), or of the last one;
 // - Crimson: the music of the raid going on, or of the last one;
-// - otherwise (Hoard-Bane, or nothing yet): the music of a raid of the bubble's biome, else of any raid.
+// - otherwise (Hoard-Bane, or nothing yet): the music of a raid of the Blood Grounds' biome, else of any raid.
 // The game's own boss and raid music still wins whenever it has some.
 internal static class ArenaMusic
 {
@@ -19,12 +19,12 @@ internal static class ArenaMusic
     private static string? _music;
     private static float _nextPick;
 
-    // The music to play now for the local player, or null (not in a bubble, or nothing fits).
+    // The music to play now for the local player, or null (not on Blood Grounds, or nothing fits).
     internal static string? Now()
     {
         Player? player = Player.m_localPlayer;
         WeatherKind kind = IncursionArena.Kind;
-        if (!player || player!.IsDead() || kind == WeatherKind.None || !IncursionArena.InBubble(player.transform.position)) return null;
+        if (!player || player!.IsDead() || kind == WeatherKind.None || !IncursionArena.InGrounds(player.transform.position)) return null;
         Vector3 center = WeatherState.Position(kind);
         if (kind != _kind || Utils.DistanceXZ(center, _at) > IncursionArena.SamePlace)
         {

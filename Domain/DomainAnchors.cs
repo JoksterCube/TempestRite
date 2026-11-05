@@ -8,7 +8,7 @@ using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Domain;
 
-// A Domain rite ends when the obliterator it was performed at is destroyed. The server checks now and then, ends it for
+// A Domain rite (and the Ley-Survey Rite) ends when the obliterator it was performed at is destroyed. The server checks now and then, ends it for
 // everyone and tells the players within its area.
 internal static class DomainAnchors
 {
@@ -50,7 +50,7 @@ internal static class DomainAnchors
         bool ended = false;
         foreach (EffectSlot slot in WeatherKinds.Slots)
         {
-            if (!WeatherKinds.IsDomainSlot(slot)) continue;
+            if (!WeatherKinds.EndsWithObliterator(slot)) continue;
             WeatherKind kind = WeatherState.Active(slot);
             if (kind == WeatherKind.None)
             {
@@ -60,7 +60,7 @@ internal static class DomainAnchors
             Vector3 at = WeatherState.Position(kind);
             if (!Anchors.TryGetValue(slot, out Anchor anchor) || anchor.Kind != kind || Utils.DistanceXZ(anchor.At, at) > CrimsonRaids.SamePlace)
             {
-                anchor = new Anchor { Kind = kind, At = at, Obliterator = Find(at) };
+                anchor = new Anchor { Kind = kind, At = at, Obliterator = FindObliterator(at) };
                 Anchors[slot] = anchor;
                 if (anchor.Obliterator.IsNone())
                     Plugin.ModLogger.LogWarning($"{WeatherKinds.Name(kind)}: found no obliterator at ({at.x:0}, {at.z:0}); it won't end if one is destroyed.");
@@ -76,7 +76,8 @@ internal static class DomainAnchors
         if (ended) WeatherSync.Broadcast();
     }
 
-    private static ZDOID Find(Vector3 at)
+    // The obliterator standing here, as this game knows it, or none.
+    internal static ZDOID FindObliterator(Vector3 at)
     {
         List<ZDO> found = [];
         ZDOMan.instance.FindObjects(ZoneSystem.GetZone(at), found, []);

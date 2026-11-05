@@ -30,6 +30,7 @@ internal static class SessionPatches
                 CrimsonArena.Register(ZRoutedRpc.instance);
                 RagnarokRush.Register(ZRoutedRpc.instance);
                 RagnarokArena.Register(ZRoutedRpc.instance);
+                TreasureChests.Register(ZRoutedRpc.instance);
                 HoardBaneRush.Register(ZRoutedRpc.instance);
                 HoardBaneArena.Register(ZRoutedRpc.instance);
                 IncursionWatch.Register(ZRoutedRpc.instance);

@@ -18,7 +18,7 @@ internal static class Constants
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "1.1.1";
+        internal const string ModVersion = "1.1.4";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
         internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
@@ -1039,16 +1039,18 @@ internal static class Constants
 
         // ---- Atmospheric ----
 
-        internal static readonly RiteSettings Clear = new(
+        internal static readonly RiteSettings Clear = new RiteSettings(
             "1 - Atmospheric - Clear Sky",
             "the Clear Sky Rite (clear skies)",
             "SurtlingCore",
             "a surtling core",
-            "No rain, snow or fog: for building, farming and travelling in peace. Cold biomes stay as cold as their own weather makes them.",
+            "No rain, snow or fog: for building, farming and travelling in peace. Cold biomes stay as cold as their own weather makes them. " +
+            "The Swamp keeps its own weather.",
             true,
             amount: 2,
             minutes: 20f,
-            environments: "Default: Clear, Mistlands: Mistlands_clear, AshLands: Ashlands_ashrain_clear");
+            environments: "Default: Clear, Swamp: None, Mistlands: Mistlands_clear, AshLands: Ashlands_ashrain_clear")
+            .OldEnvironments("1.1.4", "Default: Clear, Mistlands: Mistlands_clear, AshLands: Ashlands_ashrain_clear");
 
         internal static readonly RiteSettings Thunderstorm = new(
             "1 - Atmospheric - Tempest",
@@ -1072,16 +1074,18 @@ internal static class Constants
             minutes: 20f,
             environments: "Default: Rain, Meadows: LightRain, Swamp: SwampRain, Mountain: Snow, Mistlands: Mistlands_rain, AshLands: Ashlands_ashrain");
 
-        internal static readonly RiteSettings Mist = new(
+        internal static readonly RiteSettings Mist = new RiteSettings(
             "1 - Atmospheric - Shrouding",
             "the Shrouding Rite (mist)",
             "Cloudberry",
             "cloudberries",
-            "Fog that hides what is far away.",
+            "Fog that hides what is far away. In the Swamp, thick mist over its rain.",
             true,
             amount: 3,
             minutes: 20f,
-            environments: "Default: Misty, BlackForest: DeepForest Mist, Mistlands: Mistlands_clear, AshLands: Ashlands_misty");
+            environments: "Default: Misty, BlackForest: DeepForest Mist, Swamp: " + CustomEnvironmentNames.SwampMist +
+                ", Mistlands: Mistlands_clear, AshLands: Ashlands_misty")
+            .OldEnvironments("1.1.4", "Default: Misty, BlackForest: DeepForest Mist, Mistlands: Mistlands_clear, AshLands: Ashlands_misty");
 
         internal static readonly RiteSettings Aurora = new(
             "1 - Atmospheric - Aurora",
@@ -1903,10 +1907,10 @@ internal static class Constants
             16f,
             true);
 
-        internal static readonly RiteSettings TundraShroud = new(
+        internal static readonly RiteSettings TundraShroud = new RiteSettings(
             "5 - Blessings - Tundra Shroud",
             "the Tundra Shroud Rite (rain and night don't chill you)",
-            "LeatherScraps, DeerHide, TrollHide, BjornHide, WolfPelt, LoxPelt, ScaleHide, AskHide, MooseHide, SealHide",
+            "DeerHide, TrollHide, BjornHide, WolfPelt, LoxPelt, ScaleHide, AskHide, MooseHide, SealHide",
             "different hides and pelts",
             "Rain no longer makes you Wet and nightfall (or any merely cold weather) no longer makes you Cold. Freezing (the " +
             "mountains, blizzards, the Deep North's frost) is untouched: that still needs frost resistance or a fire. Water " +
@@ -1914,7 +1918,8 @@ internal static class Constants
             true,
             amount: 3,
             minutes: 30f,
-            distinctKeys: true);
+            distinctKeys: true)
+            .OldKeyItem("1.1.4", "LeatherScraps, DeerHide, TrollHide, BjornHide, WolfPelt, LoxPelt, ScaleHide, AskHide, MooseHide, SealHide");
 
         internal static readonly ConfigInfo<float> ShroudDryingMultiplier = new(
             TundraShroud.Enabled.Group,
@@ -2175,7 +2180,7 @@ internal static class Constants
                 "How fast a thrown spear flies back to you under the Tendril-Draw Rite, in meters a second. One that strikes " +
                 "close by is back in your hands at once.",
                 new AcceptableValueRange<float>(5f, 200f)),
-            20f,
+            25f,
             true);
 
         // ---- Kinship: for everyone on the server at once, wherever they are ----
@@ -3103,6 +3108,7 @@ internal static class CustomEnvironmentNames
     internal const string Bloodmoon = "TempestRite_Bloodmoon";
     internal const string Ragnarok = "TempestRite_Ragnarok";
     internal const string HoardBane = "TempestRite_HoardBane";
+    internal const string SwampMist = "TempestRite_SwampMist";
 }
 
 // The settings of one rite, in its own section.
@@ -3176,9 +3182,22 @@ internal sealed class RiteSettings
             "Environments",
             $"The game environment shown during {effect} in each biome, as Biome: Environment pairs. " +
             "Biomes: Meadows, BlackForest, Swamp, Mountain, Plains, Mistlands, AshLands, DeepNorth, Ocean; Default is used for any " +
-            "biome not listed. Any name the env console command takes works.",
+            "biome not listed. Any name the env console command takes works; None keeps that biome's own weather.",
             environments,
             true)
         { IsAdvanced = true };
+    }
+
+    // A default these settings had before (see OldDefaults).
+    internal RiteSettings OldKeyItem(string changedIn, string keyItem)
+    {
+        KeyItem.OldDefault(changedIn, keyItem);
+        return this;
+    }
+
+    internal RiteSettings OldEnvironments(string changedIn, string environments)
+    {
+        Environments?.OldDefault(changedIn, environments);
+        return this;
     }
 }

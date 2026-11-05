@@ -12,9 +12,12 @@ namespace JoksterCube.TempestRite.Domain;
 //   on fire (the Ragnarök Rite).
 // - TempestRite_HoardBane: a game environment (the mist by default) dimmed and tinted violet, the gloom of a cursed
 //   hoard (the Hoard-Bane Rite).
+// - TempestRite_SwampMist: the Swamp's rain under Misty's thick fog and drifting mist (the Shrouding Rite in the Swamp).
 internal static class CustomEnvironments
 {
     private const string AuroraBase = "Clear";
+    private const string SwampMistRain = "SwampRain";
+    private const string SwampMistFog = "Misty";
 
     private static EnvMan? _madeFor;
     private static string _bloodmoonBase = string.Empty;
@@ -36,6 +39,7 @@ internal static class CustomEnvironments
         Replace(envMan, MakeBloodmoon(envMan, bloodmoonBase));
         Replace(envMan, MakeRagnarok(envMan, ragnarokBase));
         Replace(envMan, MakeHoardBane(envMan, hoardBaneBase));
+        Replace(envMan, MakeSwampMist(envMan));
     }
 
     private static void Replace(EnvMan envMan, EnvSetup? env)
@@ -160,6 +164,32 @@ internal static class CustomEnvironments
         sky.m_fogDensityDay *= 1.3f;
         sky.m_fogDensityEvening *= 1.3f;
         return sky;
+    }
+
+    private static EnvSetup? MakeSwampMist(EnvMan envMan)
+    {
+        EnvSetup? rain = envMan.GetEnv(SwampMistRain);
+        EnvSetup? fog = envMan.GetEnv(SwampMistFog);
+        if (rain == null || fog == null)
+        {
+            Plugin.ModLogger.LogWarning($"Shrouding Rite: \"{SwampMistRain}\" or \"{SwampMistFog}\" is not an environment the game knows; no swamp mist.");
+            return null;
+        }
+        EnvSetup mist = rain.Clone();
+        mist.m_name = CustomEnvironmentNames.SwampMist;
+        // The thicker fog of the two at each time of day.
+        mist.m_fogDensityNight = Mathf.Max(rain.m_fogDensityNight, fog.m_fogDensityNight);
+        mist.m_fogDensityMorning = Mathf.Max(rain.m_fogDensityMorning, fog.m_fogDensityMorning);
+        mist.m_fogDensityDay = Mathf.Max(rain.m_fogDensityDay, fog.m_fogDensityDay);
+        mist.m_fogDensityEvening = Mathf.Max(rain.m_fogDensityEvening, fog.m_fogDensityEvening);
+        // The rain's particles and the mist's together: the game only switches them on and off.
+        var particles = new System.Collections.Generic.List<GameObject>();
+        foreach (GameObject[]? list in new[] { rain.m_psystems, fog.m_psystems })
+            if (list != null)
+                foreach (GameObject particle in list)
+                    if (particle && !particles.Contains(particle)) particles.Add(particle);
+        mist.m_psystems = particles.ToArray();
+        return mist;
     }
 
     // Keeps how bright a color is, turned deep violet, and a little darker.

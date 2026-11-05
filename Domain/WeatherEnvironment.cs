@@ -43,6 +43,7 @@ internal static class WeatherEnvironment
         EnvironmentTable? table = PluginConfig.For(kind)?.Table;
         if (table == null) return null;
         string name = table.For(biome);
+        if (EnvironmentTable.KeepsOwn(name)) return null;
         if (!Exists(envMan, name))
         {
             // A biome entry naming an environment the game doesn't have falls back to Default.

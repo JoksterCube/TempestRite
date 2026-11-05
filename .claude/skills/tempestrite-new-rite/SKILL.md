@@ -50,7 +50,7 @@ everything it touches. Follow it file by file.
 8. **Icon**: a painter in `Domain/WeatherIcons.cs`. Add a `case` in `Picture`, a `XPicture(Canvas)` method, and its line in the header comment. Follow the valheim-mod-art skill: a thematic picture of the *mechanic*, **never the key item** (it can be changed in config), in the same painted style as its neighbours.
 9. **Tests**: a block in `Tests/TempestRite.Tests/WeatherTests.cs` like the ElderSprout one (number, group, `Lasts`, `HasSlot`, `Personal`, `ForEveryone`, `Clashes`, `All` contains it). Add logic tests for any maths (rewards, multipliers).
 10. **Build and test**: `dotnet build -c Release` (0 warnings: fix CS8604 nullability warnings), then `dotnet test Tests/TempestRite.Tests` (the tests reference `bin/Release`).
-11. **README**: a row in its group's rite table (`<img src=".../Docs/Rites/<Name>.png" width="48">`, cost, name, effect; `<Name>` is the rite's English name without " Rite", letters only: "Fortune's Boon Rite" -> `FortunesBoon`, "Ragnarök Rite" -> `Ragnarok`), and any new settings in the settings table.
+11. **README**: a row in its group's rite table (`<img src=".../Docs/Rites/<Name>.png" width="48">`, cost written as `**2x Surtling cores**` (no count for a single item: `**Copper ore**`), name, effect; `<Name>` is the rite's English name without " Rite", letters only: "Fortune's Boon Rite" -> `FortunesBoon`, "Ragnarök Rite" -> `Ragnarok`), and any new settings in the settings table.
 12. **Preview image**: `python Tools/Icon/rite_previews.py` (needs the art venv, see valheim-mod-art) renders `Docs/Rites/<Name>.png` from the C# painter, named after the rite as players know it (`IconPreview.FileName`), not its enum member (Equilibrium.png, not Reset.png). A rename of a rite renames its image: update the README links and delete the old file. Remind the user it must be committed and pushed, or the README
     shows a broken image. If the rite has a visible in-world effect (weather, light, arena, map pin, HUD), suggest a
     screenshot of it (see the valheim-mod-readme screenshot review).
@@ -59,7 +59,7 @@ everything it touches. Follow it file by file.
 
 ## Changing an existing rite
 
-- **Cost or duration change**: change the `RiteSettings` defaults only. **Never write code that overwrites values in an existing config file** (no "move old default to new" migrations): servers keep the configs they have; new defaults apply to new config files only. Then a changelog row: "**X Rite now costs N Y** (was ...). New defaults: an existing config file keeps its values."
+- **Cost, duration or any default change**: change the default, and register the old one so configs still on it move to the new default once, while values players changed are kept: `.OldDefault("<this release version>", oldValue)` on a `ConfigInfo`, or `.OldKeyItem(...)` / `.OldEnvironments(...)` on a `RiteSettings` (Settings/OldDefaults.cs). Use the version that ships the change (for a default changed in an older release without this, the current one). Then a changelog row: "**X Rite now costs N Y** (was ...). Settings still on the old default update on their own; changed ones are kept."
 - **Category move** (e.g. "move Tailwind to blessings"): change its `RiteGroup`/`EffectSlot`, its place in `All` (also decides which rite keeps a shared key item), the group part of its section name, the README table, the tests and the compendium text.
 - **Rename**: display texts only (English.json, README). Keep the enum member and number unless the user asks otherwise.
 

@@ -205,7 +205,43 @@ public class EnvironmentTableTests
     }
 
     [Fact]
+    public void None_keeps_the_biomes_own_weather()
+    {
+        EnvironmentTable table = EnvironmentTable.Parse("Default: Clear, Swamp: none");
+        Assert.True(EnvironmentTable.KeepsOwn(table.For(Swamp)));
+        Assert.False(EnvironmentTable.KeepsOwn(table.For(Meadows)));
+        Assert.Empty(table.Problems);
+    }
+
+    [Fact]
     public void Empty_setting_gives_no_environment() => Assert.Equal(string.Empty, EnvironmentTable.Parse("").For(Meadows));
+}
+
+public class OldDefaultsTests
+{
+    [Fact]
+    public void Reads_the_version_that_saved_the_file()
+    {
+        Assert.Equal(new System.Version(1, 1, 3), JoksterCube.TempestRite.Settings.OldDefaults.ParseHeader("## Settings file was created by plugin TempestRite v1.1.3"));
+        Assert.Null(JoksterCube.TempestRite.Settings.OldDefaults.ParseHeader("[0 - General]"));
+        Assert.Null(JoksterCube.TempestRite.Settings.OldDefaults.ParseHeader(null));
+    }
+
+    [Fact]
+    public void Applies_only_to_files_saved_before_the_change()
+    {
+        Assert.True(JoksterCube.TempestRite.Settings.OldDefaults.Applies(new System.Version(1, 1, 3), "1.1.4"));
+        Assert.False(JoksterCube.TempestRite.Settings.OldDefaults.Applies(new System.Version(1, 1, 4), "1.1.4"));
+        Assert.False(JoksterCube.TempestRite.Settings.OldDefaults.Applies(null, "1.1.4"));
+    }
+
+    [Fact]
+    public void Matches_lists_whatever_their_spacing()
+    {
+        Assert.True(JoksterCube.TempestRite.Settings.OldDefaults.Same("LeatherScraps,DeerHide", "LeatherScraps, DeerHide"));
+        Assert.False(JoksterCube.TempestRite.Settings.OldDefaults.Same("DeerHide, LeatherScraps", "LeatherScraps, DeerHide"));
+        Assert.True(JoksterCube.TempestRite.Settings.OldDefaults.Same(20f, 20f));
+    }
 }
 
 public class WeatherKindTests
@@ -674,6 +710,13 @@ public class WeatherBiomesTests
 
     [Fact]
     public void Names_biomes_left_out() => Assert.Equal("Ashlands, Deep North", Default.LeftOut());
+
+    [Fact]
+    public void Biomes_keeping_their_own_weather_are_left_out()
+    {
+        EnvironmentTable table = EnvironmentTable.Parse("Default: Clear, Swamp: None");
+        Assert.Equal("Swamp, Ashlands, Deep North", Default.Without(biome => EnvironmentTable.KeepsOwn(table.For(biome))).LeftOut());
+    }
 
     [Fact]
     public void Nothing_left_out() => Assert.Equal(string.Empty, (Default | WeatherBiomes.AshLands | WeatherBiomes.DeepNorth).LeftOut());

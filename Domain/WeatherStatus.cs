@@ -186,7 +186,11 @@ internal static class WeatherStatus
         }
         string plain = WeatherKinds.Plain(kind);
         string what = plain.Length > 0 ? char.ToUpperInvariant(plain[0]) + plain.Substring(1) : plain;
-        string leftOut = PluginConfig.AffectedBiomes.Value.LeftOut();
+        // Biomes the rite leaves alone too (an Environments entry of None, like Clear Sky's Swamp).
+        WeatherBiomes shown = PluginConfig.AffectedBiomes.Value;
+        EnvironmentTable? table = PluginConfig.For(kind)?.Table;
+        if (table != null) shown = shown.Without(biome => EnvironmentTable.KeepsOwn(table.For(biome)));
+        string leftOut = shown.LeftOut();
         return string.IsNullOrEmpty(leftOut)
             ? Format(Messages.StatusTooltipNoBiomes, what, who)
             : Format(Messages.StatusTooltip, what, who, leftOut);

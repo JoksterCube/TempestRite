@@ -4,10 +4,15 @@ using System.Collections.Generic;
 namespace JoksterCube.TempestRite.Domain;
 
 // Which game environment a weather shows in each biome, read from a setting like
-// "Default: Rain, Swamp: SwampRain, Mountain: Snow". Biomes not listed use Default.
+// "Default: Rain, Swamp: SwampRain, Mountain: Snow". Biomes not listed use Default. A biome set to None keeps its own
+// weather during the rite.
 internal sealed class EnvironmentTable
 {
     internal const string DefaultKey = "Default";
+    internal const string NoneValue = "None";
+
+    // Whether the environment means "keep the biome's own weather".
+    internal static bool KeepsOwn(string environment) => environment.Equals(NoneValue, StringComparison.OrdinalIgnoreCase);
 
     private readonly Dictionary<int, string> _byBiome = [];
 

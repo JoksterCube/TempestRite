@@ -33,6 +33,14 @@ internal static class WeatherBiomesExtensions
     internal static bool Includes(this WeatherBiomes affected, int biome) =>
         biome == 0 || ((int)affected & biome) != 0;
 
+    // The biomes left, without those where keepsOwn (given the game's biome value) says the biome keeps its own weather.
+    internal static WeatherBiomes Without(this WeatherBiomes affected, Func<int, bool> keepsOwn)
+    {
+        foreach (WeatherBiomes biome in Each)
+            if (keepsOwn((int)biome)) affected &= ~biome;
+        return affected;
+    }
+
     // Names of the biomes left out, for the status tooltip: "Ashlands, Deep North".
     internal static string LeftOut(this WeatherBiomes affected)
     {

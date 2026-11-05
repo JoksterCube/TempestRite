@@ -397,6 +397,8 @@ internal static class PluginConfig
         CrimsonShield = ConfigOptions.Config(Display.CrimsonShield);
         RagnarokShield = ConfigOptions.Config(Display.RagnarokShield);
         HoardBaneShield = ConfigOptions.Config(Display.HoardBaneShield);
+
+        ConfigOptions.Finish(Constants.Plugin.ModVersion);
     }
 
     private static void Add(WeatherKind kind, RiteSettings group) => Rites[kind] = new WeatherConfig(group);

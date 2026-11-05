@@ -18,7 +18,7 @@ internal static class Constants
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "1.1.4";
+        internal const string ModVersion = "1.1.5";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
         internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";

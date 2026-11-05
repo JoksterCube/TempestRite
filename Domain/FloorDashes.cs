@@ -31,6 +31,10 @@ internal sealed class FloorDashes : MonoBehaviour
     private static int _mask, _terrain = -1;
 
     internal GameObject Prefab = null!;
+    // A color for the dashes (the Ley-Survey's red), set on each dash's own renderers so they keep the game's material
+    // and draw over grass and steps as the ward's do; none keeps the ward's color.
+    internal Color? Tint;
+    private MaterialPropertyBlock? _block;
     internal float Radius = 5f;
     internal int Segments = 20;
     internal float Speed = 0.1f;
@@ -230,11 +234,35 @@ internal sealed class FloorDashes : MonoBehaviour
         return _length = length;
     }
 
+    private GameObject NewDash(Vector3 at)
+    {
+        GameObject dash = Instantiate(Prefab, at, Quaternion.identity, transform);
+        if (Tint is not { } color) return dash;
+        _block ??= new MaterialPropertyBlock();
+        foreach (Renderer renderer in dash.GetComponentsInChildren<Renderer>(true))
+        {
+            Material? material = renderer.sharedMaterial;
+            if (!material) continue;
+            renderer.GetPropertyBlock(_block);
+            foreach (string property in DomainVisuals.TintProperties)
+            {
+                if (!material!.HasProperty(property)) continue;
+                Color was = material.GetColor(property);
+                _block.SetColor(property, property == "_EmissionColor"
+                    ? color * Mathf.Max(1f, was.maxColorComponent)
+                    : new Color(color.r, color.g, color.b, was.a));
+            }
+            renderer.SetPropertyBlock(_block);
+            _block.Clear();
+        }
+        return dash;
+    }
+
     private void Place(Vector3 at, Vector3 along, Vector3 normal, float share, bool scaled)
     {
-        if (_used == _dashes.Count) _dashes.Add(Instantiate(Prefab, at, Quaternion.identity, transform));
+        if (_used == _dashes.Count) _dashes.Add(NewDash(at));
         GameObject dash = _dashes[_used++];
-        if (!dash) dash = _dashes[_used - 1] = Instantiate(Prefab, at, Quaternion.identity, transform);
+        if (!dash) dash = _dashes[_used - 1] = NewDash(at);
         if (!dash.activeSelf) dash.SetActive(true);
         Vector3 forward = Vector3.ProjectOnPlane(along, normal);
         dash.transform.SetPositionAndRotation(at, Quaternion.LookRotation(forward.sqrMagnitude > 0.001f ? forward : along, Vector3.up));

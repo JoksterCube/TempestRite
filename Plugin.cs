@@ -6,6 +6,7 @@ using BepInEx.Logging;
 using HarmonyLib;
 using JoksterCube.ChestKit;
 using JoksterCube.ChestKit.Controls;
+using JoksterCube.ChestKit.Data;
 using JoksterCube.TempestRite.Common;
 using JoksterCube.TempestRite.Domain;
 using JoksterCube.TempestRite.Domain.Networking;
@@ -59,6 +60,8 @@ public class Plugin : BaseUnityPlugin
         // dedicated server (batch mode) hears nothing and skips it.
         if (!UnityEngine.Application.isBatchMode) Domain.HornSound.Prepare();
 
+        // The rites switch, also from players who don't own the obliterator (MultiUserChest).
+        ChestWrite.Setup(ModName, container => ObliteratorKeys.IsObliteratorHatch(container, out _), ObliteratorSwitch.WritableKeys);
         // ChestKit's patches go through this Harmony; this mod's own are found by PatchAll.
         ChestKitCore.Initialize(ModLogger, _harmony);
         // The Rally-Horn Rite's key, also in the game's Settings > Controls.

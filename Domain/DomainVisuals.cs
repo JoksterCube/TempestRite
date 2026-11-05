@@ -163,7 +163,6 @@ internal static class DomainVisuals
         _sparksLooked = false;
         _wardMarker = null;
         _wardLooked = false;
-        DropTint();
     }
 
     // Every frame.
@@ -430,14 +429,14 @@ internal static class DomainVisuals
 
     // A ring of the ward's area-marker dashes, on the ground and every floor built over it, slowly turning; null when the
     // game's ward marker can't be found.
-    private static FloorDashes? Dashes(Transform parent, float radius, GameObject? dash = null)
+    private static FloorDashes? Dashes(Transform parent, float radius)
     {
         CircleProjector? ward = WardMarker();
         if (!ward) return null;
         GameObject go = new("Dashes");
         go.transform.SetParent(parent, false);
         FloorDashes dashes = go.AddComponent<FloorDashes>();
-        dashes.Prefab = dash ? dash! : ward!.m_prefab;
+        dashes.Prefab = ward!.m_prefab;
         Size(dashes, radius);
         return dashes;
     }
@@ -467,9 +466,7 @@ internal static class DomainVisuals
     }
 
     // Color properties a dash's material may have: whichever it has is tinted.
-    private static readonly string[] TintProperties = ["_Color", "_TintColor", "_EmissionColor"];
-    private static GameObject? _tintHolder, _tintedDash;
-    private static Color _tintedFor;
+    internal static readonly string[] TintProperties = ["_Color", "_TintColor", "_EmissionColor"];
 
     // The same ring as a Domain rite's edge, in this color: the ward's dashes tinted, or the line if they can't be.
     internal static ColoredEdge ColorEdge(Vector3 at, float radius, Color color)
@@ -477,9 +474,9 @@ internal static class DomainVisuals
         GameObject root = new("TempestRite_ColoredEdge");
         root.transform.position = at;
         ColoredEdge edge = new() { Root = root, At = at, Radius = radius, Color = color };
-        GameObject? dash = TintedDash(color);
-        FloorDashes? dashes = dash ? Dashes(root.transform, radius, dash) : null;
-        if (!dashes) edge.Line = Line(root.transform, "Line", EdgeWidth);
+        FloorDashes? dashes = CanTint() ? Dashes(root.transform, radius) : null;
+        if (dashes) dashes!.Tint = color;
+        else edge.Line = Line(root.transform, "Line", EdgeWidth);
         return edge;
     }
 
@@ -503,51 +500,18 @@ internal static class DomainVisuals
         if (edge != null && edge.Root) UnityEngine.Object.Destroy(edge.Root);
     }
 
-    // A copy of the ward's dash with its materials tinted, kept out of the world; null when it has no color to tint.
-    private static GameObject? TintedDash(Color color)
+    // Whether the ward's dash has a color to tint. Each dash is tinted in place (see FloorDashes.Tint), keeping the
+    // game's own material: a copied material drew under grass and steps instead of over them as the ward's does.
+    private static bool CanTint()
     {
-        if (_tintedDash && _tintedFor == color) return _tintedDash;
-        DropTint();
         CircleProjector? ward = WardMarker();
-        if (!ward) return null;
-        _tintHolder = new GameObject("TempestRite_TintedDash") { hideFlags = HideFlags.HideAndDontSave };
-        _tintHolder.SetActive(false);
-        GameObject copy = UnityEngine.Object.Instantiate(ward!.m_prefab, _tintHolder.transform);
-        bool tinted = false;
-        foreach (Renderer renderer in copy.GetComponentsInChildren<Renderer>(true))
-        {
-            Material[] materials = renderer.sharedMaterials;
-            for (int i = 0; i < materials.Length; i++)
-            {
-                if (!materials[i]) continue;
-                Material material = new(materials[i]) { hideFlags = HideFlags.HideAndDontSave };
-                foreach (string property in TintProperties)
-                {
-                    if (!material.HasProperty(property)) continue;
-                    Color was = material.GetColor(property);
-                    material.SetColor(property, property == "_EmissionColor"
-                        ? color * Mathf.Max(1f, was.maxColorComponent)
-                        : new Color(color.r, color.g, color.b, was.a));
-                    tinted = true;
-                }
-                materials[i] = material;
-            }
-            renderer.sharedMaterials = materials;
-        }
-        if (!tinted)
-        {
-            DropTint();
-            return null;
-        }
-        _tintedFor = color;
-        return _tintedDash = copy;
-    }
-
-    private static void DropTint()
-    {
-        if (_tintHolder) UnityEngine.Object.Destroy(_tintHolder);
-        _tintHolder = null;
-        _tintedDash = null;
+        if (!ward) return false;
+        foreach (Renderer renderer in ward!.m_prefab.GetComponentsInChildren<Renderer>(true))
+            foreach (Material material in renderer.sharedMaterials)
+                if (material)
+                    foreach (string property in TintProperties)
+                        if (material.HasProperty(property)) return true;
+        return false;
     }
 
     // The ward's area marker (the workbench's if that's not found).

@@ -9,12 +9,14 @@ namespace JoksterCube.TempestRite.Domain;
 // The Tendril-Draw Rite, in the blessed player's own game (it shoots, throws and owns what it throws):
 // - an arrow or crossbow bolt it shoots is sometimes not taken from the inventory (Ammo Saved Chance);
 // - a weapon it throws (a spear) is dropped by the game where it strikes, as usual, and that dropped item then flies
-//   back to the player at Spear Return Speed and is picked up: back in the hands when they are empty (once the throw
-//   ends, when it is caught point blank before that). One that strikes
-//   close by is picked up at once. The dropped item is an ordinary one, so every player sees it fly, mod or not.
-//   No other player can pick it up while it comes back. It is let go where it is (an ordinary item on the ground,
-//   anyone's to take) when the player dies, teleports or leaves, it changes owner anyway, or it hasn't arrived in a
-//   while; with no room in the inventory it falls at the player's feet.
+//   back to the player at Spear Return Speed, butt first with its tip pointing away (straight back along its
+//   way), leaving a trail of green motes (in this player's game only), and is picked up: back in the hands when
+//   they are empty (once the throw ends, when it is caught point blank before that). One that strikes close by is
+//   picked up at once. The dropped item is an ordinary one, so every player sees it fly, mod or not. No other
+//   player can pick it up while it comes back; if the game hands it to someone else (the server often takes far or
+//   floating items) it is taken back, so it always flies all the way back (waiting while its thrower teleports).
+//   It is let go where it is (an ordinary item on the ground, anyone's to take) only when the player dies or
+//   leaves; with no room in the inventory it falls at the player's feet.
 internal static class TendrilReturn
 {
     private const string Feature = "Tendril-Draw Rite";
@@ -22,13 +24,23 @@ internal static class TendrilReturn
     private const float AtOnce = 2.5f;
     // Flying, it is caught within this far of the player's middle.
     private const float CatchDistance = 0.8f;
-    // Let go after this long in flight.
-    private const float GiveUpSeconds = 20f;
 
-    private sealed class Flight(ItemDrop item, float started)
+    // How fast it turns to fly straight back.
+    private const float TurnRate = 14f;
+    // The trail: motes left behind per meter flown, and how long the last ones stay after it is caught.
+    private const float TrailPerMeter = 14f;
+    private const float TrailFade = 1.5f;
+    private static readonly Color Green = new(0.55f, 1f, 0.45f);
+    private static readonly Color Pale = new(0.85f, 1f, 0.8f);
+
+    private sealed class Flight(ItemDrop item, float started, Vector3 shaft, Vector3 middle, ParticleSystem? trail)
     {
         internal ItemDrop Item { get; } = item;
         internal float Started { get; } = started;
+        // Along the weapon toward its tip, and its middle, in the item's own space.
+        internal Vector3 Shaft { get; } = shaft;
+        internal Vector3 Middle { get; } = middle;
+        internal ParticleSystem? Trail { get; } = trail;
     }
 
     private static readonly List<Flight> Flights = [];
@@ -63,7 +75,101 @@ internal static class TendrilReturn
             body.isKinematic = true;
         }
         SetColliders(item, false);
-        Flights.Add(new Flight(item, Time.time));
+        (Vector3 shaft, Vector3 middle) = Shape(item);
+        ParticleSystem? trail = null;
+        try { trail = Trail(item.transform.TransformPoint(middle)); }
+        catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
+        Flights.Add(new Flight(item, Time.time, shaft, middle, trail));
+    }
+
+    // The weapon's length runs along the longest side of its biggest mesh; its tip is the end that struck farther from
+    // the thrower (it flew tip first).
+    private static (Vector3 Shaft, Vector3 Middle) Shape(ItemDrop item)
+    {
+        Transform root = item.transform;
+        MeshFilter? body = null;
+        float biggest = 0f;
+        foreach (MeshFilter filter in item.GetComponentsInChildren<MeshFilter>())
+        {
+            if (!filter.sharedMesh) continue;
+            float size = filter.sharedMesh.bounds.size.sqrMagnitude;
+            if (size <= biggest) continue;
+            biggest = size;
+            body = filter;
+        }
+        if (!body) return (Vector3.forward, Vector3.zero);
+        Bounds bounds = body!.sharedMesh.bounds;
+        Vector3 scaled = Vector3.Scale(bounds.size, body.transform.lossyScale);
+        Vector3 axis = scaled.x >= scaled.y && scaled.x >= scaled.z ? Vector3.right : scaled.y >= scaled.z ? Vector3.up : Vector3.forward;
+        Vector3 world = body.transform.TransformDirection(axis).normalized;
+        Player? player = Player.m_localPlayer;
+        if (player && Vector3.Dot(world, root.position - player!.transform.position) < 0f) world = -world;
+        return (root.InverseTransformDirection(world).normalized, root.InverseTransformPoint(body.transform.TransformPoint(bounds.center)));
+    }
+
+    // Green motes left hanging behind it as it flies, fading out.
+    private static ParticleSystem? Trail(Vector3 at)
+    {
+        Material? material = DomainVisuals.EmberMaterial();
+        if (!material) return null;
+        GameObject go = new("TempestRite_TendrilTrail");
+        go.transform.position = at;
+        ParticleSystem particles = go.AddComponent<ParticleSystem>();
+        particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        ParticleSystem.MainModule main = particles.main;
+        main.loop = true;
+        main.duration = 5f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.1f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.05f, 0.25f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.12f);
+        main.startColor = new ParticleSystem.MinMaxGradient(Green, Pale);
+        main.gravityModifier = -0.03f;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles = 300;
+
+        ParticleSystem.EmissionModule emission = particles.emission;
+        emission.rateOverTime = 10f;
+        emission.rateOverDistance = TrailPerMeter;
+
+        ParticleSystem.ShapeModule shape = particles.shape;
+        shape.enabled = true;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.15f;
+
+        ParticleSystem.NoiseModule noise = particles.noise;
+        noise.enabled = true;
+        noise.strength = 0.15f;
+        noise.frequency = 0.8f;
+
+        Gradient fade = new();
+        fade.SetKeys(
+            [new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f)],
+            [new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.95f, 0.1f), new GradientAlphaKey(0.5f, 0.6f), new GradientAlphaKey(0f, 1f)]);
+        ParticleSystem.ColorOverLifetimeModule overLife = particles.colorOverLifetime;
+        overLife.enabled = true;
+        overLife.color = new ParticleSystem.MinMaxGradient(fade);
+
+        ParticleSystem.SizeOverLifetimeModule size = particles.sizeOverLifetime;
+        size.enabled = true;
+        size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.3f));
+
+        ParticleSystemRenderer renderer = go.GetComponent<ParticleSystemRenderer>();
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        renderer.sharedMaterial = material;
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        particles.Play();
+        return particles;
+    }
+
+    // The flight is over: the trail stops and its last motes fade where they hang.
+    private static void EndTrail(Flight flight)
+    {
+        ParticleSystem? trail = flight.Trail;
+        if (!trail) return;
+        trail!.Stop(false, ParticleSystemStopBehavior.StopEmitting);
+        UnityEngine.Object.Destroy(trail.gameObject, TrailFade);
     }
 
     // Whether this dropped item is still flying back. While it is, no one else may take it: another player picks an
@@ -97,7 +203,7 @@ internal static class TendrilReturn
     private static void Fly()
     {
         Player? player = Player.m_localPlayer;
-        bool gone = !player || player!.IsDead() || player.IsTeleporting();
+        bool gone = !player || player!.IsDead();
         float step = Mathf.Max(1f, PluginConfig.TendrilReturnSpeed.Value) * Time.deltaTime;
         for (int i = Flights.Count - 1; i >= 0; i--)
         {
@@ -106,29 +212,57 @@ internal static class TendrilReturn
             if (!item)
             {
                 Flights.RemoveAt(i);
+                EndTrail(flight);
                 continue;
             }
             ZNetView view = item.GetComponent<ZNetView>();
-            if (gone || !view || !view.IsValid() || !view.IsOwner() || Time.time - flight.Started > GiveUpSeconds)
+            if (!view || !view.IsValid())
             {
                 Flights.RemoveAt(i);
+                EndTrail(flight);
+                continue;
+            }
+            if (gone)
+            {
+                Flights.RemoveAt(i);
+                EndTrail(flight);
+                view.ClaimOwnership();
                 LetGo(item);
                 continue;
             }
+            // The game can hand a far or floating item to someone else (often the server); it is taken back, or it
+            // would hang where it is, out of anyone's reach.
+            if (!view.IsOwner()) view.ClaimOwnership();
+            // While its thrower teleports it waits, then flies on.
+            if (player!.IsTeleporting()) continue;
 
-            Vector3 target = player!.GetCenterPoint();
+            Vector3 target = player.GetCenterPoint();
             Vector3 toward = target - item.transform.position;
             float distance = toward.magnitude;
             bool arrived = distance <= CatchDistance || (distance <= AtOnce && Time.time - flight.Started < 0.1f);
             if (!arrived)
             {
                 if (step >= distance - CatchDistance) arrived = true;
-                else item.transform.position += toward / distance * step;
+                else
+                {
+                    Transform at = item.transform;
+                    at.position += toward / distance * step;
+                    // Turned to fly straight back, tip pointing away from the player.
+                    Vector3 away = at.position - target;
+                    if (away.sqrMagnitude > 0.0001f)
+                    {
+                        Quaternion facing = Quaternion.FromToRotation(at.TransformDirection(flight.Shaft), away.normalized) * at.rotation;
+                        at.rotation = Quaternion.Slerp(at.rotation, facing, 1f - Mathf.Exp(-TurnRate * Time.deltaTime));
+                    }
+                    if (flight.Trail) flight.Trail!.transform.position = at.TransformPoint(flight.Middle);
+                }
             }
             if (!arrived) continue;
 
             Flights.RemoveAt(i);
+            EndTrail(flight);
             item.transform.position = target;
+            view.ClaimOwnership();
             ItemDrop.ItemData caught = item.m_itemData;
             bool handsFree = HandsFree(player);
             if (!player.Pickup(item.gameObject, autoequip: true, autoPickupDelay: false))
@@ -173,7 +307,10 @@ internal static class TendrilReturn
     private static void LetAllGo()
     {
         foreach (Flight flight in Flights)
+        {
+            EndTrail(flight);
             if (flight.Item) LetGo(flight.Item);
+        }
         Flights.Clear();
     }
 

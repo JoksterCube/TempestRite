@@ -40,7 +40,10 @@ internal static class WeatherStatus
             StatusEffect template = Effect(kind);
             int hash = template.NameHash();
             StatusEffect? current = seMan.GetStatusEffect(hash);
-            if (!show || !WeatherState.IsActive(kind) || !WeatherState.ShowsHere(kind))
+            // The Ley-Survey Rite's shows 10 m beyond its ring too, then counts down the 5 seconds before it fades.
+            float fadeLeft = -1f;
+            bool here = kind == WeatherKind.LeySurvey ? LeySurvey.RiteShowsHere(out fadeLeft) : WeatherState.ShowsHere(kind);
+            if (!show || !WeatherState.IsActive(kind) || !here)
             {
                 if (current) StatusCommands.RemoveQuietly(seMan, hash);
                 continue;
@@ -56,8 +59,17 @@ internal static class WeatherStatus
             // Counts down with the called effect, also when it was called by someone else or before joining.
             // An untimed rite shows no time (a time to live of 0 never runs out).
             float duration = WeatherKinds.Untimed(kind) ? 0f : WeatherState.Duration(kind);
-            current!.m_ttl = duration;
-            current.m_time = WeatherKinds.Untimed(kind) ? 0f : duration - WeatherState.Remaining(kind);
+            float left = WeatherState.Remaining(kind);
+            if (fadeLeft >= 0f && (WeatherKinds.Untimed(kind) || fadeLeft < left))
+            {
+                current!.m_ttl = LeySurvey.LeaveGrace;
+                current.m_time = LeySurvey.LeaveGrace - fadeLeft;
+            }
+            else
+            {
+                current!.m_ttl = duration;
+                current.m_time = WeatherKinds.Untimed(kind) ? 0f : duration - left;
+            }
             if (added || tooltips) current.m_tooltip = Tooltip(kind);
         }
     }

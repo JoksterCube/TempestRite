@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using JoksterCube.ChestKit.Data;
 using JoksterCube.TempestRite.Common;
 using JoksterCube.TempestRite.Domain.Networking;
 using JoksterCube.TempestRite.Settings;
@@ -20,23 +22,22 @@ internal static class ObliteratorSwitch
         return zdo != null && zdo.GetBool(Key);
     }
 
-    // The container panel only shows containers this game owns, so the switch is written here and reaches everyone
-    // else with the obliterator's next update. Only players who may perform rites can turn it.
+    // The keys other players may write on an obliterator they have open (see ChestWrite).
+    internal static IEnumerable<int> WritableKeys() => [Key];
+
+    // Written by the obliterator's owner: here, or sent there when another player has it open too (MultiUserChest).
+    // It reaches everyone else with the obliterator's next update. Only players who may perform rites can turn it.
     internal static void Toggle(Container container)
     {
-        if (!container || !container.m_nview || container.m_nview.GetZDO() == null) return;
         if (!WeatherSync.LocalPlayerMayChange())
         {
             PlayerMessages.Warning(Messages.RefusedAdminsOnly);
             return;
         }
-        if (!container.m_nview.IsOwner())
-        {
-            PlayerMessages.Warning(Messages.SwitchNotOwner);
-            return;
-        }
-        bool on = !IsOn(container);
-        container.m_nview.GetZDO().Set(Key, on);
+        using ChestWrite? zdo = ChestWrite.Begin(container);
+        if (zdo == null) return;
+        bool on = !zdo.GetBool(Key);
+        zdo.Set(Key, on);
         PlayerMessages.Center(on ? Messages.SwitchedOn : Messages.SwitchedOff);
     }
 }

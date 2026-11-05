@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Bootstrap;
+using UnityEngine;
 using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Domain;
@@ -56,6 +57,13 @@ internal static class StatusGroupsLink
             // The open rally call is the Rally-Horn Rite's, a kinship rite, but it's an offer to take, not a wait.
             assign.Invoke(null, [StatusCommands.RallyCallName, Buffs]);
             assign.Invoke(null, [StatusCommands.ArenaPreviewStatus, Domain]);
+            // StatusGroups API version 2 and later: the groups' icons, the rites page's own tab emblems, which it tints to match its own.
+            MethodInfo? setIcon = api!.GetMethod("SetGroupIcon", [typeof(string), typeof(Func<Sprite?>), typeof(bool)]);
+            if (setIcon != null)
+            {
+                setIcon.Invoke(null, [Domain, (Func<Sprite?>)(() => WeatherIcons.Tab(RiteGroup.Domain)), true]);
+                setIcon.Invoke(null, [World, (Func<Sprite?>)(() => WeatherIcons.Tab(RiteGroup.Atmospheric)), true]);
+            }
             Plugin.ModLogger.LogInfo("StatusGroups found: rite statuses are placed in its groups.");
         }
         catch (Exception exception)

@@ -82,12 +82,13 @@ internal static class RitesFlap
         return flap;
     }
 
-    // The obliterator shown in the inventory screen. The game only shows containers this game owns.
+    // The obliterator shown in the inventory screen. Not only for its owner: with MultiUserChest other players have it
+    // open too, and their switch is sent to the owner (see ObliteratorSwitch).
     private static Container? OpenObliterator(InventoryGui gui)
     {
         if (!InventoryGui.IsVisible() || !gui.m_container || !gui.m_container.gameObject.activeInHierarchy) return null;
         Container? container = gui.m_currentContainer;
-        return container && container!.IsOwner() && ObliteratorKeys.IsObliteratorHatch(container, out _) ? container : null;
+        return container && ObliteratorKeys.IsObliteratorHatch(container!, out _) ? container : null;
     }
 
     private static void OnActive()

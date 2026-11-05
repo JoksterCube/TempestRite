@@ -455,7 +455,6 @@
   "page_tooltip": "Rites",
   "switched_on": "Rites are performed here",
   "switched_off": "Items are just obliterated here, as usual",
-  "switch_not_owner": "Someone else is using this",
   "panel_hint": "Give your riches to the thunder, and the gods will grant their favor.",
   "panel_item_enough": "The rite has all it needs",
   "panel_any_different": "Any {0} different",

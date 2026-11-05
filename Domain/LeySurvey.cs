@@ -22,7 +22,7 @@ namespace JoksterCube.TempestRite.Domain;
 //   most room, a post without room red);
 // - its status lists what is in the way.
 // It shows to each player within the ring or 10 m beyond it, in their own game, and fades 5 seconds after they go farther (back when they
-// step in again). It ends when its time runs out, its obliterator is destroyed (see DomainAnchors) or any other
+// step in again); meanwhile its status counts those 5 seconds down, and shows the rite's own time again once back. It ends when its time runs out, its obliterator is destroyed (see DomainAnchors) or any other
 // Reckoning rite is performed (see WeatherState.Start).
 // A refused Crimson, Ragnarök or Hoard-Bane Rite gives the player who pulled the lever a glimpse of the same, for 30
 // seconds (the Arena Bounds status): it ends 5 seconds after they go more than 10 m beyond the ring, when its obliterator is
@@ -30,7 +30,7 @@ namespace JoksterCube.TempestRite.Domain;
 internal static class LeySurvey
 {
     private const string Feature = "Ley-Survey";
-    private const float LeaveGrace = 5f;
+    internal const float LeaveGrace = 5f;
     // It keeps showing this far beyond the ring; only farther out does the fading start.
     private const float KeepNear = 10f;
     private const float ScanInterval = 2f;
@@ -59,6 +59,8 @@ internal static class LeySurvey
     private static Vector3 _glimpseAt;
     private static ZDOID _glimpseObliterator = ZDOID.None;
     private static float _glimpseOutsideSince = -1f;
+    private static float _glimpseSeconds;
+    private static float _glimpseEnd;
     private static StatusEffect? _effect;
 
     // What shows now.
@@ -99,6 +101,8 @@ internal static class LeySurvey
             _glimpseAt = center;
             _glimpseObliterator = DomainAnchors.FindObliterator(center);
             _glimpseOutsideSince = -1f;
+            _glimpseSeconds = seconds;
+            _glimpseEnd = Time.time + seconds;
             _nextScan = 0f;
             AddStatus(me, seconds);
         }
@@ -179,20 +183,44 @@ internal static class LeySurvey
 
     private static bool Same(Vector3 a, Vector3 b) => Utils.DistanceXZ(a, b) < 0.5f;
 
-    // The glimpse ends with its status, an arena begun, its obliterator gone, or 5 seconds outside its ring.
+    // In the Ley-Survey Rite's status: whether it shows here, and when the player is more than 10 m beyond its ring, the
+    // seconds left before it fades (below 0 while within). Stepping back in brings its own time back.
+    internal static bool RiteShowsHere(out float fadeLeft)
+    {
+        fadeLeft = -1f;
+        Player? me = Player.m_localPlayer;
+        if (!me) return false;
+        Vector3 riteAt = WeatherState.Position(WeatherKind.LeySurvey);
+        if (Utils.DistanceXZ(me!.transform.position, riteAt) <= PluginConfig.ArenaRadius + KeepNear) return true;
+        if (!_showing || _outsideSince < 0f || !Same(riteAt, _center)) return false;
+        fadeLeft = LeaveGrace - (Time.time - _outsideSince);
+        return fadeLeft > 0f;
+    }
+
+    // The glimpse ends with its status, its time, an arena begun, its obliterator gone, or 5 seconds outside its ring.
+    // While outside, its status counts those 5 seconds down; back inside, it shows its own time again.
     private static void KeepGlimpse(Player me, Vector3 at, float radius)
     {
         if (!_glimpse) return;
         StatusEffect? status = me.GetSEMan().GetStatusEffect(GlimpseHash);
-        bool gone = !status || IncursionArena.Kind != WeatherKind.None ||
+        float left = _glimpseEnd - Time.time;
+        bool gone = !status || left <= 0f || IncursionArena.Kind != WeatherKind.None ||
                     (!_glimpseObliterator.IsNone() && ZDOMan.instance != null && ZDOMan.instance.GetZDO(_glimpseObliterator) == null);
         if (!gone)
         {
-            if (Utils.DistanceXZ(at, _glimpseAt) <= radius + KeepNear) _glimpseOutsideSince = -1f;
+            if (Utils.DistanceXZ(at, _glimpseAt) <= radius + KeepNear)
+            {
+                _glimpseOutsideSince = -1f;
+                status!.m_ttl = _glimpseSeconds;
+                status.m_time = _glimpseSeconds - left;
+            }
             else
             {
                 if (_glimpseOutsideSince < 0f) _glimpseOutsideSince = Time.time;
-                gone = Time.time - _glimpseOutsideSince > LeaveGrace;
+                float fadeLeft = LeaveGrace - (Time.time - _glimpseOutsideSince);
+                gone = fadeLeft <= 0f;
+                status!.m_ttl = LeaveGrace;
+                status.m_time = LeaveGrace - Mathf.Clamp(Mathf.Min(fadeLeft, left), 0f, LeaveGrace);
             }
         }
         if (gone) EndGlimpse();

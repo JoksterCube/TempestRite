@@ -18,7 +18,7 @@ internal static class Constants
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "1.1.0";
+        internal const string ModVersion = "1.1.1";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
         internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
@@ -796,7 +796,6 @@ internal static class Constants
         internal static string PageTooltip => Text.Get("page_tooltip");
         internal static string SwitchedOn => Text.Get("switched_on");
         internal static string SwitchedOff => Text.Get("switched_off");
-        internal static string SwitchNotOwner => Text.Get("switch_not_owner");
         internal static string PanelHint => Text.Get("panel_hint");
         // Tooltip of an item on the rites page. {0}: how many it takes, {1}: how many you have.
         internal static string PanelItemMissing => Text.Get("panel_item_missing");

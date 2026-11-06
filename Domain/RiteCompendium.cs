@@ -63,6 +63,7 @@ internal static class RiteCompendium
         Targets.Clear();
         StringBuilder text = new(8192);
         text.Append(CompendiumTexts.Intro).Append("\n\n").Append(CompendiumTexts.Rules).Append("\n\n");
+        if (Common.Networking.RpcHandlers.ServerLacksMod) text.Append(CompendiumTexts.ServerLacksMod).Append("\n\n");
         if (PluginConfig.WhoCanChange.Value == WeatherPermission.AdminsOnly) text.Append(CompendiumTexts.AdminsOnly).Append("\n\n");
         text.AppendFormat(Note, CompendiumTexts.Learning).Append('\n');
 

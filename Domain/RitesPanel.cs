@@ -408,6 +408,14 @@ internal static class RitesPanel
         RiteRows.Clear();
         if (!_list) return;
 
+        // On a server without the mod, a red line right under the hint says why some rites are missing.
+        if (_hint && _hint!.TryGetComponent(out TextMeshProUGUI hint))
+        {
+            string text = Common.Networking.RpcHandlers.ServerLacksMod
+                ? $"{Messages.PanelHint}\n<color=#ff7a5c>{Messages.PanelServerLacksMod}</color>"
+                : Messages.PanelHint;
+            if (hint.text != text) hint.text = text;
+        }
         if (!WeatherSync.LocalPlayerMayChange()) Footer(gui, Messages.LeverNotAllowed);
 
         int known = 0, unknown = 0;

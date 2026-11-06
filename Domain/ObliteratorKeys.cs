@@ -15,7 +15,7 @@ internal static class ObliteratorKeys
     private static readonly Dictionary<string, string> SharedNames = [];
 
     // Each turned on rite's key items, and each key item's rite, read again whenever a Key Item or Enabled setting
-    // changes (also when the server sends its own).
+    // changes (also when the server sends its own, and on joining a server without the mod).
     private static Dictionary<WeatherKind, List<string>> _lists = [];
     private static readonly Dictionary<string, WeatherKind> Owners = [];
     private static readonly List<KeyItemLists.Conflict> Conflicts = [];
@@ -46,7 +46,7 @@ internal static class ObliteratorKeys
             WeatherConfig? config = PluginConfig.For(kind);
             if (config == null) continue;
             string text = config.KeyItem.Value;
-            bool enabled = config.Enabled.IsOn();
+            bool enabled = PluginConfig.IsEnabled(kind);
             if (ReadSettings.TryGetValue(kind, out (string text, bool enabled) before) && before.enabled == enabled &&
                 ReferenceEquals(before.text, text)) continue;
             ReadSettings[kind] = (text, enabled);
@@ -60,7 +60,7 @@ internal static class ObliteratorKeys
         foreach (WeatherKind kind in WeatherKinds.All)
         {
             WeatherConfig? config = PluginConfig.For(kind);
-            if (config != null && config.Enabled.IsOn()) Ordered.Add((kind, config.KeyItem.Value));
+            if (config != null && PluginConfig.IsEnabled(kind)) Ordered.Add((kind, config.KeyItem.Value));
         }
         _lists = KeyItemLists.Resolve(Ordered, Owners, Conflicts);
         foreach (KeyItemLists.Conflict conflict in Conflicts)

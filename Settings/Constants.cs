@@ -18,7 +18,7 @@ internal static class Constants
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "1.1.5";
+        internal const string ModVersion = "1.1.6";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
         internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
@@ -39,6 +39,8 @@ internal static class Constants
         internal const string State = $"{Plugin.ModName}_State";
         // Server -> client: a request was refused.
         internal const string Refused = $"{Plugin.ModName}_Refused";
+        // Player -> everyone, on a server without the mod: I performed these blessings and kinship rites here.
+        internal const string Performed = $"{Plugin.ModName}_Performed";
         // Vein owner -> striking player: a Vein-Shatter shatter broke this many more pieces (wear the pickaxe).
         internal const string VeinWear = $"{Plugin.ModName}_VeinWear";
         // Player -> everyone: show a kinship rite's effect (sparks and fire, or lightning) on me.
@@ -612,8 +614,6 @@ internal static class Constants
         internal static string EndedCarrion => Text.Get("ended_carrion");
         internal static string RefusedAdminsOnly => Text.Get("refused_admins_only");
         internal static string RefusedDisabled => Text.Get("refused_disabled");
-        // The connection error shown on joining. {0}: mod name and version.
-        internal static string ServerLacksMod => Text.Get("server_lacks_mod");
 
         // First line: what it does, capitalized.
         internal static string StatusTooltip => Text.Get("status_tooltip");
@@ -818,6 +818,8 @@ internal static class Constants
         // After the name of the rite pulling the lever performs.
         internal static string PanelReady => Colored("#8fe08f", Text.Get("panel_ready"));
         internal static string PanelMoreToFind => Text.Get("panel_more_to_find");
+        // At the top of the rites page on a server without the mod.
+        internal static string PanelServerLacksMod => Text.Get("panel_server_lacks_mod");
         internal static string PanelOneMoreToFind => Text.Get("panel_one_more_to_find");
         internal static string CloseTooltip => Text.Get("close_tooltip");
     }
@@ -830,6 +832,7 @@ internal static class Constants
         internal static string Intro => Text.Get("compendium_intro");
         internal static string Rules => Text.Get("compendium_rules");
         internal static string AdminsOnly => Colored("#ff7a5c", Text.Get("compendium_admins_only"));
+        internal static string ServerLacksMod => Colored("#ff7a5c", Text.Get("compendium_server_lacks_mod"));
         internal static string Learning => Text.Get("compendium_learning");
         internal static string NoneKnown => Text.Get("compendium_none_known");
         internal static string MoreToFind => Text.Get("compendium_more_to_find");

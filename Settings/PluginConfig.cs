@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using BepInEx.Configuration;
 using JoksterCube.TempestRite.Common;
+using JoksterCube.TempestRite.Common.Networking;
 using JoksterCube.TempestRite.Domain;
 using ServerSync;
 using static JoksterCube.TempestRite.Settings.Constants.Groups;
@@ -405,7 +406,10 @@ internal static class PluginConfig
 
     internal static WeatherConfig? For(WeatherKind kind) => Rites.TryGetValue(kind, out WeatherConfig config) ? config : null;
 
-    internal static bool IsEnabled(WeatherKind kind) => For(kind)?.Enabled.IsOn() == true;
+    // Turned on in the settings, and able to work here: on a server without the mod only some rites do (see
+    // WeatherKinds.WorksWithoutServerMod); the rest are off as if turned off, hidden from the rites page and Compendium.
+    internal static bool IsEnabled(WeatherKind kind) =>
+        For(kind)?.Enabled.IsOn() == true && (!RpcHandlers.ServerLacksMod || WeatherKinds.WorksWithoutServerMod(kind));
 
     // A located rite's radius in meters (0 for rites that work everywhere): the Domain rites share one, and the
     // Ley-Survey Rite shows the widest arena.

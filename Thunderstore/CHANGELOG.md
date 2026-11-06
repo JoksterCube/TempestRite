@@ -1,5 +1,6 @@
 | Version | Update Notes |
 |----------|---------------|
+| **1.1.6** | **New:**<br>• **Works on servers without the mod:** join any server and use the blessings (except Soul-Tether), the kinship rites (except Rally-Horn) and the Unmaking Rite. The other rites are hidden there, and a red note on the rites page says why.<br>• README: a 🌍 column marks the rites that work there.<br>**Changes:**<br>• **New icons:** the Grave-Bind Rite shows the Eihwaz rune (the yew, the graveyard tree), and the Blood Grounds status shows Thurisaz (the thorn). |
 | **1.1.5** | • Clearer changelog: every change on its own line. |
 | **1.1.4** | • **Clear Sky Rite:** no longer clears the Swamp, which keeps its own weather.<br>• **Tundra Shroud Rite:** leather scraps no longer count as a hide.<br>• **Shrouding Rite:** in the Swamp, thick mist now hangs over the swamp rain instead of replacing it.<br>Settings still on the old default update on their own; changed ones are kept. |
 | **1.1.3** | • README: points to [StatusGroups](https://thunderstore.io/c/valheim/p/JoksterCube/StatusGroups/) for grouping and tidying the many rite statuses. |

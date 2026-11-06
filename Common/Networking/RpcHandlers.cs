@@ -3,21 +3,32 @@ using static JoksterCube.TempestRite.Settings.Constants.Plugin;
 
 namespace JoksterCube.TempestRite.Common.Networking;
 
-// The mod is needed on both sides, in the same version. A player with the mod doesn't join a server without it (see
-// RequireMod); a server turns away players without it, unless its Require Mod On Clients setting is off.
+// A server with the mod needs the same version on both sides: it turns away players without it (unless its Require Mod
+// On Clients setting is off), and a player doesn't join one with another version (see RequireMod). A player can join a
+// server without the mod: only the rites their own game can do work there (see WeatherKinds.WorksWithoutServerMod).
 internal static class RpcHandlers
 {
     internal static readonly HashSet<ZRpc> ValidatedPeers = [];
     private static bool _serverVersionReceived;
     private static bool _serverVersionMatches;
+    private static bool _serverLacksMod;
 
     // On a client: the server answered the version check with the same version.
     internal static bool ServerMatches => _serverVersionReceived && _serverVersionMatches;
+
+    // On a client: the server never answered the version check, so it doesn't have the mod.
+    // Checked against being a client too, so it never lingers into single player or hosting.
+    internal static bool ServerLacksMod => _serverLacksMod && ZNet.instance && !ZNet.instance.IsServer();
+    // Whether the server answered the version check at all (with any version).
+    internal static bool ServerAnswered => _serverVersionReceived;
+
+    internal static void JoinedServerWithoutMod() => _serverLacksMod = true;
 
     internal static void BeginServerVersionCheck()
     {
         _serverVersionReceived = false;
         _serverVersionMatches = false;
+        _serverLacksMod = false;
         Plugin.ConnectionError = string.Empty;
     }
 
@@ -25,6 +36,7 @@ internal static class RpcHandlers
     {
         _serverVersionReceived = false;
         _serverVersionMatches = false;
+        _serverLacksMod = false;
     }
 
     internal static void RPC_VersionCheck(ZRpc rpc, ZPackage pkg)

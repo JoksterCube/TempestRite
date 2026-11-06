@@ -308,6 +308,16 @@ internal static class WeatherKinds
     internal static bool Lasts(WeatherKind kind) =>
         Rites.TryGetValue(kind, out Rite rite) && !InstantBlessing(kind) && (rite.Slot != null || rite.Group is RiteGroup.Blessings or RiteGroup.Kinship);
 
+    // Whether it works on a server without the mod: what each player's own game does for its own player, with nothing
+    // the server keeps or works out. Blessings (but the Soul-Tether Rite: only the server has every tombstone), kinship
+    // rites (but the Rally-Horn Rite: the server keeps one call at a time) and the Unmaking Rite (the obliterator's
+    // owner gives back the materials). The others are turned off there: shared weather and Domain rites need the server
+    // to keep them, and the Reckoning fights are run by it.
+    internal static bool WorksWithoutServerMod(WeatherKind kind) =>
+        kind == WeatherKind.Unmaking
+        || (Personal(kind) && kind != WeatherKind.SoulTether)
+        || (ForEveryone(kind) && kind != WeatherKind.RallyHorn);
+
     // A blessing that does what it does as it is received and isn't kept (the Soul-Tether Rite).
     internal static bool InstantBlessing(WeatherKind kind) => kind == WeatherKind.SoulTether;
 

@@ -7,8 +7,9 @@ using static JoksterCube.TempestRite.Settings.Constants;
 
 namespace JoksterCube.TempestRite.Domain.Networking;
 
-// Shares performed rites through the server, which always has the mod (see RequireMod); single player and hosting
-// are the server themselves. Players ask the server to perform a rite; it checks who may, then tells everyone with the
+// Shares performed rites through the server; single player and hosting are the server themselves. On a server without
+// the mod the player's own game performs them (only those that work there, see WeatherKinds.WorksWithoutServerMod) and
+// tells everyone with the mod itself. Players ask the server to perform a rite; it checks who may, then tells everyone with the
 // mod. Players joining later ask it what's going on and how long each has left. Only players whose version matched the
 // server's take part.
 // One burn can perform several rites: they are asked for, performed and told together.
@@ -46,6 +47,7 @@ internal static class WeatherSync
         rpc.Register<ZPackage>(Rpcs.StateRequest, RPC_StateRequest);
         rpc.Register<ZPackage>(Rpcs.State, RPC_State);
         rpc.Register<ZPackage>(Rpcs.Refused, RPC_Refused);
+        rpc.Register<ZPackage>(Rpcs.Performed, RPC_Performed);
     }
 
     internal static void ClearSession()
@@ -95,6 +97,11 @@ internal static class WeatherSync
         kinds = kinds.FindAll(PluginConfig.IsEnabled);
         if (kinds.Count == 0) return;
 
+        if (!ZNet.instance.IsServer() && RpcHandlers.ServerLacksMod)
+        {
+            PerformHere(kinds, position);
+            return;
+        }
         if (!ZNet.instance.IsServer())
         {
             ZPackage package = new();
@@ -307,6 +314,55 @@ internal static class WeatherSync
             _ => Messages.RefusedAdminsOnly
         });
         if (refusal == Refusal.Incursion) LeySurvey.Glimpse(kind, at);
+    }
+
+    // ---- On a server without the mod ----
+
+    // The local player performed these rites: this game performs them and tells everyone with the mod (the server
+    // passes it on without reading it). Every rite that works here is a blessing, a kinship rite or the Unmaking Rite,
+    // none of which is kept by the server, so nothing else needs to know.
+    private static void PerformHere(List<WeatherKind> kinds, Vector3 position)
+    {
+        if (!LocalPlayerMayChange())
+        {
+            PlayerMessages.Warning(Messages.RefusedAdminsOnly);
+            return;
+        }
+        List<WeatherKind> rites = [];
+        List<WeatherKind> blessings = [];
+        List<WeatherKind> done = [];
+        foreach (WeatherKind kind in kinds)
+        {
+            if (!WeatherKinds.IsKnown(kind) || !WeatherKinds.WorksWithoutServerMod(kind) || done.Exists(d => WeatherKinds.Clashes(d, kind))) continue;
+            done.Add(kind);
+            if (WeatherKinds.Personal(kind) || WeatherKinds.ForEveryone(kind)) blessings.Add(kind);
+            else rites.Add(kind);
+        }
+        if (done.Count == 0) return;
+        string callerName = Player.m_localPlayer ? Player.m_localPlayer.GetPlayerName() : string.Empty;
+        Plugin.ModLogger.LogInfo($"{callerName} performed {string.Join(", ", done.ConvertAll(kind => WeatherKinds.Name(kind)))} (server without the mod).");
+        Announce(rites, blessings, position, byLocalPlayer: true, callerName);
+        if (blessings.Count == 0) return;
+
+        ZPackage package = new();
+        WriteKinds(package, blessings);
+        package.Write(position);
+        package.Write(callerName);
+        ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.Performed, package);
+    }
+
+    // Another player performed blessings and kinship rites on a server without the mod. Only heeded there: on a server
+    // with the mod, rites come from the server alone. Only rites that work here and are turned on in this game count.
+    private static void RPC_Performed(long sender, ZPackage package)
+    {
+        if (!ZNet.instance || ZNet.instance.IsServer() || !RpcHandlers.ServerLacksMod || sender == ZRoutedRpc.instance.m_id) return;
+        List<WeatherKind> blessings = ReadKinds(package);
+        Vector3 position = package.ReadVector3();
+        string callerName = package.ReadString();
+        blessings = blessings.FindAll(kind =>
+            (WeatherKinds.Personal(kind) || WeatherKinds.ForEveryone(kind)) && PluginConfig.IsEnabled(kind));
+        if (blessings.Count == 0) return;
+        Announce([], blessings, position, byLocalPlayer: false, callerName);
     }
 
     // ---- Shared helpers ----

@@ -1,7 +1,7 @@
 # Builds the TempestRite icon on top of the shared base (Thunderstore/icon_base.png): a corner badge with the mod's
 # symbol. The badge frame matches FairCraftingLuck's clover badge so the mod icons read as one family.
 # Symbols: "runebolt" (the default: a rune stone on a mossy mound, a lightning bolt carved in it and glowing, sparks
-# crackling off it, as on the in-game rites button), "flame" (a flame with a lightning bolt in it, on an altar stone), "othala" (a rune stone with the glowing Othala rune, as on the rites button),
+# crackling off it, as on the in-game rites button), "flame" (a flame with a lightning bolt in it, on an altar stone),
 # "weather" (the old storm cloud with sun and bolt).
 # Usage (needs Pillow): python mod_icon.py <icon_base.png> <output icon.png> [preview.png] [symbol]
 import math
@@ -172,16 +172,6 @@ def bolt_rune(X, Y):
     return lambda d, color, width: zigzag(d, X, Y, BOLT_RUNE, color, width)
 
 
-def othala_rune(X, Y):
-    top, left, right = (0, -15), (-9, -3), (9, -3)
-    lines = [[top, left], [top, right], [left, (8, 15)], [right, (-8, 15)]]
-
-    def draw(d, color, width):
-        for line in lines:
-            zigzag(d, X, Y, line, color, width)
-    return draw
-
-
 def sparks(art, X, Y):
     d = ImageDraw.Draw(art)
     for spark in SPARKS:
@@ -197,10 +187,6 @@ def runebolt(art, X, Y):
     rune_stone(art, X, Y)
     carved(art, X, Y, bolt_rune(X, Y), STORM_GLOW, STORM_CORE)
     sparks(art, X, Y)
-
-def othala(art, X, Y):
-    rune_stone(art, X, Y)
-    carved(art, X, Y + 1 * SS, othala_rune(X, Y + 1 * SS), FIRE_GLOW, FIRE_CORE)
 
 
 # ---- flame on an altar stone ----
@@ -233,7 +219,7 @@ def flame(art, X, Y):
     d.polygon(p, fill=STORM_CORE)
 
 
-SYMBOLS = {"runebolt": runebolt, "flame": flame, "othala": othala, "weather": weather}
+SYMBOLS = {"runebolt": runebolt, "flame": flame, "weather": weather}
 
 
 def badge(img, symbol, cx=204, cy=204, r=40):

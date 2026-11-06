@@ -251,11 +251,11 @@ internal static class WeatherIcons
                 float light = Mathf.Lerp(1.1f, 0.55f, Mathf.Clamp01((x - 24f) / 16f)) * (0.75f + 0.25f * Mathf.Clamp01(depth / 1.5f));
                 return new Color(0.3f * light, 0.27f * light, 0.27f * light, 1f);
             });
-        // Its rune (Tiwaz, the war god's arrow) burning red.
+        // Its rune (Thurisaz, the thorn) burning red.
         canvas.Paint((x, y) =>
         {
-            float d = Mathf.Min(Capsule(x, y, 32f, 23f, 32f, 38f, 0.8f),
-                Polyline(x, y, [new(27.8f, 27.5f), new(32f, 23f), new(36.2f, 27.5f)], 0.8f));
+            float d = Mathf.Min(Capsule(x, y, 29.5f, 23f, 29.5f, 38f, 0.8f),
+                Polyline(x, y, [new(29.5f, 26.5f), new(35f, 30.5f), new(29.5f, 34.5f)], 0.8f));
             float glow = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Max(d, 0f) / 4f), 2f) * 0.75f;
             return Canvas.Over(new Color(1f, 0.12f, 0.06f, glow), new Color(1f, 0.55f, 0.4f, Mathf.Clamp01(0.5f - d)));
         });
@@ -1932,7 +1932,8 @@ internal static class WeatherIcons
         return d;
     }
 
-    // Grave-Bind: a tombstone in chains, a rune of protection glowing on it, a beam of light rising behind it.
+    // Grave-Bind: a tombstone in chains, the rune Eihwaz (the yew, the graveyard tree) glowing on it, a beam of light
+    // rising behind it.
     private static void GraveBindPicture(Canvas canvas)
     {
         Beam(canvas);
@@ -1953,8 +1954,8 @@ internal static class WeatherIcons
             canvas.Draw(chain, 4f, 18f, 56f, 56f, iron, 60f);
             canvas.Draw(chain, 4f, 18f, 56f, 56f, iron, -60f);
         }
-        GlowLine(canvas, (x, y) => Strokes(x, y, 1.1f, new Vector4(32f, 26f, 32f, 42f), new Vector4(32f, 32f, 26.5f, 25f),
-            new Vector4(32f, 32f, 37.5f, 25f)), new Color(0.4f, 0.85f, 1f), new Color(0.85f, 1f, 1f), 4f, 0.8f);
+        GlowLine(canvas, (x, y) => Strokes(x, y, 1.1f, new Vector4(32f, 25f, 32f, 42f), new Vector4(32f, 25f, 37f, 30f),
+            new Vector4(32f, 42f, 27f, 37f)), new Color(0.4f, 0.85f, 1f), new Color(0.85f, 1f, 1f), 4f, 0.8f);
     }
 
     // Tundra Shroud: a hooded fur cloak, thick white fur round its face, warmth glowing amber inside the hood; fat

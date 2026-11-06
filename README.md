@@ -37,7 +37,7 @@ Doing the same rite again resets its timer.
 
 ### 🧭 Rites
 
-There are seven kinds of rites, and each has its own tab on the rites page. The tables below give the short version. For full details, open the **Compendium** in game and find the **Tempest Rite** page.
+There are seven kinds of rites, and each has its own tab on the rites page. The tables below give the short version. For full details, open the **Compendium** in game and find the **Tempest Rite** page. A ✅ in the 🌍 column means the rite also works when you join a server **without the mod**.
 
 #### 🌦️ Atmospheric
 
@@ -107,53 +107,53 @@ These only work within **100 m** of the obliterator where you did them, and a ri
 
 Blessings go to every player standing next to the obliterator when you pull the lever (the lightning hits them too, but it doesn't hurt). Each player keeps the blessing until it runs out or **they die**.
 
-| | Sacrifice | Rite | What it does |
-| :---: | --- | --- | --- |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/CryptDelver.png" width="48" alt="Crypt Delver Rite"> | **Swamp key** | **Crypt Delver Rite** | The first time you open a dungeon chest, it holds **half as much loot again**, for **45 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/GlacialSatiety.png" width="48" alt="Glacial Satiety Rite"> | **3x Freeze glands** | **Glacial Satiety Rite** | Food lasts **25% longer** and only fades to 75% of its strength (not half) for **45 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/VeinShatter.png" width="48" alt="Vein-Shatter Rite"> | **Hard antler** | **Vein-Shatter Rite** | Rocks and ore veins **break** much faster for **30 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/CarapaceTemper.png" width="48" alt="Carapace Temper Rite"> | **2x Mandibles** | **Carapace Temper Rite** | Your gear wears out much slower for **30 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/GraveBind.png" width="48" alt="Grave-Bind Rite"> | **Torn spirit** | **Grave-Bind Rite** | Your next death costs no skills, and your tombstone shines a beam into the sky. Lasts **60 minutes** if unused. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/FortunesBoon.png" width="48" alt="Fortune's Boon Rite"> | **Wishbone** | **Fortune's Boon Rite** | Lucky extra drops happen **twice as often** for **15 minutes**, and the first failed Forge of Potential upgrade doesn't destroy your item. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Luminary.png" width="48" alt="Luminary Rite"> | **Dvergr lantern** | **Luminary Rite** | You glow like a lantern for **60 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/AbyssalDraw.png" width="48" alt="Abyssal Draw Rite"> | **4x Chitin** | **Abyssal Draw Rite** | You pick up items from much farther away for **60 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/FairWind.png" width="48" alt="Fair-Wind Rite"> | **Dragon egg** | **Fair-Wind Rite** | The wind never blows against your ship for **30 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/HushFelling.png" width="48" alt="Hush-Felling Rite"> | **Fuling totem** | **Hush-Felling Rite** | Chopping, mining and gathering make no sound, and creatures have to come closer to spot you while you work, for **60 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/DraughtFlush.png" width="48" alt="Draught-Flush Rite"> | **5x Royal jelly** | **Draught-Flush Rite** | Meads last longer and you can drink the next one sooner for **45 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/SoulTether.png" width="48" alt="Soul-Tether Rite"> | **Vile ribcage** | **Soul-Tether Rite** | **All your tombstones** are brought to the obliterator. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/TundraShroud.png" width="48" alt="Tundra Shroud Rite"> | **3 different hides or pelts** | **Tundra Shroud Rite** | Rain doesn't make you Wet and night doesn't make you Cold for **30 minutes**. Freezing still applies. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/ScaldDrift.png" width="48" alt="Scald-Drift Rite"> | **Bonemaw tooth** | **Scald-Drift Rite** | The Ashlands' boiling sea and lava hurt much less for **45 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/TetherLock.png" width="48" alt="Tether-Lock Rite"> | **Morgen sinew** | **Tether-Lock Rite** | Your harpoon line is harder to snap, costs less stamina to pull and reels in faster, for **30 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/StriderGirth.png" width="48" alt="Strider-Girth Rite"> | **Asksvin bladder** | **Strider-Girth Rite** | Your mount gets its stamina back **much faster** and attacks when you press attack while riding, for **45 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/SecondKindle.png" width="48" alt="Second-Kindle Rite"> | **Kindled ribs** | **Second-Kindle Rite** | Survive the next hit that would kill you, and knock nearby enemies back. Lasts **60 minutes** if unused. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/PlumeWard.png" width="48" alt="Plume-Ward Rite"> | **2x Celestial feathers** | **Plume-Ward Rite** | Less fall damage, and one deadly fall forgiven, for **60 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/MorgenPouch.png" width="48" alt="Morgen-Pouch Rite"> | **3x Morgen hearts** | **Morgen-Pouch Rite** | Pocket up to **3 tamed creatures** you've petted and let them out anywhere, through portals too, for **30 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/TendrilDraw.png" width="48" alt="Tendril-Draw Rite"> | **Writhan root** | **Tendril-Draw Rite** | Arrows often aren't used up, and thrown spears come back to you, for **45 minutes**. |
+| | Sacrifice | Rite | What it does | 🌍 |
+| :---: | --- | --- | --- | :---: |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/CryptDelver.png" width="48" alt="Crypt Delver Rite"> | **Swamp key** | **Crypt Delver Rite** | The first time you open a dungeon chest, it holds **half as much loot again**, for **45 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/GlacialSatiety.png" width="48" alt="Glacial Satiety Rite"> | **3x Freeze glands** | **Glacial Satiety Rite** | Food lasts **25% longer** and only fades to 75% of its strength (not half) for **45 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/VeinShatter.png" width="48" alt="Vein-Shatter Rite"> | **Hard antler** | **Vein-Shatter Rite** | Rocks and ore veins **break** much faster for **30 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/CarapaceTemper.png" width="48" alt="Carapace Temper Rite"> | **2x Mandibles** | **Carapace Temper Rite** | Your gear wears out much slower for **30 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/GraveBind.png" width="48" alt="Grave-Bind Rite"> | **Torn spirit** | **Grave-Bind Rite** | Your next death costs no skills, and your tombstone shines a beam into the sky. Lasts **60 minutes** if unused. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/FortunesBoon.png" width="48" alt="Fortune's Boon Rite"> | **Wishbone** | **Fortune's Boon Rite** | Lucky extra drops happen **twice as often** for **15 minutes**, and the first failed Forge of Potential upgrade doesn't destroy your item. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Luminary.png" width="48" alt="Luminary Rite"> | **Dvergr lantern** | **Luminary Rite** | You glow like a lantern for **60 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/AbyssalDraw.png" width="48" alt="Abyssal Draw Rite"> | **4x Chitin** | **Abyssal Draw Rite** | You pick up items from much farther away for **60 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/FairWind.png" width="48" alt="Fair-Wind Rite"> | **Dragon egg** | **Fair-Wind Rite** | The wind never blows against your ship for **30 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/HushFelling.png" width="48" alt="Hush-Felling Rite"> | **Fuling totem** | **Hush-Felling Rite** | Chopping, mining and gathering make no sound, and creatures have to come closer to spot you while you work, for **60 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/DraughtFlush.png" width="48" alt="Draught-Flush Rite"> | **5x Royal jelly** | **Draught-Flush Rite** | Meads last longer and you can drink the next one sooner for **45 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/SoulTether.png" width="48" alt="Soul-Tether Rite"> | **Vile ribcage** | **Soul-Tether Rite** | **All your tombstones** are brought to the obliterator. |  |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/TundraShroud.png" width="48" alt="Tundra Shroud Rite"> | **3 different hides or pelts** | **Tundra Shroud Rite** | Rain doesn't make you Wet and night doesn't make you Cold for **30 minutes**. Freezing still applies. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/ScaldDrift.png" width="48" alt="Scald-Drift Rite"> | **Bonemaw tooth** | **Scald-Drift Rite** | The Ashlands' boiling sea and lava hurt much less for **45 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/TetherLock.png" width="48" alt="Tether-Lock Rite"> | **Morgen sinew** | **Tether-Lock Rite** | Your harpoon line is harder to snap, costs less stamina to pull and reels in faster, for **30 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/StriderGirth.png" width="48" alt="Strider-Girth Rite"> | **Asksvin bladder** | **Strider-Girth Rite** | Your mount gets its stamina back **much faster** and attacks when you press attack while riding, for **45 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/SecondKindle.png" width="48" alt="Second-Kindle Rite"> | **Kindled ribs** | **Second-Kindle Rite** | Survive the next hit that would kill you, and knock nearby enemies back. Lasts **60 minutes** if unused. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/PlumeWard.png" width="48" alt="Plume-Ward Rite"> | **2x Celestial feathers** | **Plume-Ward Rite** | Less fall damage, and one deadly fall forgiven, for **60 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/MorgenPouch.png" width="48" alt="Morgen-Pouch Rite"> | **3x Morgen hearts** | **Morgen-Pouch Rite** | Pocket up to **3 tamed creatures** you've petted and let them out anywhere, through portals too, for **30 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/TendrilDraw.png" width="48" alt="Tendril-Draw Rite"> | **Writhan root** | **Tendril-Draw Rite** | Arrows often aren't used up, and thrown spears come back to you, for **45 minutes**. | ✅ |
 
 #### 🍻 Kinship
 
 These reach **every player on the server** at once, wherever they are, and everyone raises a cheer. After that, the same rite can't affect a player again for a while.
 
-| | Sacrifice | Rite | What it does |
-| :---: | --- | --- | --- |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Skal.png" width="48" alt="Skål Rite"> | **3x Tasty mead** | **Skål Rite** | Everyone is **Rested** for **10 minutes**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/SkyCall.png" width="48" alt="Sky-Call Rite"> | **Ymir flesh** | **Sky-Call Rite** | Everyone's **forsaken power** is ready again. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/AnvilSpark.png" width="48" alt="Anvil-Spark Rite"> | **Sharpening stone** | **Anvil-Spark Rite** | Everyone's gear is **repaired**, no workbench needed. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Eldhrimnir.png" width="48" alt="Eldhrímnir Rite"> | **A feast** (any) | **Eldhrímnir Rite** | Everyone's food is **refreshed** to full. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/RallyHorn.png" width="48" alt="Rally-Horn Rite"> | **Anniversary tankard** | **Rally-Horn Rite** | Everyone is called to the obliterator: press **Y** to be brought there, or **N** to stay where you are. |
+| | Sacrifice | Rite | What it does | 🌍 |
+| :---: | --- | --- | --- | :---: |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Skal.png" width="48" alt="Skål Rite"> | **3x Tasty mead** | **Skål Rite** | Everyone is **Rested** for **10 minutes**. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/SkyCall.png" width="48" alt="Sky-Call Rite"> | **Ymir flesh** | **Sky-Call Rite** | Everyone's **forsaken power** is ready again. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/AnvilSpark.png" width="48" alt="Anvil-Spark Rite"> | **Sharpening stone** | **Anvil-Spark Rite** | Everyone's gear is **repaired**, no workbench needed. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Eldhrimnir.png" width="48" alt="Eldhrímnir Rite"> | **A feast** (any) | **Eldhrímnir Rite** | Everyone's food is **refreshed** to full. | ✅ |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/RallyHorn.png" width="48" alt="Rally-Horn Rite"> | **Anniversary tankard** | **Rally-Horn Rite** | Everyone is called to the obliterator: press **Y** to be brought there, or **N** to stay where you are. |  |
 
 #### ⚖️ Reckoning
 
 These start a fight at the obliterator. A **shield dome** closes over its **Blood Grounds**, and nobody can get in or out until the fight is over. Win, and lightning strikes your reward down in **treasure chests** beside the obliterator, with a beam of light over each until you open it. The obliterator needs dry ground all around it (built floors over water count), with no hostile creatures inside, away from wards, claimed beds, traders, boss altars and dungeon entrances. No other raid or boss fight can be going on.
 
-| | Sacrifice | Rite | What it does |
-| :---: | --- | --- | --- |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/LeySurvey.png" width="48" alt="Ley-Survey Rite"> | **5x Coal** | **Ley-Survey Rite** | **Check a spot before a fight.** For **10 minutes**, a red ring shows where the Blood Grounds would be, a red sheet shows ground under the sea (build a floor over it), and red beams mark what's in the way: claimed beds, dungeon entrances, traders, wards and more. With PingMark, enemies inside are outlined. Nothing is blocked. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Crimson.png" width="48" alt="Crimson Rite"> | **5x Withered bones** | **Crimson Rite** | **Survive the blood moon.** Raids come one after another for **10 minutes** under a blood moon, as tough as your progress. Every kill earns **coins**. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Ragnarok.png" width="48" alt="Ragnarök Rite"> | **3 different Boss trophies** | **Ragnarök Rite** | **A boss rush.** **3 bosses** that everyone inside has beaten come back one after another, weakest first, each raised with stars to about as strong as the toughest one you've all beaten. Defeat them all and each boss leaves a **treasure chest** of resources from its own lands, with a good chance of something rare (even boss summoning items), bigger the more stars it had. You need to have beaten Bonemass. After that, Eikthyr and The Elder count even if you skipped them. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/HoardBane.png" width="48" alt="Hoard-Bane Rite"> | **One of Hildir's chests** | **Hoard-Bane Rite** | **Someone wants their chest back.** Its owner comes for it under a shield, with three elite guards and their packs waiting around the arena. Slay the elites to break the shield, then slay the owner and take **coins, valuables and upgrade idols**. If you lose, you keep the chest and can try again. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Sanctuary.png" width="48" alt="Sanctuary Rite"> | **3x Scrap iron** | **Sanctuary Rite** | Ends a running raid or Reckoning fight. No reward. |
-| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Unmaking.png" width="48" alt="Unmaking Rite"> | **Thunderstone** | **Unmaking Rite** | Weapons, tools, shields and armor you put in with it give back **80%** of their materials, upgrades included. |
+| | Sacrifice | Rite | What it does | 🌍 |
+| :---: | --- | --- | --- | :---: |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/LeySurvey.png" width="48" alt="Ley-Survey Rite"> | **5x Coal** | **Ley-Survey Rite** | **Check a spot before a fight.** For **10 minutes**, a red ring shows where the Blood Grounds would be, a red sheet shows ground under the sea (build a floor over it), and red beams mark what's in the way: claimed beds, dungeon entrances, traders, wards and more. With PingMark, enemies inside are outlined. Nothing is blocked. |  |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Crimson.png" width="48" alt="Crimson Rite"> | **5x Withered bones** | **Crimson Rite** | **Survive the blood moon.** Raids come one after another for **10 minutes** under a blood moon, as tough as your progress. Every kill earns **coins**. |  |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Ragnarok.png" width="48" alt="Ragnarök Rite"> | **3 different Boss trophies** | **Ragnarök Rite** | **A boss rush.** **3 bosses** that everyone inside has beaten come back one after another, weakest first, each raised with stars to about as strong as the toughest one you've all beaten. Defeat them all and each boss leaves a **treasure chest** of resources from its own lands, with a good chance of something rare (even boss summoning items), bigger the more stars it had. You need to have beaten Bonemass. After that, Eikthyr and The Elder count even if you skipped them. |  |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/HoardBane.png" width="48" alt="Hoard-Bane Rite"> | **One of Hildir's chests** | **Hoard-Bane Rite** | **Someone wants their chest back.** Its owner comes for it under a shield, with three elite guards and their packs waiting around the arena. Slay the elites to break the shield, then slay the owner and take **coins, valuables and upgrade idols**. If you lose, you keep the chest and can try again. |  |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Sanctuary.png" width="48" alt="Sanctuary Rite"> | **3x Scrap iron** | **Sanctuary Rite** | Ends a running raid or Reckoning fight. No reward. |  |
+| <img src="https://raw.githubusercontent.com/JoksterCube/TempestRite/main/Docs/Rites/Unmaking.png" width="48" alt="Unmaking Rite"> | **Thunderstone** | **Unmaking Rite** | Weapons, tools, shields and armor you put in with it give back **80%** of their materials, upgrades included. | ✅ |
 
 More players means bigger rewards. If everyone inside dies or leaves, the fight ends with no reward.
 
@@ -189,7 +189,8 @@ Settings are in `BepInEx/config/JoksterCube.TempestRite.cfg`, or in game with Co
 ### 🧩 Multiplayer & Compatibility
 
 - ✅ Works in single player, when hosting, and on dedicated servers.
-- 🔒 **Needed on the server and on every player**, in the same version. Players without it can't join and are told why. Turn off **Require Mod On Clients** to let them in anyway; they just won't see the rites.
+- 🔒 **For every rite, install it on the server and on every player**, in the same version. Players without it can't join and are told why. Turn off **Require Mod On Clients** to let them in anyway; they just won't see the rites.
+- 🌍 **Joining a server without the mod works too**, with fewer rites: the blessings (except Soul-Tether), the kinship rites (except Rally-Horn) and the Unmaking Rite. The other rites are hidden, and their key items burn as usual. Your own settings apply.
 - 🤝 Players who join later see the rites already running, with the time left.
 - 🔐 The server decides who may perform rites, and keeps rites running through a restart.
 - 🗂️ Lots of rite statuses on screen? Use [StatusGroups](https://thunderstore.io/c/valheim/p/JoksterCube/StatusGroups/) to group and tidy them.
@@ -209,5 +210,5 @@ Report bugs or suggest improvements on [GitHub](https://github.com/JoksterCube/T
 ---
 
 **Author:** JoksterCube<br>
-**Version:** 1.1.5<br>
+**Version:** 1.1.6<br>
 **License:** [GNU GPL v3 or later](https://www.gnu.org/licenses/gpl-3.0.html)

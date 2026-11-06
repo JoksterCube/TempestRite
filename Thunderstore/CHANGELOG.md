@@ -1,5 +1,6 @@
 | Version | Update Notes |
 |----------|---------------|
+| **1.1.7** | • **Hoard-Bane Rite:** Zil and Thungr now fight as in the game: Zil rides Thungr and leaps down when Thungr falls. Before, an extra Zil could show up. |
 | **1.1.6** | **New:**<br>• **Works on servers without the mod:** join any server and use the blessings (except Soul-Tether), the kinship rites (except Rally-Horn) and the Unmaking Rite. The other rites are hidden there, and a red note on the rites page says why.<br>• README: a 🌍 column marks the rites that work there.<br>**Changes:**<br>• **New icons** for the Grave-Bind Rite and the Blood Grounds status. |
 | **1.1.5** | • Clearer changelog: every change on its own line. |
 | **1.1.4** | • **Clear Sky Rite:** no longer clears the Swamp, which keeps its own weather.<br>• **Tundra Shroud Rite:** leather scraps no longer count as a hide.<br>• **Shrouding Rite:** in the Swamp, thick mist now hangs over the swamp rain instead of replacing it.<br>Settings still on the old default update on their own; changed ones are kept. |

@@ -43,7 +43,9 @@ internal static class HoardBaneRush
         EliteFell = 0,
         ShieldBroke = 1,
         BossFell = 2,
-        BossReturns = 3
+        BossReturns = 3,
+        // The rider leaps down as the miniboss it rode falls (Zil off Thungr).
+        RiderLeaps = 4
     }
 
     private enum Phase
@@ -113,6 +115,8 @@ internal static class HoardBaneRush
     private static int _spawnTries;
     private static bool _risingAll;
     private static readonly List<int> RisingBosses = [];
+    // Where a rider leaps down (zero: its place in the layout).
+    private static Vector3 _risingAt;
 
     private static ZDOID _rewardAt = ZDOID.None;
     private static readonly List<(string item, int amount)> Reward = [];
@@ -128,7 +132,7 @@ internal static class HoardBaneRush
         rpc.Register<string, Vector3>(Rpcs.HoardBaneChest, RPC_Chest);
         rpc.Register<ZPackage>(Rpcs.HoardBaneSpawned, RPC_Spawned);
         rpc.Register<ZPackage>(Rpcs.HoardBaneReinforced, RPC_Reinforced);
-        rpc.Register<ZDOID>(Rpcs.HoardBaneDown, RPC_Down);
+        rpc.Register<ZDOID, Vector3>(Rpcs.HoardBaneDown, RPC_Down);
         rpc.Register<ZDOID>(Rpcs.HoardBaneLost, RPC_Lost);
     }
 
@@ -169,6 +173,7 @@ internal static class HoardBaneRush
         _spawnTries = 0;
         _risingAll = false;
         RisingBosses.Clear();
+        _risingAt = Vector3.zero;
     }
 
     // In the game of the player who burnt the chest, right before asking for the rite.
@@ -327,8 +332,8 @@ internal static class HoardBaneRush
         Power.Clear();
         foreach (string prefab in Fight.Bosses) Power.Add(Strength(prefab));
         ZPackage begun = new();
-        begun.Write(Fight.Bosses.Length);
-        foreach (string boss in Fight.Bosses) begun.Write(boss);
+        begun.Write(Fight.Leaders.Length);
+        foreach (string boss in Fight.Leaders) begun.Write(boss);
         begun.Write(Fight.Elites.Length);
         begun.Write(_center);
         ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.HoardBaneBegun, begun);
@@ -363,8 +368,8 @@ internal static class HoardBaneRush
                 break;
             case Phase.Rising:
                 if (Time.time < _phaseUntil) break;
-                if (++_spawnTries >= SpawnTries) Stop(Ending.NoSpawn);
-                else Rise(_risingAll, [.. RisingBosses]);
+                if (++_spawnTries >= SpawnTries) Stop(NoSpawnEnding());
+                else Rise(_risingAll, [.. RisingBosses], _risingAt);
                 break;
             case Phase.Fighting:
                 if (_shieldBroken && Time.time >= _nextUnshield) Unshield();
@@ -378,8 +383,9 @@ internal static class HoardBaneRush
         }
     }
 
-    // One player inside spawns it: everything (all), or only these minibosses again. A different player on each try.
-    private static void Rise(bool all, List<int> bosses)
+    // One player inside spawns it: everything (all), or only these minibosses (again, or a rider leaping down at). A
+    // different player on each try. A rider never rises with everything: it comes when the one it rides falls.
+    private static void Rise(bool all, List<int> bosses, Vector3 at = default)
     {
         List<long> players = PlayersInside();
         if (players.Count == 0) return;
@@ -387,7 +393,8 @@ internal static class HoardBaneRush
         if (all)
         {
             bosses = [];
-            for (int i = 0; i < Fight.Bosses.Length; i++) bosses.Add(i);
+            for (int i = 0; i < Fight.Bosses.Length; i++)
+                if (!Fight.Rides(i)) bosses.Add(i);
         }
         _phase = Phase.Rising;
         _phaseUntil = Time.time + SpawnWait;
@@ -395,6 +402,7 @@ internal static class HoardBaneRush
         _risingAll = all;
         RisingBosses.Clear();
         RisingBosses.AddRange(bosses);
+        _risingAt = at;
         ZPackage package = new();
         package.Write(_ticket);
         package.Write(_encounter);
@@ -408,6 +416,9 @@ internal static class HoardBaneRush
             package.Write(Power[boss].health);
             package.Write(Power[boss].damage);
         }
+        package.Write(at);
+        // Once the shield is down, whatever rises comes without it (a rider leaping down).
+        package.Write(!_shieldBroken);
         ZRoutedRpc.instance.InvokeRoutedRPC(spawner, Rpcs.HoardBaneSpawn, package);
     }
 
@@ -443,7 +454,7 @@ internal static class HoardBaneRush
             foreach ((ZDOID id, string _) in elites) TakeAway(id);
             foreach (ZDOID id in guards) TakeAway(id);
             foreach (ZDOID id in followers) TakeAway(id);
-            Stop(Ending.NoSpawn);
+            Stop(NoSpawnEnding());
             return;
         }
         foreach ((ZDOID id, string prefab) in elites) Elites[id] = prefab;
@@ -458,10 +469,15 @@ internal static class HoardBaneRush
         if (_elitesTotal == 0) BreakShield();
     }
 
+    // Nothing could rise: the rite is broken, unless only a rider was to leap down after every other miniboss fell.
+    private static Ending NoSpawnEnding() =>
+        !_risingAll && Bosses.Count == 0 && RisingBosses.TrueForAll(Fight.Rides) ? Ending.Survived : Ending.NoSpawn;
+
     // ---- 3. Fighting ----
 
     // From the game that owned it, as it died.
-    private static void RPC_Down(long sender, ZDOID id)
+    // From the game that owned it, as it died (where: for a rider leaping down).
+    private static void RPC_Down(long sender, ZDOID id, Vector3 at)
     {
         if (!IsServer() || !_running || id.IsNone()) return;
         if (Elites.TryGetValue(id, out string elite))
@@ -469,7 +485,7 @@ internal static class HoardBaneRush
             Elites.Remove(id);
             EliteFell(elite);
         }
-        else if (Bosses.TryGetValue(id, out int place)) BossFell(id, place);
+        else if (Bosses.TryGetValue(id, out int place)) BossFell(id, place, at);
     }
 
     // From the game that owns it: it fell out of the Blood Grounds and couldn't be put back (see ArenaRescue).
@@ -491,11 +507,12 @@ internal static class HoardBaneRush
             return;
         }
         if (!Bosses.TryGetValue(id, out int place)) return;
+        Vector3 at = ZDOMan.instance.GetZDO(id)?.GetPosition() ?? Vector3.zero;
         TakeAway(id);
         if (_shieldBroken)
         {
             Plugin.ModLogger.LogWarning($"Hoard-Bane Rite: {Fight.Bosses[place]} was lost with its shield down; it counts as slain.");
-            BossFell(id, place);
+            BossFell(id, place, at);
             return;
         }
         Plugin.ModLogger.LogWarning($"Hoard-Bane Rite: {Fight.Bosses[place]} was lost with elites still standing; it rises again.");
@@ -529,12 +546,24 @@ internal static class HoardBaneRush
         ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.HoardBaneUnshield, _center);
     }
 
-    private static void BossFell(ZDOID id, int place)
+    private static void BossFell(ZDOID id, int place, Vector3 at)
     {
         Bosses.Remove(id);
         GoneSince.Remove(id);
-        Tell(News.BossFell, Fight.Bosses[place], 0, 0);
-        if (Bosses.Count == 0 && _phase != Phase.Rising) Stop(Ending.Survived);
+        int rider = Fight.RiderOf(place);
+        if (rider < 0)
+        {
+            Tell(News.BossFell, Fight.Bosses[place], 0, 0);
+            if (Bosses.Count == 0 && _phase != Phase.Rising) Stop(Ending.Survived);
+            return;
+        }
+        // Its rider leaps down where it fell and fights on (with others rising already, they come along).
+        Tell(News.RiderLeaps, Fight.Bosses[rider], 0, 0);
+        Plugin.ModLogger.LogInfo($"Hoard-Bane Rite: {Fight.Bosses[place]} fell; {Fight.Bosses[rider]} leaps down.");
+        _spawnTries = 0;
+        List<int> rising = _phase == Phase.Rising ? [.. RisingBosses] : [];
+        if (!rising.Contains(rider)) rising.Add(rider);
+        Rise(_phase == Phase.Rising && _risingAll, rising, at);
     }
 
     // Elites and minibosses gone without falling (taken away by something else) count as lost.
@@ -573,8 +602,8 @@ internal static class HoardBaneRush
                 if (ZDOMan.instance.GetZDO(boss) is { } zdo) strikes.Add(zdo.GetPosition());
         package.Write(strikes.Count);
         foreach (Vector3 at in strikes) package.Write(at);
-        package.Write(Fight.Bosses.Length);
-        foreach (string boss in Fight.Bosses) package.Write(boss);
+        package.Write(Fight.Leaders.Length);
+        foreach (string boss in Fight.Leaders) package.Write(boss);
         ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, Rpcs.HoardBaneNews, package);
     }
 

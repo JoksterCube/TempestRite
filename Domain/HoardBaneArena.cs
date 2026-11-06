@@ -126,6 +126,9 @@ internal static class HoardBaneArena
         int count = package.ReadInt();
         List<(int place, float health, float damage)> bosses = [];
         for (int i = 0; i < count; i++) bosses.Add((package.ReadInt(), package.ReadSingle(), package.ReadSingle()));
+        // Where a rider leaps down (zero: its place), and whether the shield is still up.
+        Vector3 leapAt = package.ReadVector3();
+        bool shielded = package.ReadBool();
         if (encounter < 0 || encounter >= HoardBaneLoot.Encounters.Length) return;
         HoardBaneLoot.Encounter fight = HoardBaneLoot.Encounters[encounter];
         float radius = Radius;
@@ -178,9 +181,11 @@ internal static class HoardBaneArena
         foreach ((int place, float health, float damage) in bosses)
         {
             if (place < 0 || place >= fight.Bosses.Length) continue;
-            Vector3 at = ArenaRoom.Nearby(bossAt + along * ((place - (fight.Bosses.Length - 1) * 0.5f) * BrotherGap),
-                ArenaRoom.Boss, center, radius);
-            Character? boss = SpawnBoss(fight.Bosses[place], center, at, health, damage);
+            Vector3 at = fight.Rides(place) && leapAt != Vector3.zero
+                ? leapAt
+                : bossAt + along * ((Math.Min(place, fight.Leaders.Length - 1) - (fight.Leaders.Length - 1) * 0.5f) * BrotherGap);
+            at = ArenaRoom.Nearby(at, ArenaRoom.Boss, center, radius);
+            Character? boss = SpawnBoss(fight.Bosses[place], center, at, health, damage, shielded);
             if (boss) risen.Add((boss!.m_nview.GetZDO().m_uid, place));
         }
 
@@ -343,15 +348,15 @@ internal static class HoardBaneArena
         return shared.m_itemType == ItemDrop.ItemData.ItemType.Bow || shared.m_skillType == Skills.SkillType.Bows;
     }
 
-    // Shielded, a star stronger than the game's own and as strong as the server says on top (see RagnarokPatches for
-    // the multipliers), hunting the players.
-    private static Character? SpawnBoss(string prefab, Vector3 center, Vector3 at, float healthBy, float damageBy)
+    // Shielded (unless the shield broke already: a rider leaping down), a star stronger than the game's own and as
+    // strong as the server says on top (see RagnarokPatches for the multipliers), hunting the players.
+    private static Character? SpawnBoss(string prefab, Vector3 center, Vector3 at, float healthBy, float damageBy, bool shielded)
     {
         Character? character = Spawn(prefab, center, OnGround(at));
         if (!character) return null;
         ZDO zdo = character!.m_nview.GetZDO();
         zdo.Set(Role, BossRole);
-        zdo.Set(Shield, true);
+        zdo.Set(Shield, shielded);
         zdo.Set(IncursionArena.BossHealth, healthBy);
         zdo.Set(IncursionArena.BossDamage, damageBy);
         zdo.Set(EliteTint, HoardBaneLoot.DefaultTint);
@@ -754,12 +759,12 @@ internal static class HoardBaneArena
 
     // ---- Falling ----
 
-    // In the game that owns a creature, as it dies.
+    // In the game that owns a creature, as it dies (where: a rider leaps down there).
     internal static void CreatureDied(Character character)
     {
         int role = RoleOf(character);
         if (role is not (EliteRole or BossRole) || !character.m_nview.IsOwner()) return;
-        ZRoutedRpc.instance?.InvokeRoutedRPC(Rpcs.HoardBaneDown, character.m_nview.GetZDO().m_uid);
+        ZRoutedRpc.instance?.InvokeRoutedRPC(Rpcs.HoardBaneDown, character.m_nview.GetZDO().m_uid, character.transform.position);
     }
 
     // ---- What everyone sees ----
@@ -796,6 +801,7 @@ internal static class HoardBaneArena
             HoardBaneRush.News.ShieldBroke => string.Format(Messages.HoardBaneShieldBreaks, Together(bosses)),
             HoardBaneRush.News.BossFell => string.Format(Messages.HoardBaneBossFalls, Name(prefab)),
             HoardBaneRush.News.BossReturns => string.Format(Messages.HoardBaneBossReturns, Name(prefab)),
+            HoardBaneRush.News.RiderLeaps => string.Format(Messages.HoardBaneRiderLeaps, Name(prefab)),
             _ => null
         };
         if (message != null) PlayerMessages.Warning(message);

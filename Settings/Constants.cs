@@ -18,7 +18,7 @@ internal static class Constants
     internal static class Plugin
     {
         internal const string ModName = "TempestRite";
-        internal const string ModVersion = "1.1.6";
+        internal const string ModVersion = "1.1.7";
         internal const string Author = "JoksterCube";
         internal const string ModGUID = $"{Author}.{ModName}";
         internal const string Description = "Perform rites at the obliterator: sacrifice an item to change the weather, hold the sun, call raids, grow crops faster, receive blessings and more.";
@@ -597,6 +597,8 @@ internal static class Constants
         // {0}: the miniboss.
         internal static string HoardBaneBossFalls => Text.Get("hoard_bane_boss_falls");
         internal static string HoardBaneBossReturns => Text.Get("hoard_bane_boss_returns");
+        // {0}: the rider (Zil), leaping down as the one it rode falls.
+        internal static string HoardBaneRiderLeaps => Text.Get("hoard_bane_rider_leaps");
         internal static string HoardBaneEliteWakes => Text.Get("hoard_bane_elite_wakes");
         internal static string HoardBaneSurvived => Text.Get("hoard_bane_survived");
         internal static string HoardBaneSurvivedNoReward => Text.Get("hoard_bane_survived_no_reward");

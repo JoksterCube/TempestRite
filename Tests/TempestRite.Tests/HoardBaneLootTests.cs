@@ -24,6 +24,23 @@ public class HoardBaneLootTests
     }
 
     [Fact]
+    public void Zil_rides_Thungr_and_leaps_down_when_he_falls()
+    {
+        HoardBaneLoot.Encounter brothers = HoardBaneLoot.Encounters[2];
+        // Only "Zil & Thungr" rises at the start; Zil (the last) comes when Thungr (the first) falls.
+        Assert.Equal(["GoblinBruteBros_nochest"], brothers.Leaders);
+        Assert.False(brothers.Rides(0));
+        Assert.True(brothers.Rides(1));
+        Assert.Equal(1, brothers.RiderOf(0));
+        Assert.Equal(-1, brothers.RiderOf(1));
+        // A lone miniboss rides nothing.
+        HoardBaneLoot.Encounter brenna = HoardBaneLoot.Encounters[0];
+        Assert.Equal(brenna.Bosses, brenna.Leaders);
+        Assert.False(brenna.Rides(0));
+        Assert.Equal(-1, brenna.RiderOf(0));
+    }
+
+    [Fact]
     public void Each_fight_has_three_elites_with_stars_and_one_kind_of_follower()
     {
         foreach (HoardBaneLoot.Encounter fight in HoardBaneLoot.Encounters) Assert.Equal(3, fight.Elites.Length);

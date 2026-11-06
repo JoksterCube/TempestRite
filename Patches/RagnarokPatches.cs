@@ -169,7 +169,8 @@ internal static class RagnarokPatches
     }
 
     // No trophies (from the Hoard-Bane Rite's minibosses either, which drop no chest: they are the game's chestless ones):
-    // everything else they drop is the players'.
+    // everything else they drop is the players'. No creatures either: the game's "Zil & Thungr" drops Zil as it dies, but
+    // the rite brings him down itself (see HoardBaneRush.BossFell).
     [HarmonyPatch(typeof(CharacterDrop), nameof(CharacterDrop.GenerateDropList))]
     internal static class DropPatch
     {
@@ -183,10 +184,12 @@ internal static class RagnarokPatches
                 Character character = __instance.m_character;
                 if (__result == null || !character) return;
                 if (!IncursionArena.IsRagnarokBoss(character) && HoardBaneArena.RoleOf(character) != HoardBaneArena.BossRole) return;
-                __result.RemoveAll(drop => IsTrophy(drop.Key));
+                __result.RemoveAll(drop => IsTrophy(drop.Key) || IsCreature(drop.Key));
             }
             catch (Exception exception) { PatchGuard.Fail(Feature, exception); }
         }
+
+        private static bool IsCreature(GameObject? prefab) => prefab && prefab!.GetComponent<Character>();
 
         private static bool IsTrophy(GameObject? prefab)
         {

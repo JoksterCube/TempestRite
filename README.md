@@ -210,5 +210,5 @@ Report bugs or suggest improvements on [GitHub](https://github.com/JoksterCube/T
 ---
 
 **Author:** JoksterCube<br>
-**Version:** 1.1.6<br>
+**Version:** 1.1.7<br>
 **License:** [GNU GPL v3 or later](https://www.gnu.org/licenses/gpl-3.0.html)

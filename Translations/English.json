@@ -349,6 +349,7 @@
   "hoard_bane_shield_breaks": "The shield breaks: {0} can be slain!",
   "hoard_bane_boss_falls": "{0} falls",
   "hoard_bane_boss_returns": "{0} is pulled back into the circle, whole and shielded",
+  "hoard_bane_rider_leaps": "{0} leaps down to fight on!",
   "hoard_bane_survived": "Victory! The hoard is avenged, the gods reward you with treasure",
   "hoard_bane_survived_no_reward": "Victory! The hoard is avenged",
   "hoard_bane_failed_obliterator": "The rite's thunder falls silent: the Hoard-Bane Rite is broken",

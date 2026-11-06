@@ -50,7 +50,7 @@ internal static class HoardBaneLoot
     // Darker and more saturated than its level's own colors.
     internal static readonly Vector3 DefaultTint = new(0f, 0.15f, -0.12f);
 
-    internal sealed class Encounter(string chest, string[] bosses, string follower, Elite[] elites)
+    internal sealed class Encounter(string chest, string[] bosses, string follower, Elite[] elites, bool lastRides = false)
     {
         // The chest that calls it.
         internal string Chest { get; } = chest;
@@ -59,6 +59,18 @@ internal static class HoardBaneLoot
         // The creature following the miniboss: FollowersAtStart of them rise with it, more as they fall (see HoardBaneRush).
         internal string Follower { get; } = follower;
         internal Elite[] Elites { get; } = elites;
+
+        // The last miniboss rides the first, as in the game's own fight (Zil on Thungr): it doesn't rise with the
+        // others but leaps down where the first falls.
+        private bool LastRides { get; } = lastRides && bosses.Length > 1;
+
+        internal bool Rides(int place) => LastRides && place == Bosses.Length - 1;
+
+        // The miniboss riding the one at this place (its place), or -1.
+        internal int RiderOf(int place) => LastRides && place == 0 ? Bosses.Length - 1 : -1;
+
+        // The minibosses rising at the start ("Zil & Thungr" rides as one).
+        internal string[] Leaders { get; } = lastRides && bosses.Length > 1 ? new List<string>(bosses).GetRange(0, bosses.Length - 1).ToArray() : bosses;
     }
 
     // The game's Hildir minibosses without their chest (the "_nochest" ones), so they drop none. Each elite has stars
@@ -80,7 +92,8 @@ internal static class HoardBaneLoot
                 new("Fenring", 2, "Sköll’s Kin, the Moon-Ripper", [new("Wolf", 2, 4)]),
                 new("Fenring_Cultist", 1, "Moon-Chanter Hjördis", [new("Ulv", 1, 4)])
             ]),
-        // Zil and Thungr, from the Sealed Tower: fulings.
+        // Zil and Thungr, from the Sealed Tower: fulings. Zil rides Thungr (the game's "Zil & Thungr", casting Zil's
+        // spells) and leaps down when Thungr falls.
         new("chest_hildir3", ["GoblinBruteBros_nochest", "GoblinShaman_Hildir_nochest"], "Goblin",
             [
                 new("GoblinBrute", 3, "Gorgar Earth-Splitter", [new("Goblin", 2, 4)]),
@@ -88,7 +101,7 @@ internal static class HoardBaneLoot
                 // A lox's olive-brown fur turns green under a hue and saturation shift: its colors multiplied toward a deep
                 // demon red instead, a little darker.
                 new("Lox", 1, "Grymm-Tusk", [new("Deathsquito", 0, 3)], new Vector3(0f, 0f, -0.1f), color: new Vector3(1f, 0.28f, 0.22f))
-            ])
+            ], lastRides: true)
     ];
 
     // ---- Followers ----
